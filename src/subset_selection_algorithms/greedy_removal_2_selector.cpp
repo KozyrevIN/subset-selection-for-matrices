@@ -1,14 +1,84 @@
 #include <vector>
 #include <unordered_set>
 #include <float.h>
+#include <iostream>
 
 #include "../../include/subset_selection_algorithms/greedy_removal_2_selector.h"
 
 template <typename scalar>
-GreedyRemoval2Selector<scalar>::GreedyRemoval2Selector(double eps): SubsetSelector<scalar>("greedy_removal_2"), eps(eps) {
+GreedyRemoval2Selector<scalar>::GreedyRemoval2Selector(scalar eps): SubsetSelector<scalar>("greedy_removal_2"), eps(eps) {
     //do nothing
 }
 
+template <typename scalar>
+std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+    std::vector<uint> cols(X.cols());
+    for (uint j = 0; j < X.cols(); ++j) {
+        cols[j] = j;
+    }
+
+    if (k < cols.size()) {
+        Eigen::VectorX<scalar> x;
+        Eigen::MatrixX<scalar> XXT_inv = (X * X.adjoint()).inverse();
+        Eigen::MatrixX<scalar> XXT_inv2 = XXT_inv * XXT_inv;
+        scalar xTXXT_inv2x;
+        Eigen::MatrixX<scalar> XXT_invx, XXT_inv2x;
+        Eigen::VectorX<scalar> l(cols.size()), d(cols.size());
+        scalar l_min = DBL_MAX, d_min = 0; scalar d_min_prev_m_1;
+        uint j_min;
+
+        //#pragma omp parallel for
+        for (uint j = 0; j < cols.size(); ++j) {
+            l(j) = (X.col(j).adjoint() * XXT_inv2 * X.col(j)).value();
+            d(j) = 1.0 - (X.col(cols[j]).adjoint() * XXT_inv * X.col(j)).value();
+            if (d(j) > eps and l(j) * d_min < l_min * d(j)) {
+                l_min = l(j);
+                d_min = d(j);
+                j_min = j;
+            }
+        }
+
+        d_min_prev_m_1 = 1 / d_min;
+        d_min = 0.0;
+        x = X.col(cols[j_min]);
+        XXT_invx = XXT_inv * x;
+        XXT_inv2x = XXT_inv2 * x;
+        xTXXT_inv2x = (x.adjoint() * XXT_inv2x).value();
+        XXT_inv += XXT_inv * x * x.adjoint() * XXT_inv * d_min_prev_m_1;
+        XXT_inv2 += 2 * (XXT_inv2x * XXT_invx.adjoint()).real() * d_min_prev_m_1 +
+                    XXT_invx * XXT_invx.adjoint() * (x.adjoint() * XXT_inv2x).value() * std::pow(d_min_prev_m_1, 2);
+        cols.erase(cols.begin() + j_min);
+
+        while (cols.size() > k) {
+            //#pragma omp parallel for
+            for (uint j = 0; j < cols.size(); ++j) {
+                l(cols[j]) += 2 * std::real(((X.col(cols[j]).adjoint() * XXT_inv2x) * (XXT_invx.adjoint() * X.col(cols[j]))).value()) * d_min_prev_m_1 +
+                              (X.col(cols[j]).adjoint() * XXT_invx).cwiseAbs2().value() * xTXXT_inv2x * std::pow(d_min_prev_m_1,2);
+                d(cols[j]) -= (X.col(cols[j]).adjoint() * XXT_invx).cwiseAbs2().value() * d_min_prev_m_1;
+                if (d(cols[j]) > eps and l(cols[j]) * d_min < l_min * d(cols[j])) {
+                    l_min = l(cols[j]);
+                    d_min = d(cols[j]);
+                    j_min = j;
+                }           
+            }
+
+            d_min_prev_m_1 = 1 / d_min;
+            d_min = 0.0;
+            x = X.col(cols[j_min]);
+            XXT_invx = XXT_inv * x;
+            XXT_inv2x = XXT_inv2 * x;
+            xTXXT_inv2x = (x.adjoint() * XXT_inv2x).value();
+            XXT_inv += XXT_inv * x * x.adjoint() * XXT_inv * d_min_prev_m_1;
+            XXT_inv2 += 2 * (XXT_inv2x * XXT_invx.adjoint()).real() * d_min_prev_m_1 +
+                        XXT_invx * XXT_invx.adjoint() * xTXXT_inv2x * std::pow(d_min_prev_m_1, 2);
+            cols.erase(cols.begin() + j_min);
+        }
+    }
+
+    return cols;
+}
+
+/*
 template <typename scalar>
 std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
     std::unordered_set<uint> cols;
@@ -48,7 +118,7 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
     std::copy(cols.begin(), cols.end(), std::back_inserter(vec));
     std::sort(vec.begin(), vec.end());
     return vec;
-}
+}*/
 
 template class GreedyRemoval2Selector<float>;
 template class GreedyRemoval2Selector<double>;

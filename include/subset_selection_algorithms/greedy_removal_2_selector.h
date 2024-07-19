@@ -10,7 +10,7 @@ private:
     double eps;
 
 public:
-    GreedyRemoval2Selector(double eps = 1e-8); 
+    GreedyRemoval2Selector(scalar eps = 1e-8); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 };

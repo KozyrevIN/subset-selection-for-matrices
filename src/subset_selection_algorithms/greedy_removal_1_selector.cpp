@@ -20,41 +20,37 @@ std::vector<uint> GreedyRemoval1Selector<scalar>::selectSubset(const Eigen::Matr
 
     if (k < cols.size()) {
         Eigen::VectorX<scalar> x;
-        Eigen::MatrixX<scalar> XXT_inv = (X * X.adjoint()).inverse();
-        Eigen::MatrixX<scalar> XXT_invx;
+        Eigen::MatrixX<scalar> XXT_inv = (X * X.transpose()).inverse();
+        Eigen::MatrixX<scalar> XXT_invx_d_max_m1;
         Eigen::VectorX<scalar> d(cols.size());
-        scalar d_max = 0.0; scalar d_max_prev_m_1; uint j_max;
+        scalar d_max = 0.0; uint j_max;
 
-        #pragma omp parallel for
+        //#pragma omp parallel for
         for (uint j = 0; j < cols.size(); ++j) {
-            d(j) = 1.0 - (X.col(cols[j]).adjoint() * XXT_inv * X.col(cols[j])).value();
+            d(j) = 1.0 - (X.col(cols[j]).transpose() * XXT_inv * X.col(cols[j])).value();
             if (d(j) > eps and d(j) > d_max) {
                 d_max = d(j);
                 j_max = j;
             }
         }
 
-        x = X.col(cols[j_max]);
-        XXT_invx = XXT_inv * x;
-        XXT_inv += XXT_inv * x * x.adjoint() * XXT_inv / d_max;
-        d_max_prev_m_1 = 1 / d_max;
+        XXT_invx_d_max_m1 = XXT_inv * X.col(cols[j_max]) / d_max;
+        XXT_inv += (XXT_inv * X.col(cols[j_max])) * (X.col(cols[j_max]).transpose() * XXT_inv) / d_max;
         d_max = 0.0;
         cols.erase(cols.begin() + j_max);
 
         while (cols.size() > k) {
-            #pragma omp parallel for
+            //#pragma omp parallel for
             for (uint j = 0; j < cols.size(); ++j) {
-                d(cols[j]) -= (X.col(cols[j]).adjoint() * XXT_invx).cwiseAbs2().value() * d_max_prev_m_1;
-                if (d(cols[j]) > eps and d(cols[j]) > d_max) {
+                d(cols[j]) -= (X.col(cols[j]).transpose() * XXT_invx_d_max_m1).value();
+                if (d(cols[j]) > d_max and d(cols[j]) > eps) {
                     d_max = d(cols[j]);
                     j_max = j;
                 }            
             }
 
-            x = X.col(cols[j_max]);
-            XXT_invx = XXT_inv * x;
-            XXT_inv += XXT_inv * x * x.adjoint() * XXT_inv / d_max;
-            d_max_prev_m_1 = 1 / d_max;
+            XXT_invx_d_max_m1 = XXT_inv * X.col(cols[j_max]) / d_max;
+            XXT_inv += XXT_inv * X.col(cols[j_max]) * X.col(cols[j_max]).transpose() * XXT_inv / d_max;
             d_max = 0.0;
             cols.erase(cols.begin() + j_max);
         }
@@ -65,5 +61,3 @@ std::vector<uint> GreedyRemoval1Selector<scalar>::selectSubset(const Eigen::Matr
 
 template class GreedyRemoval1Selector<float>;
 template class GreedyRemoval1Selector<double>;
-//template class GreedyRemoval1Selector<std::complex<float>>;
-//template class GreedyRemoval1Selector<std::complex<double>>;

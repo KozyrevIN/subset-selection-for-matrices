@@ -9,11 +9,11 @@ int main()
     Eigen::setNbThreads(8);
     Eigen::initParallel();
 
-    auto mat_gen = type3MatrixGenerator<double>(30, 3000, 0.1);
+    auto mat_gen = type3MatrixGenerator<double>(50, 1000, 0.1);
     auto A = mat_gen.generateMatrix();
     SubsetSelector<double> selector_1("bobs");
     RankRevealingQRSelector<double> selector_2;
-    GreedyRemoval1Selector<double> selector_3(1e-8);
+    GreedyRemoval1Selector<double> selector_3;
     GreedyRemoval2Selector<double> selector_4;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
@@ -23,5 +23,5 @@ int main()
     alg_list.push_back(&selector_4);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(A, alg_list, 30);
+    std::cout << t.testAlgorithmsOnMatrix(A, alg_list, 50);
 }

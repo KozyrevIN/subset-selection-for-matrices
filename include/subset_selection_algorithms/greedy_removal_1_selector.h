@@ -11,7 +11,7 @@ class GreedyRemoval1Selector : public SubsetSelector<scalar>
 private:
     scalar eps;
 public:
-    GreedyRemoval1Selector(scalar eps); 
+    GreedyRemoval1Selector(scalar eps = 1e-8); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 };

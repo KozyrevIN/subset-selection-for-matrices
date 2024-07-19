@@ -12,14 +12,22 @@ Tester<scalar>::Tester() {
 template <typename scalar>
 std::string Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar>& A, SubsetSelector<scalar>* algorithm, uint k) {
     std::string results;
-    auto t1 = std::chrono::high_resolution_clock::now();
-    auto subset = algorithm -> selectSubset(A, k);
-    auto t2 = std::chrono::high_resolution_clock::now();
-    double pinv_norm = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
-    double pinv_norm_0 = pinv_frobenius_norm<scalar>(A);
+    double time = 0; double volume_reduction = 0;
+    for (uint i = 0; i < 100; ++i) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        auto subset = algorithm -> selectSubset(A, k);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        double pinv_norm = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
+        double pinv_norm_0 = pinv_frobenius_norm<scalar>(A);
+
+        volume_reduction += pinv_norm_0 / pinv_norm;
+        time += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    }
+    time *= 0.01;
+    volume_reduction *= 0.01;
     results = algorithm -> algorithmName + ":\n"
-              "    volume reduction = " + std::to_string(pinv_norm_0 / pinv_norm) + "\n"
-              "    time = " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()) + " ms \n";
+              "    volume reduction = " + std::to_string(volume_reduction) + "\n"
+              "    time = " + std::to_string(time) + " ms \n";
 
     return results;
 }

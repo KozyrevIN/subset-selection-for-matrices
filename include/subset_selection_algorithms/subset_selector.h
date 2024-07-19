@@ -14,5 +14,5 @@ public:
     SubsetSelector(const std::string& algorithm_name);
 
     std::string algorithmName; 
-    virtual std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k);
+    virtual std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& X, uint k);
 };

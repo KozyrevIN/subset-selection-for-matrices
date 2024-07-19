@@ -8,12 +8,13 @@ SubsetSelector<scalar>::SubsetSelector(const std::string& algorithm_name): algor
 }
 
 template <typename scalar>
-std::vector<uint> SubsetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& x, uint k) {
-    std::vector<uint> vect(k);
+std::vector<uint> SubsetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+    std::vector<uint> cols(k);
     for (int i = 0; i < k; ++i) {
-        vect[i] = i;
+        cols[i] = i;
     }
-    return vect;
+
+    return cols;
 }
 
 template class SubsetSelector<float>;
