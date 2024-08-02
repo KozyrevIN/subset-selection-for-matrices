@@ -4,12 +4,12 @@
 #endif
 
 template <typename scalar>
-class GreedyRemoval1Selector : public SubsetSelector<scalar>
+class GradientBasedReplacementSelector : public SubsetSelector<scalar>
 {
 private:
     scalar eps;
 public:
-    GreedyRemoval1Selector(scalar eps = 1e-8); 
+    GradientBasedReplacementSelector(scalar eps = 1e-8); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 };

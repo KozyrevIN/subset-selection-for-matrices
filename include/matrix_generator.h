@@ -63,7 +63,7 @@ public:
 };
 
 /*
-Генератор матрицы со всеми сингулярными числами кроме посдеднего 1, последнее - эпсилон
+Генератор матрицы со всеми сингулярными числами кроме последнего 1, последнее - эпсилон
 */
 template <typename scalar>
 class type3MatrixGenerator : public SigmaMatrixGenerator<scalar> {

@@ -9,8 +9,8 @@ int main()
     Eigen::setNbThreads(8);
     Eigen::initParallel();
 
-    auto mat_gen = type3MatrixGenerator<double>(50, 1000, 0.1);
-    auto A = mat_gen.generateMatrix();
+    auto mat_gen = new type3MatrixGenerator<double>(50, 1000, 0.1);
+    //auto A = mat_gen.generateMatrix();
     SubsetSelector<double> selector_1("bobs");
     RankRevealingQRSelector<double> selector_2;
     GreedyRemoval1Selector<double> selector_3;
@@ -23,5 +23,6 @@ int main()
     alg_list.push_back(&selector_4);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(A, alg_list, 50);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 50);
+    delete mat_gen;
 }
