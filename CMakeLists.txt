@@ -11,6 +11,7 @@ set(SOURCES
     src/subset_selection_algorithms/rank_revealing_QR_selector.cpp
     src/subset_selection_algorithms/greedy_removal_1_selector.cpp
     src/subset_selection_algorithms/greedy_removal_2_selector.cpp
+    src/subset_selection_algorithms/greedy_selection_1_selector.cpp
 )
 
 set(CMAKE_CXX_FLAGS "-fopenmp -O3")
