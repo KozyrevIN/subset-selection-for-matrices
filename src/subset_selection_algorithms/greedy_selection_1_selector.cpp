@@ -1,5 +1,4 @@
 #include <vector>
-#include <iostream>
 #include <eigen3/Eigen/QR>
 #include <eigen3/Eigen/SVD>
 
@@ -33,7 +32,6 @@ std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::Ma
 
     while (cols.size() < k) {
         Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X(Eigen::all, cols), Eigen::ComputeThinU);
-        std::cout << cols.size() << "\n";
 
         for (uint j = 0; j < remaining_cols.size(); ++j) {
             scalar val = X.col(remaining_cols[j]).squaredNorm() - (X.col(remaining_cols[j]).transpose() * svd.matrixU()).squaredNorm();

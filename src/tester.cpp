@@ -12,15 +12,24 @@ Tester<scalar>::Tester() {
 template <typename scalar>
 std::string Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar>& A, SubsetSelector<scalar>* algorithm, uint k) {
     std::string results;
+
     auto t1 = std::chrono::high_resolution_clock::now();
     auto subset = algorithm -> selectSubset(A, k);
     auto t2 = std::chrono::high_resolution_clock::now();
-    scalar pinv_norm = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
-    scalar pinv_norm_0 = pinv_frobenius_norm<scalar>(A);
-    scalar volume_reduction = pinv_norm_0 / pinv_norm;
+
+    scalar pinv_frobenius_norm_1 = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
+    scalar pinv_frobenius_norm_0 = pinv_frobenius_norm<scalar>(A);
+
+    scalar pinv_l_2_norm_1 = pinv_l_2_norm<scalar>(A(Eigen::all, subset));
+    scalar pinv_l_2_norm_0 = pinv_l_2_norm<scalar>(A);
+
+    scalar frobenius_volume_reduction = pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
+    scalar l_2_volume_reduction = pinv_l_2_norm_0 / pinv_l_2_norm_1;
+
     auto time = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     results = algorithm -> algorithmName + ":\n"
-              "    volume reduction = " + std::to_string(volume_reduction) + "\n"
+              "    frobenius volume reduction = " + std::to_string(frobenius_volume_reduction) + "\n" +
+              "    l_2 volume reduction = " + std::to_string(l_2_volume_reduction) + "\n" +
               "    time = " + std::to_string(time) + " ms \n";
 
     return results;
@@ -37,21 +46,32 @@ template <typename scalar>
 std::string Tester<scalar>::testAlgorithmOnMatrix(MatrixGenerator<scalar>* mat_gen, SubsetSelector<scalar>* algorithm, uint k, uint cycles) {
     std::string results;
     Eigen::ArrayX<double> time(cycles);
-    Eigen::ArrayX<scalar> volume_reduction(cycles);
+    Eigen::ArrayX<scalar> frobeinus_volume_reduction(cycles);
+    Eigen::ArrayX<scalar> l_2_volume_reduction(cycles);
+
     for (uint i = 0; i < cycles; ++i) {
         auto A = mat_gen -> generateMatrix();
+
         auto t1 = std::chrono::high_resolution_clock::now();
         auto subset = algorithm -> selectSubset(A, k);
         auto t2 = std::chrono::high_resolution_clock::now();
-        scalar pinv_norm = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
-        scalar pinv_norm_0 = pinv_frobenius_norm<scalar>(A);
 
-        volume_reduction(i) = pinv_norm_0 / pinv_norm;
+        scalar pinv_frobenius_norm_1 = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
+        scalar pinv_frobenius_norm_0 = pinv_frobenius_norm<scalar>(A);
+
+        scalar pinv_l_2_norm_1 = pinv_l_2_norm<scalar>(A(Eigen::all, subset));
+        scalar pinv_l_2_norm_0 = pinv_l_2_norm<scalar>(A);
+
+        frobeinus_volume_reduction(i) = pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
+        l_2_volume_reduction(i) = pinv_l_2_norm_0 / pinv_l_2_norm_1;
+
         time(i) = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     }
     results = algorithm -> algorithmName + ":\n"
-              "    volume reduction = " + std::to_string(volume_reduction.mean()) + " +- " + 
-              std::to_string(std::sqrt((volume_reduction - volume_reduction.mean()).square().sum() / (cycles - 1))) + "\n" +
+              "    frobenius volume reduction = " + std::to_string(frobeinus_volume_reduction.mean()) + " +- " + 
+              std::to_string(std::sqrt((frobeinus_volume_reduction - frobeinus_volume_reduction.mean()).square().sum() / (cycles - 1))) + "\n" +
+              "    l_2 volume reduction = " + std::to_string(l_2_volume_reduction.mean()) + " +- " + 
+              std::to_string(std::sqrt((l_2_volume_reduction - l_2_volume_reduction.mean()).square().sum() / (cycles - 1))) + "\n" +
               "    time = " + std::to_string(time.mean()) + " +- " +
               std::to_string(std::sqrt((time - time.mean()).square().sum() / (cycles - 1))) + " ms \n";
 

@@ -4,10 +4,10 @@
 #endif
 
 template <typename scalar>
-class GreedySelection1Selector : public SubsetSelector<scalar> {
+class GradientDescentSelector : public SubsetSelector<scalar> {
     
 public:
-    GreedySelection1Selector(); 
+    GradientDescentSelector(); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 };
