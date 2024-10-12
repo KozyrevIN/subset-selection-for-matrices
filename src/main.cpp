@@ -6,9 +6,6 @@
 
 int main()
 {
-    //Eigen::setNbThreads(8);
-    //Eigen::initParallel();
-
     auto mat_gen = new type3MatrixGenerator<double>(50, 1000, 0.1);
     //auto A = mat_gen.generateMatrix();
     SubsetSelector<double> selector_1("first_m");
@@ -25,6 +22,6 @@ int main()
     alg_list.push_back(&selector_5);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 100, 10);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 10);
     delete mat_gen;
 }

@@ -27,5 +27,3 @@ std::vector<uint> RankRevealingQRSelector<scalar>::selectSubset(const Eigen::Mat
 
 template class RankRevealingQRSelector<float>;
 template class RankRevealingQRSelector<double>;
-template class RankRevealingQRSelector<std::complex<float>>;
-template class RankRevealingQRSelector<std::complex<double>>;
