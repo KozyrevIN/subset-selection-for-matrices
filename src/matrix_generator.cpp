@@ -1,7 +1,6 @@
 #include <random>
+#include <cassert>
 #include <iostream>
-#include <tuple>
-#include <complex>
 
 #include "../include/matrix_generator.h"
 
@@ -26,22 +25,13 @@ Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix() {
 
 template class MatrixGenerator<float>;
 template class MatrixGenerator<double>;
-template class MatrixGenerator<std::complex<float>>;
-template class MatrixGenerator<std::complex<double>>;
 
 /*
-Генератор унитарной матрицы заданных размеров
+Генератор унитарной матрицы заданных размеров, m >= n
 */
 template <typename scalar>
 UnitaryMatrixGenerator<scalar>::UnitaryMatrixGenerator(uint m, uint n) : MatrixGenerator<scalar>(m, n) {
-    try {
-        if (m < n) {
-            throw std::pair(m, n);
-        }
-    }
-    catch (const std::pair<uint, uint>& dim) {
-        std::cout << "Invalid matrix size, m < n: (" << dim.first << ", " << dim.second << ")!\n";
-    }
+   assert(m >= n && "Invalid matrix size, m must be larger then n");
 }
 
 template <typename scalar>
@@ -60,12 +50,13 @@ Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix(uint seed)
     }
 
     Eigen::HouseholderQR<Eigen::MatrixX<scalar>> qr(tmp);
-    Eigen::MatrixX<scalar> Q = qr.householderQ() * Eigen::MatrixX<scalar>::Identity(m,n);
-    Eigen::MatrixX<scalar> R = qr.matrixQR();
+    Eigen::MatrixX<scalar> Qfull = qr.householderQ();
+    Eigen::MatrixX<scalar> Q = Qfull.leftCols(n);
+    Eigen::VectorX<scalar> Rdiag = qr.matrixQR().diagonal();
 
     for(int i = 0; i < n; ++i) {
-        if (std::abs(R(i, i)) != 0) {
-            Q.row(i) *= R(i, i) / std::abs(R(i, i));
+        if (std::abs(Rdiag(i) != 0)) {
+            Q.row(i) *= Rdiag(i) / std::abs(Rdiag(i));
         }
     }
 
@@ -80,8 +71,6 @@ Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix() {
 
 template class UnitaryMatrixGenerator<float>;
 template class UnitaryMatrixGenerator<double>;
-//template class UnitaryMatrixGenerator<std::complex<float>>;
-//template class UnitaryMatrixGenerator<std::complex<double>>;
 
 /*
 Генератор матрицы заданных размеров с заданными набором сингулярных чисел
@@ -96,15 +85,8 @@ Eigen::MatrixX<scalar> SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(con
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
     uint k = sigma.rows();
-    try {
-        if (MatrixGenerator<scalar>::m < k or MatrixGenerator<scalar>::n < k) {
-            throw std::tuple(m, n, k);
-        }
-    }
-    catch (const std::tuple<uint, uint, uint>& dim) {
-        std::cout << "Invalid combination of matrix size and number of singular values, n < k or m < k: (" 
-                  << std::get<0>(dim) << ", " << std::get<1>(dim) << ", " << std::get<2>(dim) << ")!\n";
-    }
+
+    assert((m >= k) && (n >= k) && "Invalid combination of matrix size and number of singular values, n and m must be larger then k");
 
     UnitaryMatrixGenerator<scalar> u_gen(m, k); 
     UnitaryMatrixGenerator<scalar> v_gen(n, k); 
@@ -120,14 +102,12 @@ Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sig
 
 template class SigmaMatrixGenerator<float>;
 template class SigmaMatrixGenerator<double>;
-//template class SigmaMatrixGenerator<std::complex<float>>;
-//template class SigmaMatrixGenerator<std::complex<double>>;
 
 /*
 Генератор матрицы со всеми сингулярными числами 1
 */
 template <typename scalar>
-type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n, double eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
+type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n, scalar eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
     //do nothing
 }
 
@@ -135,6 +115,7 @@ template <typename scalar>
 Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix(uint seed_1, uint seed_2) {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
+
     Eigen::VectorX<scalar> sigma(m);
     for (uint i = 0; i < m; ++i) {
         sigma(i) = 1;
@@ -151,14 +132,12 @@ Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix() {
 
 template class type1MatrixGenerator<float>;
 template class type1MatrixGenerator<double>;
-//template class type1MatrixGenerator<std::complex<float>>;
-//template class type1MatrixGenerator<std::complex<double>>;
 
 /*
 Генератор матрицы с 1 сингулярными числом 1 и остальными эпсилон
 */
 template <typename scalar>
-type2MatrixGenerator<scalar>::type2MatrixGenerator(uint m, uint n, double eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
+type2MatrixGenerator<scalar>::type2MatrixGenerator(uint m, uint n, scalar eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
     //do nothing
 }
 
@@ -166,6 +145,7 @@ template <typename scalar>
 Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix(uint seed_1, uint seed_2) {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
+
     Eigen::VectorX<scalar> sigma(m);
     sigma(0) = 1;
     for (uint i = 1; i < m; ++i) {
@@ -183,14 +163,12 @@ Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix() {
 
 template class type2MatrixGenerator<float>;
 template class type2MatrixGenerator<double>;
-//template class type2MatrixGenerator<std::complex<float>>;
-//template class type2MatrixGenerator<std::complex<double>>;
 
 /*
 Генератор матрицы со всеми сингулярными числами кроме посдеднего 1, последнее - эпсилон
 */
 template <typename scalar>
-type3MatrixGenerator<scalar>::type3MatrixGenerator(uint m, uint n, double eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
+type3MatrixGenerator<scalar>::type3MatrixGenerator(uint m, uint n, scalar eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
     //do nothing
 }
 
@@ -215,5 +193,3 @@ Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix() {
 
 template class type3MatrixGenerator<float>;
 template class type3MatrixGenerator<double>;
-//template class type3MatrixGenerator<std::complex<float>>;
-//template class type3MatrixGenerator<std::complex<double>>;

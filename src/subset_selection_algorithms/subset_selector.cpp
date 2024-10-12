@@ -19,5 +19,3 @@ std::vector<uint> SubsetSelector<scalar>::selectSubset(const Eigen::MatrixX<scal
 
 template class SubsetSelector<float>;
 template class SubsetSelector<double>;
-template class SubsetSelector<std::complex<float>>;
-template class SubsetSelector<std::complex<double>>;

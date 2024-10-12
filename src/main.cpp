@@ -25,6 +25,6 @@ int main()
     alg_list.push_back(&selector_5);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 50);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 100, 10);
     delete mat_gen;
 }

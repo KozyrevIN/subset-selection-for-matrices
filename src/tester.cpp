@@ -100,5 +100,3 @@ std::string Tester<scalar>::testAlgorithmsOnMatrix(MatrixGenerator<scalar>* mat_
 
 template class Tester<float>;
 template class Tester<double>;
-//template class Tester<std::complex<float>>;
-//template class Tester<std::complex<double>>;

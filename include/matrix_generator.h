@@ -8,6 +8,7 @@ class MatrixGenerator {
 protected:
     uint m;
     uint n;
+    
 public:
     MatrixGenerator(uint m, uint n);
     virtual Eigen::MatrixX<scalar> generateMatrix(uint seed);
@@ -42,9 +43,10 @@ public:
 template <typename scalar>
 class type1MatrixGenerator : public SigmaMatrixGenerator<scalar> {
 private:
-    double eps;
+    scalar eps;
+
 public:
-    type1MatrixGenerator(uint m, uint n, double eps);
+    type1MatrixGenerator(uint m, uint n, scalar eps);
     Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
@@ -55,9 +57,10 @@ public:
 template <typename scalar>
 class type2MatrixGenerator : public SigmaMatrixGenerator<scalar> {
 private:
-    double eps;
+    scalar eps;
+
 public:
-    type2MatrixGenerator(uint m, uint n, double eps);
+    type2MatrixGenerator(uint m, uint n, scalar eps);
     Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
@@ -68,9 +71,10 @@ public:
 template <typename scalar>
 class type3MatrixGenerator : public SigmaMatrixGenerator<scalar> {
 private:
-    double eps;
+    scalar eps;
+    
 public:
-    type3MatrixGenerator(uint m, uint n, double eps);
+    type3MatrixGenerator(uint m, uint n, scalar eps);
     Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
