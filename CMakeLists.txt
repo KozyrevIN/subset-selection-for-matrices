@@ -14,6 +14,6 @@ set(SOURCES
     src/subset_selection_algorithms/greedy_selection_1_selector.cpp
 )
 
-set(CMAKE_CXX_FLAGS "-fopenmp -O3")
+set(CMAKE_CXX_FLAGS "-O3")
 
 add_executable(main ${SOURCES})
