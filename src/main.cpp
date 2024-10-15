@@ -6,13 +6,13 @@
 
 int main()
 {
-    auto mat_gen = new type3MatrixGenerator<double>(50, 1000, 0.1);
+    auto mat_gen = new type1MatrixGenerator<double>(50, 1000, 0.1);
     //auto A = mat_gen.generateMatrix();
     SubsetSelector<double> selector_1("first_m");
-    RankRevealingQRSelector<double> selector_2;
-    GreedyRemoval1Selector<double> selector_3;
-    GreedyRemoval2Selector<double> selector_4;
-    GreedySelection1Selector<double> selector_5;
+    GreedySelection1Selector<double> selector_2;
+    RankRevealingQRSelector<double> selector_3;
+    GreedyRemoval1Selector<double> selector_4;
+    GreedyRemoval2Selector<double> selector_5;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
     alg_list.push_back(&selector_1);
@@ -22,6 +22,6 @@ int main()
     alg_list.push_back(&selector_5);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 100, 10);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 51, 10);
     delete mat_gen;
 }
