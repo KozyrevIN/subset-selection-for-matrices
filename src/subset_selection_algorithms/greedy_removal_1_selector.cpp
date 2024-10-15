@@ -34,11 +34,11 @@ std::vector<uint> GreedyRemoval1Selector<scalar>::selectSubset(const Eigen::Matr
             V.col(j_max).swap(V.col(cols_remaining - 1));
             VVT_invV.col(j_max).swap(VVT_invV.col(cols_remaining - 1));
 
-            d.head(cols_remaining) -= (V.col(cols_remaining - 1).transpose() * 
-                                      VVT_invV.leftCols(cols_remaining)).array().square() / d_max;
-            VVT_invV.leftCols(cols_remaining) += VVT_invV.col(cols_remaining - 1) *
+            d.head(cols_remaining - 1) -= (V.col(cols_remaining - 1).transpose() * 
+                                      VVT_invV.leftCols(cols_remaining - 1)).array().square() / d_max;
+            VVT_invV.leftCols(cols_remaining - 1) += VVT_invV.col(cols_remaining - 1) *
                                                  (VVT_invV.col(cols_remaining - 1).transpose() *
-                                                 V.leftCols(cols_remaining)) / d_max;
+                                                 V.leftCols(cols_remaining - 1)) / d_max;
         }
     }
 

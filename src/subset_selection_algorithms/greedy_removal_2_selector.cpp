@@ -45,7 +45,14 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
                                                 VVT_invV.leftCols(cols_remaining)).array();
             l.head(cols_remaining) += 2 * wTVVT_invV * wTVVT_inv2V / d(cols_remaining - 1) + 
                                       wTVVT_invV.square() * wTVVT_inv2V(cols_remaining - 1) / (d(cols_remaining - 1) * d(cols_remaining - 1));
-            d.head(cols_remaining) -= wTVVT_invV.square() / d(cols_remaining - 1);
+            //l.head(cols_remaining) = (VVT_invV.leftCols(cols_remaining).transpose() * S_inv2.asDiagonal() * VVT_invV.leftCols(cols_remaining)).diagonal();
+            //d.head(cols_remaining) = 1 - (V.leftCols(cols_remaining).transpose() * VVT_invV.leftCols(cols_remaining)).diagonal().array();
+            /*d.head(cols_remaining) -= (V.col(cols_remaining - 1).transpose() * 
+                                      VVT_invV.leftCols(cols_remaining)).array().square() / d(cols_remaining - 1);*/
+
+            d.head(cols_remaining - 1) -= (V.col(cols_remaining - 1).transpose() * 
+                                      VVT_invV.leftCols(cols_remaining - 1)).array().square() / d(cols_remaining - 1);
+
             VVT_invV.leftCols(cols_remaining) += VVT_invV.col(cols_remaining - 1) *
                                                  (VVT_invV.col(cols_remaining - 1).transpose() *
                                                  V.leftCols(cols_remaining)) / d(cols_remaining - 1);
