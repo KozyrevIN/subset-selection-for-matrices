@@ -1,4 +1,3 @@
-#include <random>
 #include <cassert>
 #include <iostream>
 
@@ -10,7 +9,13 @@ namespace SubsetSelection
 */
 template <typename scalar>
 MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n) : m(m), n(n) {
-    //do nothing
+    std::random_device rd;
+    gen = std::mt19937(rd());
+}
+
+template <typename scalar>
+MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n, int seed) : m(m), n(n) {
+    gen = std::mt19937(seed);
 }
 
 template <typename scalar>
@@ -19,14 +24,8 @@ std::pair <uint, uint> MatrixGenerator<scalar>::getMatrixSize() {
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix(uint seed) {
-    return Eigen::MatrixX<scalar>(m, n);
-}
-
-template <typename scalar>
 Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix() {
-    std::random_device rd;
-    return generateMatrix(rd());
+    return Eigen::MatrixX<scalar>(m, n);
 }
 
 /*
@@ -38,17 +37,21 @@ UnitaryMatrixGenerator<scalar>::UnitaryMatrixGenerator(uint m, uint n) : MatrixG
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix(uint seed) {
+UnitaryMatrixGenerator<scalar>::UnitaryMatrixGenerator(uint m, uint n, int seed) : MatrixGenerator<scalar>(m, n, seed) {
+   assert(m >= n && "Invalid matrix size, m must be larger then n");
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix() {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
-    std::mt19937 gen(seed);
     std::normal_distribution<scalar> dis(0.0, 1.0);
 
     Eigen::MatrixX<scalar> tmp(m, n);
 
     for (int i = 0; i < m; ++i) {
         for (int j = 0; j < n; ++j) {
-            tmp(i, j) = dis(gen);
+            tmp(i, j) = dis(MatrixGenerator<scalar>::gen);
         }
     }
 
@@ -66,12 +69,6 @@ Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix(uint seed)
     return Q;
 }
 
-template <typename scalar>
-Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix() {
-    std::random_device rd;
-    return generateMatrix(rd());
-}
-
 /*
 Генератор матрицы заданных размеров с заданными набором сингулярных чисел
 */
@@ -81,23 +78,22 @@ SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(uint m, uint n) : MatrixGener
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma, uint seed_1, uint seed_2) {
+SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(uint m, uint n, int seed) : MatrixGenerator<scalar>(m , n, seed) {
+    //do nothing
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma) {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
     uint k = sigma.rows();
 
     assert((m >= k) && (n >= k) && "Invalid combination of matrix size and number of singular values, n and m must be larger then k");
 
-    UnitaryMatrixGenerator<scalar> u_gen(m, k); 
-    UnitaryMatrixGenerator<scalar> v_gen(n, k); 
+    UnitaryMatrixGenerator<scalar> u_gen(m, k, MatrixGenerator<scalar>::gen()); 
+    UnitaryMatrixGenerator<scalar> v_gen(n, k, MatrixGenerator<scalar>::gen()); 
 
-    return u_gen.generateMatrix(seed_1) * sigma.asDiagonal() * v_gen.generateMatrix(seed_2).adjoint();
-}
-
-template <typename scalar>
-Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma) {
-    std::random_device rd_1, rd_2;
-    return generateMatrixWithSigma<scalar>(sigma, rd_1(), rd_2());
+    return u_gen.generateMatrix() * sigma.asDiagonal() * v_gen.generateMatrix().adjoint();
 }
 
 /*
@@ -109,7 +105,12 @@ type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n) : SigmaMatrix
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix(uint seed_1, uint seed_2) {
+type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n, int seed) : SigmaMatrixGenerator<scalar>(m, n, seed) {
+    //do nothing
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix() {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
 
@@ -118,14 +119,8 @@ Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix(uint seed_1,
         sigma(i) = 1;
     }
 
-    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma, seed_1, seed_2);
+    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma);
 };
-
-template <typename scalar>
-Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix() {
-    std::random_device rd_1, rd_2;
-    return generateMatrix(rd_1(), rd_2());
-}
 
 /*
 Генератор матрицы с 1 сингулярными числом 1 и остальными эпсилон
@@ -136,7 +131,12 @@ type2MatrixGenerator<scalar>::type2MatrixGenerator(uint m, uint n, scalar eps) :
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix(uint seed_1, uint seed_2) {
+type2MatrixGenerator<scalar>::type2MatrixGenerator(uint m, uint n, scalar eps, int seed) : SigmaMatrixGenerator<scalar>(m, n, seed), eps(eps) {
+    //do nothing
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix() {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
 
@@ -146,13 +146,7 @@ Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix(uint seed_1,
         sigma(i) = eps;
     }
 
-    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma, seed_1, seed_2);
-};
-
-template <typename scalar>
-Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix() {
-    std::random_device rd_1, rd_2;
-    return generateMatrix(rd_1(), rd_2());
+    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma);
 }
 
 /*
@@ -164,7 +158,12 @@ type3MatrixGenerator<scalar>::type3MatrixGenerator(uint m, uint n, scalar eps) :
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix(uint seed_1, uint seed_2) {
+type3MatrixGenerator<scalar>::type3MatrixGenerator(uint m, uint n, scalar eps, int seed) : SigmaMatrixGenerator<scalar>(m, n, seed), eps(eps) {
+    //do nothing
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix() {
     uint& m = MatrixGenerator<scalar>::m;
     uint& n = MatrixGenerator<scalar>::n;
     Eigen::VectorX<scalar> sigma(m);
@@ -173,13 +172,7 @@ Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix(uint seed_1,
     }
     sigma(m - 1) = eps;
 
-    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma, seed_1, seed_2);
-};
-
-template <typename scalar>
-Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix() {
-    std::random_device rd_1, rd_2;
-    return generateMatrix(rd_1(), rd_2());
+    return SigmaMatrixGenerator<scalar>::generateMatrixWithSigma(sigma);
 }
 
 }

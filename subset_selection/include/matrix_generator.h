@@ -2,6 +2,7 @@
 #define MATRIX_GENERATOR_H
 
 #include <eigen3/Eigen/Dense>
+#include <random>
 
 namespace SubsetSelection
 {
@@ -14,11 +15,12 @@ class MatrixGenerator {
 protected:
     uint m;
     uint n;
+    std::mt19937 gen;
     
 public:
     MatrixGenerator(uint m, uint n);
+    MatrixGenerator(uint m, uint n, int seed);
     std::pair<uint, uint> getMatrixSize();
-    virtual Eigen::MatrixX<scalar> generateMatrix(uint seed);
     virtual Eigen::MatrixX<scalar> generateMatrix();
 };
 
@@ -29,7 +31,7 @@ template <typename scalar>
 class UnitaryMatrixGenerator : public MatrixGenerator<scalar> {
 public:
     UnitaryMatrixGenerator(uint m, uint n);
-    Eigen::MatrixX<scalar> generateMatrix(uint seed) override;
+    UnitaryMatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -40,7 +42,7 @@ template <typename scalar>
 class SigmaMatrixGenerator : public MatrixGenerator<scalar> {
 public:
     SigmaMatrixGenerator(uint m, uint n);
-    Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma, uint seed_1, uint seed_2);
+    SigmaMatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma);
 };
 
@@ -51,7 +53,7 @@ template <typename scalar>
 class type1MatrixGenerator : public SigmaMatrixGenerator<scalar> {
 public:
     type1MatrixGenerator(uint m, uint n);
-    Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
+    type1MatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -65,7 +67,7 @@ private:
 
 public:
     type2MatrixGenerator(uint m, uint n, scalar eps);
-    Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
+    type2MatrixGenerator(uint m, uint n, scalar eps, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -79,7 +81,7 @@ private:
     
 public:
     type3MatrixGenerator(uint m, uint n, scalar eps);
-    Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
+    type3MatrixGenerator(uint m, uint n, scalar eps, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 

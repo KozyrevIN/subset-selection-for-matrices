@@ -1,6 +1,7 @@
 #include <chrono>
 #include <fstream>
 #include <filesystem>
+#include <omp.h>
 
 #include "../include/tester.h"
 #include "../include/matrix_utilities.h"
@@ -115,11 +116,11 @@ void Tester<scalar>::scatterPoints(MatrixGenerator<scalar>* mat_gen, SubsetSelec
 
     std::ofstream output_points;
     output_points.open(path + "/points.csv");
-    output_points << "k, value\n";
+    output_points << "k,value\n";
 
     std::ofstream output_bound;
     output_bound.open(path + "/bound.csv");
-    output_bound << "k, value\n";
+    output_bound << "k,value\n";
 
     //getting matrix parameters
     auto [m, n] = mat_gen -> getMatrixSize();
@@ -131,12 +132,16 @@ void Tester<scalar>::scatterPoints(MatrixGenerator<scalar>* mat_gen, SubsetSelec
 
     //scattering points
     for (uint k = m; k <= n; ++k) {
+        #pragma omp parallel for
         for (uint i = 0; i < points_for_k; ++i) {
             auto A = mat_gen -> generateMatrix();
             auto subset = algorithm -> selectSubset(A, k);
             scalar pinv_norm_1 = pinv_norm<scalar, norm>(A(Eigen::all, subset));
             scalar pinv_norm_0 = pinv_norm<scalar, norm>(A);
-            output_points << k << ',' << pinv_norm_0 / pinv_norm_1 << '\n';
+            #pragma omp critical
+            {
+                output_points << k << ',' << pinv_norm_0 / pinv_norm_1 << '\n';
+            }
         }
     }
 
