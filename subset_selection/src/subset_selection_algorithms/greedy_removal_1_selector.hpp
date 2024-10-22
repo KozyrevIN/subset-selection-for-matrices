@@ -1,7 +1,7 @@
 #include <vector>
-#include <iostream>
 
-#include "../../include/subset_selection_algorithms/greedy_removal_1_selector.h"
+namespace SubsetSelection
+{
 
 template <typename scalar>
 GreedyRemoval1Selector<scalar>::GreedyRemoval1Selector(scalar eps): SubsetSelector<scalar>("greedy_removal_1"), eps(eps) {
@@ -46,5 +46,4 @@ std::vector<uint> GreedyRemoval1Selector<scalar>::selectSubset(const Eigen::Matr
     return cols;
 }
 
-template class GreedyRemoval1Selector<float>;
-template class GreedyRemoval1Selector<double>;
+}

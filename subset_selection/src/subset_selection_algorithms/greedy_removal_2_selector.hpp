@@ -1,6 +1,7 @@
 #include <vector>
 
-#include "../../include/subset_selection_algorithms/greedy_removal_2_selector.h"
+namespace SubsetSelection
+{
 
 template <typename scalar>
 GreedyRemoval2Selector<scalar>::GreedyRemoval2Selector(scalar eps): SubsetSelector<scalar>("greedy_removal_2"), eps(eps) {
@@ -60,14 +61,13 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
 }
 
 template <typename scalar>
-scalar GreedyRemoval2Selector<scalar>::frobeniusBound(uint m, uint n, uint k) {
-    return std::pow((scalar)(k - m + 1) / (scalar)(n - m + 1), 0.5);
+scalar GreedyRemoval2Selector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
+    scalar bound = std::pow((scalar)(k - m + 1) / (scalar)(n - m + 1), 0.5);
+    if (norm == Norm::L2) {
+        bound /= std::pow(n, 0.5);
+    }
+
+    return bound;
 }
 
-template <typename scalar>
-scalar GreedyRemoval2Selector<scalar>::l2Bound(uint m, uint n, uint k) {
-    return frobeniusBound(m, n, k) / std::pow(n, 0.5);
 }
-
-template class GreedyRemoval2Selector<float>;
-template class GreedyRemoval2Selector<double>;

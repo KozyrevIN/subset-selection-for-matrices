@@ -4,7 +4,8 @@
 #include <eigen3/Eigen/SVD>
 #include <iostream>
 
-#include "../../include/subset_selection_algorithms/greedy_selection_1_selector.h"
+namespace SubsetSelection
+{
 
 template <typename scalar> 
 GreedySelection1Selector<scalar>::GreedySelection1Selector(): SubsetSelector<scalar>("greedy_selection_1") {
@@ -77,14 +78,8 @@ std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::Ma
 }
 
 template <typename scalar>
-scalar GreedySelection1Selector<scalar>::frobeniusBound(uint m, uint n, uint k) {
-    return l2Bound(m, n, k);
-}
-
-template <typename scalar>
-scalar GreedySelection1Selector<scalar>::l2Bound(uint m, uint n, uint k) {
+scalar GreedySelection1Selector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
     return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
 }
 
-template class GreedySelection1Selector<float>;
-template class GreedySelection1Selector<double>;
+}

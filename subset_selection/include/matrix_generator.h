@@ -1,4 +1,10 @@
+#ifndef MATRIX_GENERATOR_H
+#define MATRIX_GENERATOR_H
+
 #include <eigen3/Eigen/Dense>
+
+namespace SubsetSelection
+{
 
 /*
 Базовый класс генератора матриц
@@ -11,6 +17,7 @@ protected:
     
 public:
     MatrixGenerator(uint m, uint n);
+    std::pair<uint, uint> getMatrixSize();
     virtual Eigen::MatrixX<scalar> generateMatrix(uint seed);
     virtual Eigen::MatrixX<scalar> generateMatrix();
 };
@@ -75,3 +82,10 @@ public:
     Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
+
+}
+
+#include "../src/matrix_generator.hpp"
+
+#endif
+

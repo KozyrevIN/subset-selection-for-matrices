@@ -2,7 +2,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "../include/matrix_generator.h"
+namespace SubsetSelection
+{
 
 /*
 Базовый класс генератора матриц
@@ -10,6 +11,11 @@
 template <typename scalar>
 MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n) : m(m), n(n) {
     //do nothing
+}
+
+template <typename scalar>
+std::pair <uint, uint> MatrixGenerator<scalar>::getMatrixSize() {
+    return std::make_pair(m, n);
 }
 
 template <typename scalar>
@@ -22,9 +28,6 @@ Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix() {
     std::random_device rd;
     return generateMatrix(rd());
 }
-
-template class MatrixGenerator<float>;
-template class MatrixGenerator<double>;
 
 /*
 Генератор унитарной матрицы заданных размеров, m >= n
@@ -69,9 +72,6 @@ Eigen::MatrixX<scalar> UnitaryMatrixGenerator<scalar>::generateMatrix() {
     return generateMatrix(rd());
 }
 
-template class UnitaryMatrixGenerator<float>;
-template class UnitaryMatrixGenerator<double>;
-
 /*
 Генератор матрицы заданных размеров с заданными набором сингулярных чисел
 */
@@ -100,9 +100,6 @@ Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sig
     return generateMatrixWithSigma<scalar>(sigma, rd_1(), rd_2());
 }
 
-template class SigmaMatrixGenerator<float>;
-template class SigmaMatrixGenerator<double>;
-
 /*
 Генератор матрицы со всеми сингулярными числами 1
 */
@@ -129,9 +126,6 @@ Eigen::MatrixX<scalar> type1MatrixGenerator<scalar>::generateMatrix() {
     std::random_device rd_1, rd_2;
     return generateMatrix(rd_1(), rd_2());
 }
-
-template class type1MatrixGenerator<float>;
-template class type1MatrixGenerator<double>;
 
 /*
 Генератор матрицы с 1 сингулярными числом 1 и остальными эпсилон
@@ -161,9 +155,6 @@ Eigen::MatrixX<scalar> type2MatrixGenerator<scalar>::generateMatrix() {
     return generateMatrix(rd_1(), rd_2());
 }
 
-template class type2MatrixGenerator<float>;
-template class type2MatrixGenerator<double>;
-
 /*
 Генератор матрицы со всеми сингулярными числами кроме посдеднего 1, последнее - эпсилон
 */
@@ -191,5 +182,4 @@ Eigen::MatrixX<scalar> type3MatrixGenerator<scalar>::generateMatrix() {
     return generateMatrix(rd_1(), rd_2());
 }
 
-template class type3MatrixGenerator<float>;
-template class type3MatrixGenerator<double>;
+}

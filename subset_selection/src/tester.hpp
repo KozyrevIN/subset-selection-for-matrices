@@ -1,8 +1,12 @@
 #include <chrono>
-#include <complex>
+#include <fstream>
+#include <filesystem>
 
 #include "../include/tester.h"
 #include "../include/matrix_utilities.h"
+
+namespace SubsetSelection
+{
 
 template <typename scalar>
 Tester<scalar>::Tester() {
@@ -17,11 +21,11 @@ std::string Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar>& 
     auto subset = algorithm -> selectSubset(A, k);
     auto t2 = std::chrono::high_resolution_clock::now();
 
-    scalar pinv_frobenius_norm_1 = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
-    scalar pinv_frobenius_norm_0 = pinv_frobenius_norm<scalar>(A);
+    scalar pinv_frobenius_norm_1 = pinv_norm<scalar, Norm::Frobenius>(A(Eigen::all, subset));
+    scalar pinv_frobenius_norm_0 = pinv_norm<scalar, Norm::Frobenius>(A);
 
-    scalar pinv_l2_norm_1 = pinv_l2_norm<scalar>(A(Eigen::all, subset));
-    scalar pinv_l2_norm_0 = pinv_l2_norm<scalar>(A);
+    scalar pinv_l2_norm_1 = pinv_norm<scalar, Norm::L2>(A(Eigen::all, subset));
+    scalar pinv_l2_norm_0 = pinv_norm<scalar, Norm::L2>(A);
 
     scalar frobenius_volume_reduction = pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
     scalar l2_volume_reduction = pinv_l2_norm_0 / pinv_l2_norm_1;
@@ -56,11 +60,11 @@ std::string Tester<scalar>::testAlgorithmOnMatrix(MatrixGenerator<scalar>* mat_g
         auto subset = algorithm -> selectSubset(A, k);
         auto t2 = std::chrono::high_resolution_clock::now();
 
-        scalar pinv_frobenius_norm_1 = pinv_frobenius_norm<scalar>(A(Eigen::all, subset));
-        scalar pinv_frobenius_norm_0 = pinv_frobenius_norm<scalar>(A);
+        scalar pinv_frobenius_norm_1 = pinv_norm<scalar, Norm::Frobenius>(A(Eigen::all, subset));
+        scalar pinv_frobenius_norm_0 = pinv_norm<scalar, Norm::Frobenius>(A);
 
-        scalar pinv_l2_norm_1 = pinv_l2_norm<scalar>(A(Eigen::all, subset));
-        scalar pinv_l2_norm_0 = pinv_l2_norm<scalar>(A);
+        scalar pinv_l2_norm_1 = pinv_norm<scalar, Norm::L2>(A(Eigen::all, subset));
+        scalar pinv_l2_norm_0 = pinv_norm<scalar, Norm::L2>(A);
 
         frobeinus_volume_reduction(i) = pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
         l2_volume_reduction(i) = pinv_l2_norm_0 / pinv_l2_norm_1;
@@ -98,5 +102,47 @@ std::string Tester<scalar>::testAlgorithmsOnMatrix(MatrixGenerator<scalar>* mat_
     return results;
 }
 
-template class Tester<float>;
-template class Tester<double>;
+template <typename scalar>
+template <Norm norm>
+void Tester<scalar>::scatterPoints(MatrixGenerator<scalar>* mat_gen, SubsetSelector<scalar>* algorithm, uint points_for_k) {
+    //initializing output to file
+    std::filesystem::path absolutePath = std::filesystem::absolute(__FILE__);
+    std::filesystem::path parentPath = absolutePath.parent_path();
+    std::filesystem::current_path(parentPath);
+
+    std::string path = "../../out/" + algorithm -> algorithmName + "_" + std::to_string(points_for_k);
+    std::filesystem::create_directory(path);
+
+    std::ofstream output_points;
+    output_points.open(path + "/points.csv");
+    output_points << "k, value\n";
+
+    std::ofstream output_bound;
+    output_bound.open(path + "/bound.csv");
+    output_bound << "k, value\n";
+
+    //getting matrix parameters
+    auto [m, n] = mat_gen -> getMatrixSize();
+
+    //writing bound
+    for (uint k = m; k <= n; ++k) {
+        output_bound << k << ',' << algorithm -> template bound<norm>(m, n, k) << '\n';
+    }
+
+    //scattering points
+    for (uint k = m; k <= n; ++k) {
+        for (uint i = 0; i < points_for_k; ++i) {
+            auto A = mat_gen -> generateMatrix();
+            auto subset = algorithm -> selectSubset(A, k);
+            scalar pinv_norm_1 = pinv_norm<scalar, norm>(A(Eigen::all, subset));
+            scalar pinv_norm_0 = pinv_norm<scalar, norm>(A);
+            output_points << k << ',' << pinv_norm_0 / pinv_norm_1 << '\n';
+        }
+    }
+
+    //closing files
+    output_points.close();
+    output_bound.close();
+}
+
+}

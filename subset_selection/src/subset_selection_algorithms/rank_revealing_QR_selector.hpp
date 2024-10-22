@@ -1,6 +1,7 @@
 #include <vector>
 
-#include "../../include/subset_selection_algorithms/rank_revealing_QR_selector.h"
+namespace SubsetSelection
+{
 
 template <typename scalar>
 RankRevealingQRSelector<scalar>::RankRevealingQRSelector(): SubsetSelector<scalar>("rank_revealing_QR") {
@@ -25,5 +26,4 @@ std::vector<uint> RankRevealingQRSelector<scalar>::selectSubset(const Eigen::Mat
     return vect;
 }
 
-template class RankRevealingQRSelector<float>;
-template class RankRevealingQRSelector<double>;
+}
