@@ -107,7 +107,7 @@ template class SigmaMatrixGenerator<double>;
 Генератор матрицы со всеми сингулярными числами 1
 */
 template <typename scalar>
-type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n, scalar eps) : SigmaMatrixGenerator<scalar>(m, n), eps(eps) {
+type1MatrixGenerator<scalar>::type1MatrixGenerator(uint m, uint n) : SigmaMatrixGenerator<scalar>(m, n) {
     //do nothing
 }
 

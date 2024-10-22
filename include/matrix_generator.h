@@ -42,11 +42,8 @@ public:
 */
 template <typename scalar>
 class type1MatrixGenerator : public SigmaMatrixGenerator<scalar> {
-private:
-    scalar eps;
-
 public:
-    type1MatrixGenerator(uint m, uint n, scalar eps);
+    type1MatrixGenerator(uint m, uint n);
     Eigen::MatrixX<scalar> generateMatrix(uint seed_1, uint seed_2);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };

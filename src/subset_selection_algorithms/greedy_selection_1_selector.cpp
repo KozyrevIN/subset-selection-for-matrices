@@ -76,5 +76,15 @@ std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::Ma
     return cols;
 }
 
+template <typename scalar>
+scalar GreedySelection1Selector<scalar>::frobeniusBound(uint m, uint n, uint k) {
+    return l2Bound(m, n, k);
+}
+
+template <typename scalar>
+scalar GreedySelection1Selector<scalar>::l2Bound(uint m, uint n, uint k) {
+    return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
+}
+
 template class GreedySelection1Selector<float>;
 template class GreedySelection1Selector<double>;

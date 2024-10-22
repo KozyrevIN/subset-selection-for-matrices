@@ -45,10 +45,6 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
                                                 VVT_invV.leftCols(cols_remaining)).array();
             l.head(cols_remaining) += 2 * wTVVT_invV * wTVVT_inv2V / d(cols_remaining - 1) + 
                                       wTVVT_invV.square() * wTVVT_inv2V(cols_remaining - 1) / (d(cols_remaining - 1) * d(cols_remaining - 1));
-            //l.head(cols_remaining) = (VVT_invV.leftCols(cols_remaining).transpose() * S_inv2.asDiagonal() * VVT_invV.leftCols(cols_remaining)).diagonal();
-            //d.head(cols_remaining) = 1 - (V.leftCols(cols_remaining).transpose() * VVT_invV.leftCols(cols_remaining)).diagonal().array();
-            /*d.head(cols_remaining) -= (V.col(cols_remaining - 1).transpose() * 
-                                      VVT_invV.leftCols(cols_remaining)).array().square() / d(cols_remaining - 1);*/
 
             d.head(cols_remaining - 1) -= (V.col(cols_remaining - 1).transpose() * 
                                       VVT_invV.leftCols(cols_remaining - 1)).array().square() / d(cols_remaining - 1);
@@ -61,6 +57,16 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
 
     cols.resize(k);
     return cols;
+}
+
+template <typename scalar>
+scalar GreedyRemoval2Selector<scalar>::frobeniusBound(uint m, uint n, uint k) {
+    return std::pow((scalar)(k - m + 1) / (scalar)(n - m + 1), 0.5);
+}
+
+template <typename scalar>
+scalar GreedyRemoval2Selector<scalar>::l2Bound(uint m, uint n, uint k) {
+    return frobeniusBound(m, n, k) / std::pow(n, 0.5);
 }
 
 template class GreedyRemoval2Selector<float>;

@@ -13,4 +13,7 @@ public:
     GreedyRemoval2Selector(scalar eps = 1e-8); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
+
+    scalar frobeniusBound(uint m, uint n, uint k) override;
+    scalar l2Bound(uint m, uint n, uint k) override;
 };
