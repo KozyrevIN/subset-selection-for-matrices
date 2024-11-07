@@ -4,12 +4,12 @@ namespace SubsetSelection
 {
 
 template <typename scalar>
-GreedyRemoval2Selector<scalar>::GreedyRemoval2Selector(scalar eps): SubsetSelector<scalar>("greedy_removal_2"), eps(eps) {
+FrobeniusRemovalSelector<scalar>::FrobeniusRemovalSelector(scalar eps): SubsetSelector<scalar>("frobenius_removal"), eps(eps) {
     //do nothing
 }
 
 template <typename scalar>
-std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint> FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
@@ -61,7 +61,7 @@ std::vector<uint> GreedyRemoval2Selector<scalar>::selectSubset(const Eigen::Matr
 }
 
 template <typename scalar>
-scalar GreedyRemoval2Selector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
+scalar FrobeniusRemovalSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
     scalar bound = std::pow((scalar)(k - m + 1) / (scalar)(n - m + 1), 0.5);
     if (norm == Norm::L2) {
         bound /= std::pow(n, 0.5);

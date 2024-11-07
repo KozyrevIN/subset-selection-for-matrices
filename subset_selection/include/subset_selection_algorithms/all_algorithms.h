@@ -2,8 +2,8 @@
 #define ALL_ALGORITHMS_H
 
 #include "rank_revealing_QR_selector.h"
-#include "greedy_removal_1_selector.h"
-#include "greedy_removal_2_selector.h"
-#include "greedy_selection_1_selector.h"
+#include "volume_removal_selector.h"
+#include "frobenius_removal_selector.h"
+#include "spectral_selection_selector.h"
 
 #endif

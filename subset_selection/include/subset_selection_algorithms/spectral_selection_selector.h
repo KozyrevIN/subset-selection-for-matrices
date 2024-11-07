@@ -1,5 +1,5 @@
-#ifndef GREEDY_SELECTION_1_SELECTOR_H
-#define GREEDY_SELECTION_1_SELECTOR_H
+#ifndef SPECTRAL_SELECTION_SELECTOR_H
+#define SPECTRAL_SELECTION_SELECTOR_H
 
 #include "subset_selector.h"
 
@@ -7,10 +7,10 @@ namespace SubsetSelection
 {
 
 template <typename scalar>
-class GreedySelection1Selector : public SubsetSelector<scalar> 
+class SpectralSelectionSelector : public SubsetSelector<scalar> 
 {    
 public:
-    GreedySelection1Selector(); 
+    SpectralSelectionSelector(); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 
@@ -19,6 +19,6 @@ public:
 
 }
 
-#include "../../src/subset_selection_algorithms/greedy_selection_1_selector.hpp"
+#include "../../src/subset_selection_algorithms/spectral_selection_selector.hpp"
 
 #endif

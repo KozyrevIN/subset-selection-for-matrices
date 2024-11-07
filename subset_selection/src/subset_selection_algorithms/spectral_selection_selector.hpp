@@ -8,7 +8,7 @@ namespace SubsetSelection
 {
 
 template <typename scalar> 
-GreedySelection1Selector<scalar>::GreedySelection1Selector(): SubsetSelector<scalar>("greedy_selection_1") {
+SpectralSelectionSelector<scalar>::SpectralSelectionSelector(): SubsetSelector<scalar>("spectral_selection") {
     //do nothing
 }
 
@@ -34,7 +34,7 @@ scalar binary_search(scalar l, scalar r, const std::function<scalar(scalar)>& f,
 }
 
 template <typename scalar>
-std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
@@ -78,7 +78,7 @@ std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::Ma
 }
 
 template <typename scalar>
-scalar GreedySelection1Selector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
+scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
     return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
 }
 

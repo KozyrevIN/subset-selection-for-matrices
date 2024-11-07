@@ -4,12 +4,12 @@ namespace SubsetSelection
 {
 
 template <typename scalar>
-GreedyRemoval1Selector<scalar>::GreedyRemoval1Selector(scalar eps): SubsetSelector<scalar>("greedy_removal_1"), eps(eps) {
+VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps): SubsetSelector<scalar>("volume_removal"), eps(eps) {
     //do nothing
 }
 
 template <typename scalar>
-std::vector<uint> GreedyRemoval1Selector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint> VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 

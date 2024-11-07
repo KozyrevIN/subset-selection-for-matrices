@@ -8,8 +8,8 @@ int main()
 {
     auto mat_gen = new type3MatrixGenerator<double>(40, 1000, 1);
     //auto A = mat_gen.generateMatrix();
-    GreedySelection1Selector<double> selector_1;
-    GreedyRemoval2Selector<double> selector_2;
+    SpectralSelectionSelector<double> selector_1;
+    FrobeniusRemovalSelector<double> selector_2;
     SubsetSelector<double> selector_3("random");
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
