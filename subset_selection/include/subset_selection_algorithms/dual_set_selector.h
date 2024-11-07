@@ -19,6 +19,6 @@ public:
 
 }
 
-#include "../../src/subset_selection_algorithms/spectral_selection_selector.hpp"
+#include "../../src/subset_selection_algorithms/dual_set_selector.hpp"
 
 #endif

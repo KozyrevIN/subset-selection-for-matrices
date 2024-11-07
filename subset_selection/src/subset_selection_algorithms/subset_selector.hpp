@@ -1,5 +1,3 @@
-#include <vector>
-
 namespace SubsetSelection 
 {
 
