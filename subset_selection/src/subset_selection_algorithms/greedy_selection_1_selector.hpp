@@ -52,7 +52,7 @@ std::vector<uint> GreedySelection1Selector<scalar>::selectSubset(const Eigen::Ma
         scalar l = l_0;
         Eigen::MatrixX<scalar> I = Eigen::MatrixX<scalar>::Identity(m , m);
 
-        for (uint cols_selected = 0; cols_selected <= k; ++cols_selected) {
+        for (uint cols_selected = 0; cols_selected < k; ++cols_selected) {
             scalar delta = 1 / (eps + (n - cols_selected) / (1 - (l - l_0)));
             Eigen::MatrixX<scalar> YmlI_invV = (Y - (l + delta) * I).inverse() * V.rightCols(n - cols_selected);
             Eigen::ArrayX<scalar> Phi = (Y - (l + delta) * I).inverse().trace() - 
