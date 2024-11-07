@@ -47,15 +47,17 @@ std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::M
 
     if (k < n) {
         Eigen::MatrixX<scalar> Y = Eigen::MatrixX<scalar>::Zero(m, m);
+        Eigen::MatrixX<scalar> U = Eigen::MatrixX<scalar>::Identity(m, m);
+        Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
+
         scalar eps = (n + 1) * std::pow(m - 1, 0.5) / (std::pow(k, 0.5) - std::pow(m -1, 0.5));
         scalar l_0 = -(m / eps);
         scalar l = l_0;
-        Eigen::MatrixX<scalar> I = Eigen::MatrixX<scalar>::Identity(m , m);
 
         for (uint cols_selected = 0; cols_selected < k; ++cols_selected) {
             scalar delta = 1 / (eps + (n - cols_selected) / (1 - (l - l_0)));
-            Eigen::MatrixX<scalar> YmlI_invV = (Y - (l + delta) * I).inverse() * V.rightCols(n - cols_selected);
-            Eigen::ArrayX<scalar> Phi = (Y - (l + delta) * I).inverse().trace() - 
+            Eigen::MatrixX<scalar> YmlI_invV = U * (S - (l + delta)).inverse().matrix().asDiagonal() * U.transpose() * V.rightCols(n - cols_selected);
+            Eigen::ArrayX<scalar> Phi = (S - (l + delta)).inverse().sum() - 
                                         YmlI_invV.colwise().squaredNorm().transpose().array() /
                                         (1 + (V.rightCols(n - cols_selected).transpose() * YmlI_invV).diagonal().array());
             
@@ -65,8 +67,10 @@ std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::M
             V.col(cols_selected + s).swap(V.col(cols_selected));
             Y += V.col(cols_selected) * V.col(cols_selected).transpose();
             
-            Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(Y);
-            Eigen::ArrayX<scalar> S = svd.singularValues().array(); 
+            Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition;
+            decomposition.compute(Y);
+            U = decomposition.eigenvectors();
+            S = decomposition.eigenvalues().array(); 
             
             auto f = [&S](scalar l){ return (S - l).inverse().sum(); };
             l = binary_search<scalar>(l, S(S.rows() - 1), f, 1e-6);
