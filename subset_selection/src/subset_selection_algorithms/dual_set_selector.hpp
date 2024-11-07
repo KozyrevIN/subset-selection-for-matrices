@@ -18,7 +18,7 @@ std::vector<uint> DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<sca
 
 template <typename scalar>
 scalar DualSetSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
-    return 0;
+    return (std::pow(k, 0.5) - std::pow(m, 0.5)) / (std::pow(n, 0.5) - std::pow(k, 0.5));
 }
 
 }

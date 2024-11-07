@@ -10,7 +10,7 @@ template <typename scalar>
 class DualSetSelector : public SubsetSelector<scalar> 
 {    
 public:
-    DualSetSelectorSelector(); 
+    DualSetSelector(); 
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 

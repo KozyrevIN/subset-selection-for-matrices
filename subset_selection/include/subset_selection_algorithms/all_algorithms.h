@@ -5,5 +5,6 @@
 #include "volume_removal_selector.h"
 #include "frobenius_removal_selector.h"
 #include "spectral_selection_selector.h"
+#include "dual_set_selector.h"
 
 #endif
