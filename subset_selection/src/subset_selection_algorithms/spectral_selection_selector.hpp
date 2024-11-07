@@ -1,7 +1,6 @@
 #include <vector>
 #include <functional>
-#include <eigen3/Eigen/QR>
-#include <eigen3/Eigen/SVD>
+#include <eigen3/Eigen/Eigenvalues> 
 #include <iostream>
 
 namespace SubsetSelection
@@ -56,7 +55,8 @@ std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::M
 
         for (uint cols_selected = 0; cols_selected < k; ++cols_selected) {
             scalar delta = 1 / (eps + (n - cols_selected) / (1 - (l - l_0)));
-            Eigen::MatrixX<scalar> YmlI_invV = U * (S - (l + delta)).inverse().matrix().asDiagonal() * U.transpose() * V.rightCols(n - cols_selected);
+            Eigen::MatrixX<scalar> YmlI_invV = U * (S - (l + delta)).inverse().matrix().asDiagonal() *
+                                               U.transpose() * V.rightCols(n - cols_selected);
             Eigen::ArrayX<scalar> Phi = (S - (l + delta)).inverse().sum() - 
                                         YmlI_invV.colwise().squaredNorm().transpose().array() /
                                         (1 + (V.rightCols(n - cols_selected).transpose() * YmlI_invV).diagonal().array());
@@ -67,13 +67,12 @@ std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::M
             V.col(cols_selected + s).swap(V.col(cols_selected));
             Y += V.col(cols_selected) * V.col(cols_selected).transpose();
             
-            Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition;
-            decomposition.compute(Y);
+            Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(Y);
             U = decomposition.eigenvectors();
             S = decomposition.eigenvalues().array(); 
             
             auto f = [&S](scalar l){ return (S - l).inverse().sum(); };
-            l = binary_search<scalar>(l, S(S.rows() - 1), f, 1e-6);
+            l = binary_search<scalar>(l, S(0), f, 1e-6);
         }
     }
     

@@ -10,12 +10,13 @@ int main()
     //auto A = mat_gen.generateMatrix();
     SpectralSelectionSelector<double> selector_1;
     FrobeniusRemovalSelector<double> selector_2;
-    SubsetSelector<double> selector_3("random");
+    RankRevealingQRSelector<double> selector_3;
+    SubsetSelector<double> selector_4("random");
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
     alg_list.push_back(&selector_1);
     alg_list.push_back(&selector_2);
-    //alg_list.push_back(&selector_3);
+    alg_list.push_back(&selector_3);
 
     Tester<double> t;
     std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 40, 10);
