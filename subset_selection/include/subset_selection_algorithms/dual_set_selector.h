@@ -15,6 +15,10 @@ public:
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar>& x, uint k) override;
 
     scalar bound(uint m, uint n, uint k, Norm norm) override;
+
+private:
+    Eigen::ArrayX<scalar> calculateL(const Eigen::MatrixX<scalar>& V, scalar delta_l,const Eigen::MatrixX<scalar>& A, scalar l);
+    Eigen::ArrayX<scalar> calculateU(scalar delta_u,const Eigen::ArrayX<scalar>& B, scalar u);
 };
 
 }
