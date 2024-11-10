@@ -1,15 +1,18 @@
 #include <vector>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 template <typename scalar>
-RankRevealingQRSelector<scalar>::RankRevealingQRSelector(): SubsetSelector<scalar>("rank_revealing_QR") {
-    //do nothing
+RankRevealingQRSelector<scalar>::RankRevealingQRSelector()
+    : SubsetSelector<scalar>("rank_revealing_QR") {
+    // do nothing
 }
 
 template <typename scalar>
-std::vector<uint> RankRevealingQRSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& x, uint k) {
+std::vector<uint>
+RankRevealingQRSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &x,
+                                              uint k) {
+                                                
     Eigen::ColPivHouseholderQR<Eigen::MatrixX<scalar>> qr(x);
     Eigen::MatrixX<scalar> P = qr.colsPermutation();
 
@@ -17,7 +20,8 @@ std::vector<uint> RankRevealingQRSelector<scalar>::selectSubset(const Eigen::Mat
 
     for (int j = 0; j < k; ++j) {
         int i = 0;
-        for(; std::abs(P(i, j)) == 0; ++i);
+        for (; std::abs(P(i, j)) == 0; ++i)
+            ;
         vect[j] = i;
     }
 
@@ -26,4 +30,4 @@ std::vector<uint> RankRevealingQRSelector<scalar>::selectSubset(const Eigen::Mat
     return vect;
 }
 
-}
+} // namespace SubsetSelection

@@ -11,7 +11,6 @@ Eigen::ArrayX<scalar>
 DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
                                     scalar delta_l,
                                     const Eigen::MatrixX<scalar> &A, scalar l) {
-                                        
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
     Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
     Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();

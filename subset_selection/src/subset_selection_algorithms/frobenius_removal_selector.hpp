@@ -1,15 +1,40 @@
 #include <vector>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 template <typename scalar>
-FrobeniusRemovalSelector<scalar>::FrobeniusRemovalSelector(scalar eps): SubsetSelector<scalar>("frobenius_removal"), eps(eps) {
-    //do nothing
+FrobeniusRemovalSelector<scalar>::FrobeniusRemovalSelector(scalar eps)
+    : SubsetSelector<scalar>("frobenius_removal"), eps(eps) {
+    // do nothing
 }
 
 template <typename scalar>
-std::vector<uint> FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+void FrobeniusRemovalSelector<scalar>::removeByIdx(
+    std::vector<uint> &cols, Eigen::ArrayX<scalar> &l, Eigen::ArrayX<scalar> &d,
+    Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag, uint j) {
+
+    uint new_size = cols.size() - 1;
+
+    cols[j] = cols[new_size];
+    cols.resize(new_size);
+
+    l(j) = l(new_size);
+    l.conservativeResize(new_size);
+
+    d(j) = d(new_size);
+    d.conservativeResize(new_size);
+
+    V.col(j) = V.col(new_size);
+    V.conservativeResize(V.rows(), new_size);
+
+    V_dag.col(j) = V_dag.col(new_size);
+    V_dag.conservativeResize(V.rows(), new_size);
+}
+
+template <typename scalar>
+std::vector<uint>
+FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
+                                               uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
@@ -18,56 +43,54 @@ std::vector<uint> FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::Ma
         cols[j] = j;
     }
 
-    if (k < n) {
-        Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<scalar> V = svd.matrixV().transpose(); 
-        Eigen::VectorX<scalar> S_inv2 = svd.singularValues().array().inverse().square();
+    Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
+    Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
+    Eigen::VectorX<scalar> S_inv2 =
+        svd.singularValues().array().inverse().square();
 
-        Eigen::MatrixX<scalar> VVT_invV = (V * V.transpose()).inverse() * V;
-        Eigen::ArrayX<scalar> l = (VVT_invV.transpose() * S_inv2.asDiagonal() * VVT_invV).diagonal();
-        Eigen::ArrayX<scalar> d = 1 - (V.transpose() * VVT_invV).diagonal().array();
+    Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
+    Eigen::ArrayX<scalar> l =
+        (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
+    Eigen::ArrayX<scalar> d = 1 - (V.transpose() * V_dag).diagonal().array();
 
-        for (uint cols_remaining = n; cols_remaining >= k; --cols_remaining) {
-            uint j_min = 0;
-            for (uint j = 0; j < cols_remaining; ++j) {
-                if (d(j) > eps and l(j) * d(j_min) < l(j_min) * d(j)) {
-                    j_min = j;
-                }
+    while (cols.size() > k) {
+
+        uint j_min = 0;
+        for (uint j = 0; j < cols.size(); ++j) {
+            if (d(j) > eps and l(j) * d(j_min) < l(j_min) * d(j)) {
+                j_min = j;
             }
-
-            std::swap(cols[j_min], cols[cols_remaining - 1]);
-            std::swap(l(j_min), l(cols_remaining - 1));
-            std::swap(d(j_min), d(cols_remaining - 1));
-            V.col(j_min).swap(V.col(cols_remaining - 1));
-            VVT_invV.col(j_min).swap(VVT_invV.col(cols_remaining - 1));
-
-            Eigen::ArrayX<scalar> wTVVT_invV = (V.col(cols_remaining - 1).transpose() * VVT_invV.leftCols(cols_remaining)).array();
-            Eigen::ArrayX<scalar> wTVVT_inv2V = (VVT_invV.col(cols_remaining - 1).transpose() * S_inv2.asDiagonal() *
-                                                VVT_invV.leftCols(cols_remaining)).array();
-            l.head(cols_remaining) += 2 * wTVVT_invV * wTVVT_inv2V / d(cols_remaining - 1) + 
-                                      wTVVT_invV.square() * wTVVT_inv2V(cols_remaining - 1) / (d(cols_remaining - 1) * d(cols_remaining - 1));
-
-            d.head(cols_remaining - 1) -= (V.col(cols_remaining - 1).transpose() * 
-                                      VVT_invV.leftCols(cols_remaining - 1)).array().square() / d(cols_remaining - 1);
-
-            VVT_invV.leftCols(cols_remaining) += VVT_invV.col(cols_remaining - 1) *
-                                                 (VVT_invV.col(cols_remaining - 1).transpose() *
-                                                 V.leftCols(cols_remaining)) / d(cols_remaining - 1);
         }
+
+        Eigen::VectorX<scalar> w = V.col(j_min);
+        Eigen::VectorX<scalar> w_dag = V_dag.col(j_min);
+        scalar d_min = d(j_min);
+
+        removeByIdx(cols, l, d, V, V_dag, j_min);
+
+        Eigen::ArrayX<scalar> mul_1 = w.transpose() * V_dag;
+        Eigen::ArrayX<scalar> mul_2 =
+            w_dag.transpose() * S_inv2.asDiagonal() * V_dag;
+
+        l += 2 * mul_1 * mul_2 / d_min +
+             mul_1.square() * mul_2(cols.size() - 1) / (d_min * d_min);
+        d -= (w.transpose() * V_dag).array().square() / d_min;
+
+        V_dag += w_dag * (w_dag.transpose() * V) / d_min;
     }
 
-    cols.resize(k);
     return cols;
 }
 
 template <typename scalar>
-scalar FrobeniusRemovalSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
-    scalar bound = std::pow((scalar)(k - m + 1) / (scalar)(n - m + 1), 0.5);
+scalar FrobeniusRemovalSelector<scalar>::bound(uint m, uint n, uint k,
+                                               Norm norm) {
+    scalar bound = std::sqrt((scalar)(k - m + 1) / (scalar)(n - m + 1));
     if (norm == Norm::L2) {
-        bound /= std::pow(n, 0.5);
+        bound /= std::sqrt(n);
     }
 
     return bound;
 }
 
-}
+} // namespace SubsetSelection

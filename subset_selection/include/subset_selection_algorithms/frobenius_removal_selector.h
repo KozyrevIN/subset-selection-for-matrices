@@ -10,6 +10,10 @@ class FrobeniusRemovalSelector : public SubsetSelector<scalar> {
   private:
     double eps;
 
+    void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &l,
+                     Eigen::ArrayX<scalar> &d, Eigen::MatrixX<scalar> &V,
+                     Eigen::MatrixX<scalar> &V_dag, uint j);
+
   public:
     FrobeniusRemovalSelector(scalar eps = 1e-6);
 
