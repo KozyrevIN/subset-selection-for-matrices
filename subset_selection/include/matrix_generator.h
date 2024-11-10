@@ -4,20 +4,18 @@
 #include <eigen3/Eigen/Dense>
 #include <random>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 /*
 Базовый класс генератора матриц
 */
-template <typename scalar>
-class MatrixGenerator {
-protected:
+template <typename scalar> class MatrixGenerator {
+  protected:
     uint m;
     uint n;
     std::mt19937 gen;
-    
-public:
+
+  public:
     MatrixGenerator(uint m, uint n);
     MatrixGenerator(uint m, uint n, int seed);
     std::pair<uint, uint> getMatrixSize();
@@ -29,7 +27,7 @@ public:
 */
 template <typename scalar>
 class UnitaryMatrixGenerator : public MatrixGenerator<scalar> {
-public:
+  public:
     UnitaryMatrixGenerator(uint m, uint n);
     UnitaryMatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
@@ -40,10 +38,11 @@ public:
 */
 template <typename scalar>
 class SigmaMatrixGenerator : public MatrixGenerator<scalar> {
-public:
+  public:
     SigmaMatrixGenerator(uint m, uint n);
     SigmaMatrixGenerator(uint m, uint n, int seed);
-    Eigen::MatrixX<scalar> generateMatrixWithSigma(const Eigen::VectorX<scalar>& sigma);
+    Eigen::MatrixX<scalar>
+    generateMatrixWithSigma(const Eigen::VectorX<scalar> &sigma);
 };
 
 /*
@@ -51,7 +50,7 @@ public:
 */
 template <typename scalar>
 class type1MatrixGenerator : public SigmaMatrixGenerator<scalar> {
-public:
+  public:
     type1MatrixGenerator(uint m, uint n);
     type1MatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
@@ -62,32 +61,32 @@ public:
 */
 template <typename scalar>
 class type2MatrixGenerator : public SigmaMatrixGenerator<scalar> {
-private:
+  private:
     scalar eps;
 
-public:
+  public:
     type2MatrixGenerator(uint m, uint n, scalar eps);
     type2MatrixGenerator(uint m, uint n, scalar eps, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
 /*
-Генератор матрицы со всеми сингулярными числами кроме последнего 1, последнее - эпсилон
+Генератор матрицы со всеми сингулярными числами кроме последнего 1, последнее -
+эпсилон
 */
 template <typename scalar>
 class type3MatrixGenerator : public SigmaMatrixGenerator<scalar> {
-private:
+  private:
     scalar eps;
-    
-public:
+
+  public:
     type3MatrixGenerator(uint m, uint n, scalar eps);
     type3MatrixGenerator(uint m, uint n, scalar eps, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
-}
+} // namespace SubsetSelection
 
 #include "../src/matrix_generator.hpp"
 
 #endif
-

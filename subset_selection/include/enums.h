@@ -1,13 +1,9 @@
 #ifndef ENUMS_H
 #define ENUMS_H
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
-enum class Norm {
-    Frobenius,
-    L2
-};
+enum class Norm { Frobenius, L2 };
 
 }
 

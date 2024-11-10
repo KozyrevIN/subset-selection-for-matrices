@@ -5,8 +5,7 @@
 
 #include "enums.h"
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 template <typename scalar, Norm norm>
 scalar pinv_norm(Eigen::MatrixX<scalar> X);
