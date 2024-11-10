@@ -7,22 +7,22 @@ DualSetSelector<scalar>::DualSetSelector(): SubsetSelector<scalar>("dual_set") {
 }
 
 template <typename scalar> 
-Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar>& V, scalar delta_l,const Eigen::MatrixX<scalar>& A, scalar l) {
+Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar>& V, scalar delta_l, const Eigen::MatrixX<scalar>& A, scalar l) {
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
-    U = decomposition.eigenvectors();
-    S = decomposition.eigenvalues().array();
+    Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
+    Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();
 
     Eigen::MatrixX<scalar> M_1 = U * (S - (l + delta_l)).inverse().matrix().asDiagonal() * U.transpose();
-    Eigen::MatrixX<scalar> M_2 = U * (S - (l + delta_l)).inverse().squared().matrix().asDiagonal() * U.transpose() / 
+    Eigen::MatrixX<scalar> M_2 = U * (S - (l + delta_l)).inverse().square().matrix().asDiagonal() * U.transpose() / 
                                  ((S - (l + delta_l)).inverse().sum() - (S - l).inverse().sum());
     
-    return (V.transpose() * (M_2 - M_1) * V).diagonal()
+    return (V.transpose() * (M_2 - M_1) * V).diagonal();
 }
 
 template <typename scalar> 
 Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateU(scalar delta_u, const Eigen::ArrayX<scalar>& B, scalar u) {
-    return ((u + delta_u) - B).inverse() + ((u + delta_u) - B).inverse().squared() /
-           (((u + delta_u) - B).inverse().sum() - (u - B).inverse().sum());
+    return ((u + delta_u) - B).inverse() + ((u + delta_u) - B).inverse().square() /
+           ((u - B).inverse().sum() - ((u + delta_u) - B).inverse().sum());
 }
 
 template <typename scalar>
@@ -30,13 +30,47 @@ std::vector<uint> DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<sca
     uint m = X.rows();
     uint n = X.cols();
 
-    Eigen::VectorX<scalar> s = Eigen::Zero(n);
-    scalar delta_L = 1;
-    scalar delts_U = (std::sqrt(n) - std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
+    Eigen::MatrixX<scalar> V = X;
+    Eigen::MatrixX<scalar> A = Eigen::MatrixX<scalar>::Zero(m, m);
+    Eigen::VectorX<scalar> s = Eigen::VectorX<scalar>::Zero(n);
 
+    scalar delta_l = 1;
+    scalar l = -std::sqrt(k * m);
+
+    scalar delta_u = (std::sqrt(n) - std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
+    scalar u = delta_u * std::sqrt(k * n);
     
+    for (uint i = 0; i < k; ++i) {
+        l += delta_l;
+        u += delta_u;
 
-    return 0;
+        Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);
+        Eigen::VectorX<scalar> U = calculateU(delta_u, s, u);
+
+        uint max_idx;
+        (L - U).maxCoeff(&max_idx);
+        scalar t = 2 / (L + U)(max_idx);
+
+        s(max_idx) += t;
+        A += t * V.col(max_idx) * V.col(max_idx).transpose();
+    }
+
+    std::vector<uint> indices;
+    for (uint i = 0; i < s.size(); i++) {
+        if (s(i) > 0) {
+            indices.push_back(i);
+        }
+    }
+
+    uint i = 0;
+    while (indices.size() < k) {
+        if (s(i) <= 0) {
+            indices.push_back(i);
+        }
+        ++i;
+    }
+
+    return indices;
 }
 
 template <typename scalar>
