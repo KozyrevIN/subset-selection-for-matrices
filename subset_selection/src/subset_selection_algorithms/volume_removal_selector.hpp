@@ -1,15 +1,17 @@
 #include <vector>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 template <typename scalar>
-VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps): SubsetSelector<scalar>("volume_removal"), eps(eps) {
-    //do nothing
+VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps)
+    : SubsetSelector<scalar>("volume_removal"), eps(eps) {
+    // do nothing
 }
 
 template <typename scalar>
-std::vector<uint> VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint>
+VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
+                                            uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
@@ -20,10 +22,11 @@ std::vector<uint> VolumeRemovalSelector<scalar>::selectSubset(const Eigen::Matri
 
     if (k < n) {
         Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<scalar> V = svd.matrixV().transpose(); 
+        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
 
         Eigen::MatrixX<scalar> VVT_invV = (V * V.transpose()).inverse() * V;
-        Eigen::ArrayX<scalar> d = 1 - (V.transpose() * VVT_invV).diagonal().array();
+        Eigen::ArrayX<scalar> d =
+            1 - (V.transpose() * VVT_invV).diagonal().array();
 
         for (uint cols_remaining = n; cols_remaining >= k; --cols_remaining) {
             uint j_max;
@@ -34,11 +37,17 @@ std::vector<uint> VolumeRemovalSelector<scalar>::selectSubset(const Eigen::Matri
             V.col(j_max).swap(V.col(cols_remaining - 1));
             VVT_invV.col(j_max).swap(VVT_invV.col(cols_remaining - 1));
 
-            d.head(cols_remaining - 1) -= (V.col(cols_remaining - 1).transpose() * 
-                                      VVT_invV.leftCols(cols_remaining - 1)).array().square() / d_max;
-            VVT_invV.leftCols(cols_remaining - 1) += VVT_invV.col(cols_remaining - 1) *
-                                                 (VVT_invV.col(cols_remaining - 1).transpose() *
-                                                 V.leftCols(cols_remaining - 1)) / d_max;
+            d.head(cols_remaining - 1) -=
+                (V.col(cols_remaining - 1).transpose() *
+                 VVT_invV.leftCols(cols_remaining - 1))
+                    .array()
+                    .square() /
+                d_max;
+            VVT_invV.leftCols(cols_remaining - 1) +=
+                VVT_invV.col(cols_remaining - 1) *
+                (VVT_invV.col(cols_remaining - 1).transpose() *
+                 V.leftCols(cols_remaining - 1)) /
+                d_max;
         }
     }
 
@@ -46,4 +55,4 @@ std::vector<uint> VolumeRemovalSelector<scalar>::selectSubset(const Eigen::Matri
     return cols;
 }
 
-}
+} // namespace SubsetSelection

@@ -2,8 +2,7 @@
 #include <eigen3/Eigen/QR>
 #include <eigen3/Eigen/SVD>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
 template <typename scalar, Norm norm>
 scalar pinv_norm(Eigen::MatrixX<scalar> X) {
@@ -18,4 +17,4 @@ scalar pinv_norm(Eigen::MatrixX<scalar> X) {
     }
 }
 
-}
+} // namespace SubsetSelection
