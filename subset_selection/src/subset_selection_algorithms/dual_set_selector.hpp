@@ -1,32 +1,42 @@
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
-template <typename scalar> 
-DualSetSelector<scalar>::DualSetSelector(): SubsetSelector<scalar>("dual_set") {
-    //do nothing
+template <typename scalar>
+DualSetSelector<scalar>::DualSetSelector()
+    : SubsetSelector<scalar>("dual_set") {
+    // do nothing
 }
 
-template <typename scalar> 
-Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar>& V, scalar delta_l, const Eigen::MatrixX<scalar>& A, scalar l) {
+template <typename scalar>
+Eigen::ArrayX<scalar>
+DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
+                                    scalar delta_l,
+                                    const Eigen::MatrixX<scalar> &A, scalar l) {
+                                        
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
     Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
     Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();
 
-    Eigen::MatrixX<scalar> M_1 = U * (S - (l + delta_l)).inverse().matrix().asDiagonal() * U.transpose();
-    Eigen::MatrixX<scalar> M_2 = U * (S - (l + delta_l)).inverse().square().matrix().asDiagonal() * U.transpose() / 
-                                 ((S - (l + delta_l)).inverse().sum() - (S - l).inverse().sum());
-    
+    Eigen::ArrayX<scalar> D = (S - (l + delta_l)).inverse();
+    Eigen::MatrixX<scalar> M_1 = U * D.matrix().asDiagonal() * U.transpose();
+    Eigen::MatrixX<scalar> M_2 = U * D.square().matrix().asDiagonal() *
+                                 U.transpose() /
+                                 (D.sum() - (S - l).inverse().sum());
+
     return (V.transpose() * (M_2 - M_1) * V).diagonal();
 }
 
-template <typename scalar> 
-Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateU(scalar delta_u, const Eigen::ArrayX<scalar>& B, scalar u) {
-    return ((u + delta_u) - B).inverse() + ((u + delta_u) - B).inverse().square() /
-           ((u - B).inverse().sum() - ((u + delta_u) - B).inverse().sum());
+template <typename scalar>
+Eigen::ArrayX<scalar>
+DualSetSelector<scalar>::calculateU(scalar delta_u,
+                                    const Eigen::ArrayX<scalar> &B, scalar u) {
+    return ((u + delta_u) - B).inverse() +
+           ((u + delta_u) - B).inverse().square() /
+               ((u - B).inverse().sum() - ((u + delta_u) - B).inverse().sum());
 }
 
 template <typename scalar>
-std::vector<uint> DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint>
+DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
@@ -37,9 +47,10 @@ std::vector<uint> DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<sca
     scalar delta_l = 1;
     scalar l = -std::sqrt(k * m);
 
-    scalar delta_u = (std::sqrt(n) - std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
+    scalar delta_u =
+        (std::sqrt(n) - std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
     scalar u = delta_u * std::sqrt(k * n);
-    
+
     for (uint i = 0; i < k; ++i) {
         l += delta_l;
         u += delta_u;
@@ -75,7 +86,8 @@ std::vector<uint> DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<sca
 
 template <typename scalar>
 scalar DualSetSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
-    return (std::pow(k, 0.5) - std::pow(m, 0.5)) / (std::pow(n, 0.5) - std::pow(k, 0.5));
+    return (std::pow(k, 0.5) - std::pow(m, 0.5)) /
+           (std::pow(n, 0.5) - std::pow(k, 0.5));
 }
 
-}
+} // namespace SubsetSelection
