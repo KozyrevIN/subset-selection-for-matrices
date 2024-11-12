@@ -24,10 +24,10 @@ void VolumeRemovalSelector<scalar>::removeByIdx(std::vector<uint> &cols,
     d.conservativeResize(new_size);
 
     V.col(j) = V.col(new_size);
-    V.conservativeResize(V.rows(), new_size);
+    V.conservativeResize(Eigen::NoChange, new_size);
 
     V_dag.col(j) = V_dag.col(new_size);
-    V_dag.conservativeResize(V_dag.rows(), new_size);
+    V_dag.conservativeResize(Eigen::NoChange, new_size);
 }
 
 template <typename scalar>
