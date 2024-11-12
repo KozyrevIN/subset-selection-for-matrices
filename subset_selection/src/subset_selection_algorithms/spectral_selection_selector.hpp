@@ -1,19 +1,21 @@
-#include <vector>
+#include <eigen3/Eigen/Eigenvalues>
 #include <functional>
-#include <eigen3/Eigen/Eigenvalues> 
 #include <iostream>
+#include <vector>
 
-namespace SubsetSelection
-{
+namespace SubsetSelection {
 
-template <typename scalar> 
-SpectralSelectionSelector<scalar>::SpectralSelectionSelector(): SubsetSelector<scalar>("spectral_selection") {
-    //do nothing
+template <typename scalar>
+SpectralSelectionSelector<scalar>::SpectralSelectionSelector()
+    : SubsetSelector<scalar>("spectral_selection") {
+    // do nothing
 }
 
-template <typename scalar> 
-scalar binary_search(scalar l, scalar r, const std::function<scalar(scalar)>& f, scalar eps) {
-    scalar f_l = f(l); 
+template <typename scalar>
+scalar SpectralSelectionSelector<scalar>::binarySearch(
+    scalar l, scalar r, const std::function<scalar(scalar)> &f, scalar eps) {
+
+    scalar f_l = f(l);
     scalar f_r = f(r);
 
     while (r - l > eps) {
@@ -33,56 +35,67 @@ scalar binary_search(scalar l, scalar r, const std::function<scalar(scalar)>& f,
 }
 
 template <typename scalar>
-std::vector<uint> SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar>& X, uint k) {
+std::vector<uint>
+SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
+                                                uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
     Eigen::MatrixX<scalar> V = X;
 
-    std::vector<uint> cols(n);
+    std::vector<uint> cols_remaining(n);
     for (uint j = 0; j < X.cols(); ++j) {
-        cols[j] = j;
+        cols_remaining[j] = j;
     }
 
-    if (k < n) {
-        Eigen::MatrixX<scalar> Y = Eigen::MatrixX<scalar>::Zero(m, m);
-        Eigen::MatrixX<scalar> U = Eigen::MatrixX<scalar>::Identity(m, m);
-        Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
+    std::vector<uint> cols_selected;
+    cols_selected.reserve(k);
 
-        scalar eps = (n + 1) * std::pow(m - 1, 0.5) / (std::pow(k, 0.5) - std::pow(m -1, 0.5));
-        scalar l_0 = -(m / eps);
-        scalar l = l_0;
+    Eigen::MatrixX<scalar> Y = Eigen::MatrixX<scalar>::Zero(m, m);
+    Eigen::MatrixX<scalar> U = Eigen::MatrixX<scalar>::Identity(m, m);
+    Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
 
-        for (uint cols_selected = 0; cols_selected < k; ++cols_selected) {
-            scalar delta = 1 / (eps + (n - cols_selected) / (1 - (l - l_0)));
-            Eigen::MatrixX<scalar> YmlI_invV = U * (S - (l + delta)).inverse().matrix().asDiagonal() *
-                                               U.transpose() * V.rightCols(n - cols_selected);
-            Eigen::ArrayX<scalar> Phi = (S - (l + delta)).inverse().sum() - 
-                                        YmlI_invV.colwise().squaredNorm().transpose().array() /
-                                        (1 + (V.rightCols(n - cols_selected).transpose() * YmlI_invV).diagonal().array());
-            
-            uint s;
-            Phi.minCoeff(&s);
-            std::swap(cols[cols_selected + s], cols[cols_selected]);
-            V.col(cols_selected + s).swap(V.col(cols_selected));
-            Y += V.col(cols_selected) * V.col(cols_selected).transpose();
-            
-            Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(Y);
-            U = decomposition.eigenvectors();
-            S = decomposition.eigenvalues().array(); 
-            
-            auto f = [&S](scalar l){ return (S - l).inverse().sum(); };
-            l = binary_search<scalar>(l, S(0), f, 1e-6);
-        }
+    scalar eps = (n + 1) * std::sqrt(m - 1) / (std::sqrt(k) - std::sqrt(m - 1));
+    scalar l_0 = -(m / eps);
+    scalar l = l_0;
+
+    while (cols_selected.size() < k) {
+        scalar delta = 1 / (eps + (n - cols_selected.size()) / (1 - (l - l_0)));
+
+        Eigen::MatrixX<scalar> M =
+            U * (S - (l + delta)).inverse().matrix().asDiagonal() *
+            U.transpose() * V;
+        Eigen::ArrayX<scalar> Phi =
+            (S - (l + delta)).inverse().sum() -
+            M.colwise().squaredNorm().transpose().array() /
+                (1 + (V.transpose() * M).diagonal().array());
+
+        uint j_min;
+        Phi.minCoeff(&j_min);
+        Y += V.col(j_min) * V.col(j_min).transpose();
+
+        cols_selected.push_back(cols_remaining[j_min]);
+        cols_remaining[j_min] = cols_remaining.back();
+        cols_remaining.pop_back();
+        V.col(j_min) = V.col(V.cols() - 1);
+        V.conservativeResize(Eigen::NoChange, V.cols() - 1);
+        
+        decomposition.compute(Y);
+        U = decomposition.eigenvectors();
+        S = decomposition.eigenvalues().array();
+
+        auto f = [&S](scalar l) { return (S - l).inverse().sum(); };
+        l = binarySearch(l, S(0), f, 1e-6);
     }
-    
-    cols.resize(k);
-    return cols;
+
+    return cols_selected;
 }
 
 template <typename scalar>
-scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
+scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k,
+                                                Norm norm) {
     return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
 }
 
-}
+} // namespace SubsetSelection
