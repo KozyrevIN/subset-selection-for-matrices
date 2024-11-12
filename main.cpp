@@ -9,7 +9,7 @@ int main()
     auto mat_gen = new type3MatrixGenerator<double>(40, 1000, 1);
     //auto A = mat_gen.generateMatrix();
     SpectralSelectionSelector<double> selector_1;
-    FrobeniusRemovalSelector<double> selector_2;
+    VolumeRemovalSelector<double> selector_2;
     DualSetSelector<double> selector_3;
     SubsetSelector<double> selector_4("random");
 

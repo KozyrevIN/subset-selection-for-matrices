@@ -9,6 +9,28 @@ VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps)
 }
 
 template <typename scalar>
+void VolumeRemovalSelector<scalar>::removeByIdx(std::vector<uint> &cols,
+                                                Eigen::ArrayX<scalar> &d,
+                                                Eigen::MatrixX<scalar> &V,
+                                                Eigen::MatrixX<scalar> &V_dag,
+                                                uint j) {
+
+    uint new_size = cols.size() - 1;
+
+    cols[j] = cols[new_size];
+    cols.resize(new_size);
+
+    d(j) = d(new_size);
+    d.conservativeResize(new_size);
+
+    V.col(j) = V.col(new_size);
+    V.conservativeResize(V.rows(), new_size);
+
+    V_dag.col(j) = V_dag.col(new_size);
+    V_dag.conservativeResize(V_dag.rows(), new_size);
+}
+
+template <typename scalar>
 std::vector<uint>
 VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
                                             uint k) {
@@ -20,38 +42,25 @@ VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         cols[j] = j;
     }
 
-    if (k < n) {
-        Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
+    Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
+    Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
 
-        Eigen::MatrixX<scalar> VVT_invV = (V * V.transpose()).inverse() * V;
-        Eigen::ArrayX<scalar> d =
-            1 - (V.transpose() * VVT_invV).diagonal().array();
+    Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
+    Eigen::ArrayX<scalar> d = 1 - (V.transpose() * V_dag).diagonal().array();
 
-        for (uint cols_remaining = n; cols_remaining >= k; --cols_remaining) {
-            uint j_max;
-            scalar d_max = d.head(cols_remaining).maxCoeff(&j_max);
+    while (cols.size() > k) {
+        uint j_max;
+        scalar d_max = d.maxCoeff(&j_max);
 
-            std::swap(cols[j_max], cols[cols_remaining - 1]);
-            std::swap(d(j_max), d(cols_remaining - 1));
-            V.col(j_max).swap(V.col(cols_remaining - 1));
-            VVT_invV.col(j_max).swap(VVT_invV.col(cols_remaining - 1));
+        Eigen::VectorX<scalar> w = V.col(j_max);
+        Eigen::VectorX<scalar> w_dag = V_dag.col(j_max);
 
-            d.head(cols_remaining - 1) -=
-                (V.col(cols_remaining - 1).transpose() *
-                 VVT_invV.leftCols(cols_remaining - 1))
-                    .array()
-                    .square() /
-                d_max;
-            VVT_invV.leftCols(cols_remaining - 1) +=
-                VVT_invV.col(cols_remaining - 1) *
-                (VVT_invV.col(cols_remaining - 1).transpose() *
-                 V.leftCols(cols_remaining - 1)) /
-                d_max;
-        }
+        removeByIdx(cols, d, V, V_dag, j_max);
+
+        d -= (w.transpose() * V_dag).array().square() / d_max;
+        V_dag += w_dag * (w_dag.transpose() * V) / d_max;
     }
 
-    cols.resize(k);
     return cols;
 }
 
