@@ -19,7 +19,7 @@ int main()
     alg_list.push_back(&selector_3);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 41, 10);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 10);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_1, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_2, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_3, 100);

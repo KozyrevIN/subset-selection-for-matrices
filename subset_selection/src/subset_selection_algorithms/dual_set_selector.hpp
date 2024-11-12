@@ -11,6 +11,7 @@ Eigen::ArrayX<scalar>
 DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
                                     scalar delta_l,
                                     const Eigen::MatrixX<scalar> &A, scalar l) {
+
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
     Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
     Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();
@@ -47,7 +48,7 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
     scalar l = -std::sqrt(k * m);
 
     scalar delta_u =
-        (std::sqrt(n) - std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
+        (std::sqrt(n) + std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
     scalar u = delta_u * std::sqrt(k * n);
 
     for (uint i = 0; i < k; ++i) {
@@ -59,7 +60,7 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
 
         uint max_idx;
         (L - U).maxCoeff(&max_idx);
-        scalar t = 2 / (L + U)(max_idx);
+        scalar t = 2 / (L(max_idx) + U(max_idx));
 
         s(max_idx) += t;
         A += t * V.col(max_idx) * V.col(max_idx).transpose();
