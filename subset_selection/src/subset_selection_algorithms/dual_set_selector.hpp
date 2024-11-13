@@ -17,12 +17,12 @@ DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
     Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();
 
     Eigen::ArrayX<scalar> D = (S - (l + delta_l)).inverse();
-    Eigen::MatrixX<scalar> M_1 = U * D.matrix().asDiagonal() * U.transpose();
-    Eigen::MatrixX<scalar> M_2 = U * D.square().matrix().asDiagonal() *
-                                 U.transpose() /
-                                 (D.sum() - (S - l).inverse().sum());
-
-    return (V.transpose() * (M_2 - M_1) * V).diagonal();
+    Eigen::MatrixX<scalar> M_1 = D.matrix().asDiagonal();
+    Eigen::MatrixX<scalar> M_2 =
+        (D.square() / (D.sum() - (S - l).inverse().sum()))
+            .matrix()
+            .asDiagonal();
+    return (V.transpose() * U * (M_2 - M_1) * U.transpose() * V).diagonal();
 }
 
 template <typename scalar>
@@ -52,11 +52,11 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
     scalar u = delta_u * std::sqrt(k * n);
 
     for (uint i = 0; i < k; ++i) {
-        l += delta_l;
-        u += delta_u;
-
         Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);
         Eigen::VectorX<scalar> U = calculateU(delta_u, s, u);
+
+        l += delta_l;
+        u += delta_u;
 
         uint max_idx;
         (L - U).maxCoeff(&max_idx);
