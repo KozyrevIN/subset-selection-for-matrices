@@ -8,7 +8,7 @@ namespace SubsetSelection {
 template <typename scalar>
 class FrobeniusRemovalSelector : public SubsetSelector<scalar> {
   private:
-    double eps;
+    scalar eps;
 
     void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &l,
                      Eigen::ArrayX<scalar> &d, Eigen::MatrixX<scalar> &V,
