@@ -56,7 +56,16 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
 
-    scalar eps = (n + 1) * std::sqrt(m - 1) / (std::sqrt(k) - std::sqrt(m - 1));
+    scalar eps;
+    if (m == 1) {
+        eps = 0.5;
+    } else {
+        scalar alpha = std::sqrt((k - 1) * m + 1);
+        eps =
+            n *
+            (2 * (alpha - 1) + m * (k * (alpha + m - 2) - 2 * alpha - m + 3)) /
+            ((k - 1) * m * (k - m + 1));
+    }
     scalar l_0 = -(m / eps);
     scalar l = l_0;
 
@@ -80,7 +89,7 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         cols_remaining.pop_back();
         V.col(j_min) = V.col(V.cols() - 1);
         V.conservativeResize(Eigen::NoChange, V.cols() - 1);
-        
+
         decomposition.compute(Y);
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
