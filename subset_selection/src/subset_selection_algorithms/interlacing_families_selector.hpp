@@ -107,7 +107,7 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
 template <typename scalar>
 scalar InterlacingFamiliesSelector<scalar>::bound(uint m, uint n, uint k,
                                                   Norm norm) {
-    return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n
+    return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n;
 }
 
 } // namespace SubsetSelection

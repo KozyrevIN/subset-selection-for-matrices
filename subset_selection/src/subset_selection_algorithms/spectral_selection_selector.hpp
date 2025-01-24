@@ -1,19 +1,49 @@
 #include <eigen3/Eigen/Eigenvalues>
-#include <functional>
-#include <iostream>
+#include <eigen3/Eigen/QR>
 #include <vector>
 
 namespace SubsetSelection {
 
 template <typename scalar>
-SpectralSelectionSelector<scalar>::SpectralSelectionSelector()
-    : SubsetSelector<scalar>("spectral_selection") {
+SpectralSelectionSelector<scalar>::SpectralSelectionSelector(scalar eps)
+    : SubsetSelector<scalar>("spectral_selection"), eps(eps) {
     // do nothing
 }
 
 template <typename scalar>
+scalar SpectralSelectionSelector<scalar>::calculateEpsilon(const uint m,
+                                                           const uint n,
+                                                           const uint k) {
+    scalar epsilon;
+    if (m == 1) {
+        epsilon = 0.5;
+    } else {
+        scalar alpha = std::sqrt((k - 1) * m + 1);
+        epsilon =
+            n *
+            (2 * (alpha - 1) + m * (k * (alpha + m - 2) - 2 * alpha - m + 3)) /
+            ((k - 1) * m * (k - m + 1));
+    }
+    return epsilon;
+}
+
+template <typename scalar>
+scalar SpectralSelectionSelector<scalar>::calculateDelta(
+    const uint m, const uint n, const uint k, const scalar epsilon,
+    const scalar l, const uint cols_remaining_size) {
+
+    scalar a = epsilon / m;
+    scalar b = -1 - epsilon * (1 - l - m / epsilon) / cols_remaining_size;
+    scalar c = (1 - l - m / epsilon) / cols_remaining_size;
+
+    scalar D = b * b - 4 * a * c;
+    return (-b - std::sqrt(D)) / (2 * a);
+}
+
+template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::binarySearch(
-    scalar l, scalar r, const std::function<scalar(scalar)> &f, scalar eps) {
+    scalar l, scalar r, const std::function<scalar(scalar)> &f,
+    const scalar eps) {
 
     scalar f_l = f(l);
     scalar f_r = f(r);
@@ -41,10 +71,12 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     uint m = X.rows();
     uint n = X.cols();
 
-    Eigen::MatrixX<scalar> V = X;
+    Eigen::ColPivHouseholderQR<Eigen::MatrixX<scalar>> qr(X.transpose());
+    Eigen::MatrixX<scalar> Q_full = qr.matrixQ();
+    Eigen::MatrixX<scalar> V = Q_full.leftCols(m).transpose();
 
     std::vector<uint> cols_remaining(n);
-    for (uint j = 0; j < X.cols(); ++j) {
+    for (uint j = 0; j < V.cols(); ++j) {
         cols_remaining[j] = j;
     }
 
@@ -56,21 +88,13 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
 
-    scalar eps;
-    if (m == 1) {
-        eps = 0.5;
-    } else {
-        scalar alpha = std::sqrt((k - 1) * m + 1);
-        eps =
-            n *
-            (2 * (alpha - 1) + m * (k * (alpha + m - 2) - 2 * alpha - m + 3)) /
-            ((k - 1) * m * (k - m + 1));
-    }
-    scalar l_0 = -(m / eps);
+    scalar epsilon = calculateEpsilon(m, n, k);
+    scalar l_0 = -(m / epsilon);
     scalar l = l_0;
 
     while (cols_selected.size() < k) {
-        scalar delta = 1 / (eps + (n - cols_selected.size()) / (1 - (l - l_0)));
+        scalar delta =
+            calculateDelta(m, n, k, epsilon, l, cols_remaining.size());
 
         Eigen::MatrixX<scalar> M =
             U * (S - (l + delta)).inverse().matrix().asDiagonal() *
@@ -95,7 +119,7 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         S = decomposition.eigenvalues().array();
 
         auto f = [&S](scalar l) { return (S - l).inverse().sum(); };
-        l = binarySearch(l, S(0), f, 1e-6);
+        l = binarySearch(l, S(0), f, eps);
     }
 
     return cols_selected;
