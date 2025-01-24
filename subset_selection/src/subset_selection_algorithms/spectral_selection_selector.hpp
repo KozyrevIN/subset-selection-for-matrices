@@ -128,7 +128,14 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k,
                                                 Norm norm) {
-    return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
+    scalar epsilon = calculateEpsilon(m, n, k);
+    scalar l = -(m / epsilon);
+
+    for (uint i = 0; i < k; ++i) {
+        l += calculateDelta(m, n, k, epsilon, l, n - i);
+    }
+
+    return l + 1 / epsilon;
 }
 
 } // namespace SubsetSelection
