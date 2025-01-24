@@ -12,16 +12,13 @@ class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
   private:
     scalar eps;
 
-    long long factorial(const uint n);
-    Eigen::VectorX<scalar>
-    multByDeg1PolyNTimes(const Eigen::VectorX<scalar> &poly, const scalar root,
-                         const uint n);
     Eigen::VectorX<scalar> polyFromRoots(const Eigen::VectorX<scalar> &roots);
-    Eigen::VectorX<scalar> nThDerivative(const Eigen::VectorX<scalar> &poly,
-                                         const uint n);
+
+    void fYFromPY(Eigen::VectorX<scalar> &p_y, const uint m, const uint n,
+                  const uint k, const uint i);
 
   public:
-    InterlacingFamiliesSelector(scalar eps = 1e-6);
+    InterlacingFamiliesSelector(scalar eps = 1e-2);
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;

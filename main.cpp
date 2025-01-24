@@ -6,7 +6,7 @@ using namespace SubsetSelection;
 
 int main()
 {
-    auto mat_gen = new type3MatrixGenerator<double>(90, 100, 1);
+    auto mat_gen = new type3MatrixGenerator<double>(3, 50, 1);
     //auto A = mat_gen.generateMatrix();
     SpectralSelectionSelector<double> selector_1;
     //VolumeRemovalSelector<double> selector_2;
@@ -24,15 +24,10 @@ int main()
     alg_list.push_back(&selector_6);
 
     Tester<double> t;
-    //std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 10, 2);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 5, 1);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_1, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_2, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_3, 100);
-
-    Eigen::MatrixXd M = mat_gen->generateMatrix();
-    Eigen::MatrixXd X = M * M.transpose();
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<double>> decomposition(90);
-    Eigen::PolynomialSolver<double, Eigen::Dynamic> poly_solver;
 
     delete mat_gen;
 }

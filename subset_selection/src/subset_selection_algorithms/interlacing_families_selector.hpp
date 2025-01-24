@@ -3,6 +3,7 @@
 #include <eigen3/unsupported/Eigen/Polynomials>
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 
 namespace SubsetSelection {
@@ -14,31 +15,9 @@ InterlacingFamiliesSelector<scalar>::InterlacingFamiliesSelector(scalar eps)
 }
 
 template <typename scalar>
-long long InterlacingFamiliesSelector<scalar>::factorial(const uint n) {
-    long long f = 1;
-    for (int i = 1; i <= n; ++i)
-        f *= i;
-    return f;
-}
-
-template <typename scalar>
-Eigen::VectorX<scalar>
-InterlacingFamiliesSelector<scalar>::multByDeg1PolyNTimes(
-    const Eigen::VectorX<scalar> &poly, const scalar root, const uint n) {
-    uint l = poly.size();
-    Eigen::VectorX<scalar> new_poly = Eigen::VectorX<scalar>::Zero(l + n);
-    new_poly.tail(l) = poly;
-
-    for (int i = 0; i < n; ++i) {
-        new_poly.head(l + n - 1) -= root * new_poly.tail(n + l - 1);
-    }
-
-    return new_poly;
-}
-
-template <typename scalar>
 Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::polyFromRoots(
     const Eigen::VectorX<scalar> &roots) {
+
     uint l = roots.size();
     Eigen::VectorX<scalar> poly = Eigen::VectorX<scalar>::Zero(l + 1);
     poly(l) = 1;
@@ -51,19 +30,24 @@ Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::polyFromRoots(
 }
 
 template <typename scalar>
-Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::nThDerivative(
-    const Eigen::VectorX<scalar> &poly, const uint n) {
-    uint l = poly.size();
-    Eigen::VectorX<scalar> new_poly = poly.tail(l - n);
-
-    long long factor = factorial(n);
-    for (uint i = 0; i < l - n; i++) {
-        new_poly(i) *= factor;
-        factor *= i + n + 1;
-        factor /= i + 1;
+void InterlacingFamiliesSelector<scalar>::fYFromPY(Eigen::VectorX<scalar> &p_y,
+                                                   const uint m, const uint n,
+                                                   const uint k, const uint i) {
+    if (k <= n - m) {
+        scalar coeff = 1;
+        for (uint j = 1; j < p_y.size(); ++j) {
+            coeff *= j + n - m - i;
+            coeff /= j + n - m - k;
+            p_y(j) *= coeff;
+        }
+    } else {
+        p_y = p_y.tail(n - k + 1);
+        scalar coeff = 1;
+        for (uint j = 1; j < p_y.size(); ++j) {
+            coeff *= j + k - i;
+            coeff /= j;
+        }
     }
-
-    return new_poly;
 }
 
 template <typename scalar>
@@ -87,24 +71,28 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
     std::vector<uint> cols_selected;
     cols_selected.reserve(k);
 
-    for(uint i = 1; i <= k; ++i) {
+    for (uint i = 1; i <= k; ++i) {
         Eigen::VectorX<scalar> lambdas(cols_remaining.size());
 
         for (uint j = 0; j < cols_remaining.size(); ++j) {
-            decomposition.compute(Y + V.col(j) * V.col(j).transpose());
-            Eigen::VectorX<scalar> eigenvalues = decomposition.eigenvalues();
-            Eigen::VectorX<scalar> poly = polyFromRoots(eigenvalues);
-            poly = multByDeg1PolyNTimes(poly, 1, n - m - i);
-            poly = nThDerivative(poly, k - i);
-            poly_solver.compute(poly);
+            decomposition.compute(Y + V.col(j) * V.col(j).transpose(), Eigen::EigenvaluesOnly);
+            Eigen::VectorX<scalar> p_roots = decomposition.eigenvalues();
+            // y = x - 1
+            Eigen::VectorX<scalar> p_roots_y = p_roots.array() - 1;
+            Eigen::VectorX<scalar> p_y = polyFromRoots(p_roots_y);
+            fYFromPY(p_y, m, n, k, i);
+            
+            poly_solver.compute(p_y);
 
             bool has_root;
-            lambdas(j) = poly_solver.smallestRealRoot(has_root, eps);
+            lambdas(j) = poly_solver.smallestRealRoot(has_root, 0.01);
         }
 
         uint j_max;
         lambdas.maxCoeff(&j_max);
         Y += V.col(j_max) * V.col(j_max).transpose();
+
+        decomposition.compute(Y);
 
         cols_selected.push_back(cols_remaining[j_max]);
         cols_remaining[j_max] = cols_remaining.back();
@@ -119,7 +107,7 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
 template <typename scalar>
 scalar InterlacingFamiliesSelector<scalar>::bound(uint m, uint n, uint k,
                                                   Norm norm) {
-    return (std::pow(k, 0.5) - std::pow(m - 1, 0.5)) / std::pow(n, 0.5);
+    return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n
 }
 
 } // namespace SubsetSelection

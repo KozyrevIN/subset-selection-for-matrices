@@ -25,6 +25,7 @@ template <typename scalar> class SubsetSelector {
 
     template <Norm norm> scalar bound(const Eigen::MatrixX<scalar> &X, uint k);
 
+    // lower bound on \vert X^\dag \vert_2 / \vert X_S^\dag \vert_2
     template <Norm norm> scalar bound(uint m, uint n, uint k);
 };
 
