@@ -6,7 +6,7 @@ using namespace SubsetSelection;
 
 int main()
 {
-    auto mat_gen = new type3MatrixGenerator<double>(50, 1000, 1);
+    auto mat_gen = new NearSingularMatrixGenerator<double>(50, 1000, 0.01);
     //auto A = mat_gen.generateMatrix();
     SpectralSelectionSelector<double> selector_1;
     //VolumeRemovalSelector<double> selector_2;

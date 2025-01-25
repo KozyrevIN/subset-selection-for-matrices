@@ -7,7 +7,7 @@
 namespace SubsetSelection {
 
 /*
-Базовый класс генератора матриц
+Base matrix generator class
 */
 template <typename scalar> class MatrixGenerator {
   protected:
@@ -23,66 +23,59 @@ template <typename scalar> class MatrixGenerator {
 };
 
 /*
-Генератор унитарной матрицы заданых размеров
+Generator of a random matrix with orthonormal columns/rows
+(depending on which of m and n is larger)
 */
 template <typename scalar>
-class UnitaryMatrixGenerator : public MatrixGenerator<scalar> {
+class OrthonormalEntriesMatrixGenerator : public MatrixGenerator<scalar> {
   public:
-    UnitaryMatrixGenerator(uint m, uint n);
-    UnitaryMatrixGenerator(uint m, uint n, int seed);
+    OrthonormalEntriesMatrixGenerator(uint m, uint n);
+    OrthonormalEntriesMatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
 /*
-Генератор матрицы заданных размеров с задаными набором сингулярных чисел
+Generator of a random matrix with a given set of singular values
 */
 template <typename scalar>
 class SigmaMatrixGenerator : public MatrixGenerator<scalar> {
-  public:
-    SigmaMatrixGenerator(uint m, uint n);
-    SigmaMatrixGenerator(uint m, uint n, int seed);
-    Eigen::MatrixX<scalar>
-    generateMatrixWithSigma(const Eigen::VectorX<scalar> &sigma);
-};
-
-/*
-Генератор матрицы со всеми сингулярными числами 1
-*/
-template <typename scalar>
-class type1MatrixGenerator : public SigmaMatrixGenerator<scalar> {
-  public:
-    type1MatrixGenerator(uint m, uint n);
-    type1MatrixGenerator(uint m, uint n, int seed);
-    Eigen::MatrixX<scalar> generateMatrix() override;
-};
-
-/*
-Генератор матрицы с 1 сингулярными числом 1 и остальными эпсилон
-*/
-template <typename scalar>
-class type2MatrixGenerator : public SigmaMatrixGenerator<scalar> {
   private:
-    scalar eps;
+    Eigen::VectorX<scalar> sigma;
 
   public:
-    type2MatrixGenerator(uint m, uint n, scalar eps);
-    type2MatrixGenerator(uint m, uint n, scalar eps, int seed);
+    SigmaMatrixGenerator(uint m, uint n, const Eigen::VectorX<scalar> &sigma);
+    SigmaMatrixGenerator(uint m, uint n, int seed,
+                         const Eigen::VectorX<scalar> &sigma);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
 /*
-Генератор матрицы со всеми сингулярными числами кроме последнего 1, последнее -
-эпсилон
+Generator of a random matrix with the first singular value equal to 1
+and other to eps (nearly rank-one matrix)
 */
 template <typename scalar>
-class type3MatrixGenerator : public SigmaMatrixGenerator<scalar> {
+class NearRankOneMatrixGenerator : public SigmaMatrixGenerator<scalar> {
   private:
-    scalar eps;
+    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps);
 
   public:
-    type3MatrixGenerator(uint m, uint n, scalar eps);
-    type3MatrixGenerator(uint m, uint n, scalar eps, int seed);
-    Eigen::MatrixX<scalar> generateMatrix() override;
+    NearRankOneMatrixGenerator(uint m, uint n, scalar eps);
+    NearRankOneMatrixGenerator(uint m, uint n, scalar eps, int seed);
+};
+
+/*
+Generator of a random matrix with the first min(m, n) - 1 singular
+values equal to 1 and the remaining one equal to eps (matrix being near to
+singular)
+*/
+template <typename scalar>
+class NearSingularMatrixGenerator : public SigmaMatrixGenerator<scalar> {
+  private:
+    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps);
+
+  public:
+    NearSingularMatrixGenerator(uint m, uint n, scalar eps);
+    NearSingularMatrixGenerator(uint m, uint n, scalar eps, int seed);
 };
 
 } // namespace SubsetSelection
