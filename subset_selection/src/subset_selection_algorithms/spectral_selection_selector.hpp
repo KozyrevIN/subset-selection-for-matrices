@@ -11,9 +11,8 @@ SpectralSelectionSelector<scalar>::SpectralSelectionSelector(scalar eps)
 }
 
 template <typename scalar>
-scalar SpectralSelectionSelector<scalar>::calculateEpsilon(const uint m,
-                                                           const uint n,
-                                                           const uint k) {
+scalar SpectralSelectionSelector<scalar>::calculateEpsilon(uint m, uint n,
+                                                           uint k) {
     scalar epsilon;
     if (m == 1) {
         epsilon = 0.5;
@@ -28,9 +27,10 @@ scalar SpectralSelectionSelector<scalar>::calculateEpsilon(const uint m,
 }
 
 template <typename scalar>
-scalar SpectralSelectionSelector<scalar>::calculateDelta(
-    const uint m, const uint n, const uint k, const scalar epsilon,
-    const scalar l, const uint cols_remaining_size) {
+scalar
+SpectralSelectionSelector<scalar>::calculateDelta(uint m, uint n, uint k,
+                                                  scalar epsilon, scalar l,
+                                                  uint cols_remaining_size) {
 
     scalar a = epsilon / m;
     scalar b = -1 - epsilon * (1 - l - m / epsilon) / cols_remaining_size;
@@ -42,8 +42,7 @@ scalar SpectralSelectionSelector<scalar>::calculateDelta(
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::binarySearch(
-    scalar l, scalar r, const std::function<scalar(scalar)> &f,
-    const scalar eps) {
+    scalar l, scalar r, const std::function<scalar(scalar)> &f) {
 
     scalar f_l = f(l);
     scalar f_r = f(r);
@@ -119,7 +118,7 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         S = decomposition.eigenvalues().array();
 
         auto f = [&S](scalar l) { return (S - l).inverse().sum(); };
-        l = binarySearch(l, S(0), f, eps);
+        l = binarySearch(l, S(0), f);
     }
 
     return cols_selected;
