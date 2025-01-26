@@ -78,6 +78,26 @@ class NearSingularMatrixGenerator : public SigmaMatrixGenerator<scalar> {
     NearSingularMatrixGenerator(uint m, uint n, scalar eps, int seed);
 };
 
+/*
+Generator of a matrix of right singular vectors of an edge-vertex incidence
+matrix of a random fully-connected graph with m verticies and n edges.
+*/
+template <typename scalar>
+class GraphIncidenceMatrixGenerator : public MatrixGenerator<scalar> {
+  private:
+    std::vector<std::pair<uint, uint>> randomEdgeList();
+
+    bool checkConnectivity(const std::vector<std::pair<uint, uint>> &edge_list);
+
+    Eigen::MatrixX<scalar>
+    incidenceMatrix(const std::vector<std::pair<uint, uint>> &edge_list);
+
+  public:
+    GraphIncidenceMatrixGenerator(uint m, uint n);
+    GraphIncidenceMatrixGenerator(uint m, uint n, int seed);
+    Eigen::MatrixX<scalar> generateMatrix() override;
+};
+
 } // namespace SubsetSelection
 
 #include "../src/matrix_generator.hpp"

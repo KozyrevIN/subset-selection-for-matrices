@@ -1,5 +1,7 @@
 #include <cassert>
 #include <iostream>
+#include <list>
+#include <set>
 
 namespace SubsetSelection {
 
@@ -152,13 +154,147 @@ NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) {
 
 template <typename scalar>
 NearSingularMatrixGenerator<scalar>::NearSingularMatrixGenerator(uint m, uint n,
-                                                               scalar eps)
+                                                                 scalar eps)
     : SigmaMatrixGenerator<scalar>(m, n, getSigma(m, n, eps)) {}
 
 template <typename scalar>
 NearSingularMatrixGenerator<scalar>::NearSingularMatrixGenerator(uint m, uint n,
-                                                               scalar eps,
-                                                               int seed)
+                                                                 scalar eps,
+                                                                 int seed)
     : SigmaMatrixGenerator<scalar>(m, n, seed, getSigma(m, n, eps)) {}
+
+// GraphIncidenceMatrixGenerator class
+
+template <typename scalar>
+GraphIncidenceMatrixGenerator<scalar>::GraphIncidenceMatrixGenerator(uint m,
+                                                                     uint n)
+    : MatrixGenerator<scalar>(m, n) {
+
+    assert(m - 1 <= n &&
+           "n must be larger of equal to m since m + 1 is number of edges in "
+           "constructed connected graph and n is a number of edges");
+}
+
+template <typename scalar>
+GraphIncidenceMatrixGenerator<scalar>::GraphIncidenceMatrixGenerator(uint m,
+                                                                     uint n,
+                                                                     int seed)
+    : MatrixGenerator<scalar>(m, n, seed) {
+
+    assert(m - 1 <= n &&
+           "n must be larger of equal to m since m + 1 is number of edges in "
+           "constructed connected graph and n is a number of edges");
+}
+
+template <typename scalar>
+std::vector<std::pair<uint, uint>>
+GraphIncidenceMatrixGenerator<scalar>::randomEdgeList() {
+    uint num_v = MatrixGenerator<scalar>::m + 1;
+    uint num_e = MatrixGenerator<scalar>::n;
+
+    std::vector<std::pair<uint, uint>> edge_list;
+    edge_list.reserve((num_v * (num_v - 1) / 2));
+
+    for (uint i = 0; i < num_v - 1; ++i) {
+        for (uint j = i + 1; j < num_v; ++j) {
+            edge_list.push_back(std::make_pair(i, j));
+        }
+    }
+
+    std::shuffle(edge_list.begin(), edge_list.end(),
+                 MatrixGenerator<scalar>::gen);
+    edge_list.resize(num_e);
+
+    return edge_list;
+}
+
+template <typename scalar>
+bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
+    const std::vector<std::pair<uint, uint>> &edge_list) {
+
+    auto [v_1, v_2] = edge_list[0];
+    std::set<uint> seed{v_1, v_2};
+    std::list<std::set<uint>> components{seed};
+
+    for (uint i = 1; i < edge_list.size(); ++i) {
+        auto [v_1, v_2] = edge_list[i];
+        auto v_1_component = components.begin();
+        auto v_2_component = components.begin();
+
+        bool v_1_found = false;
+        bool v_2_found = false;
+        while (!((v_1_found && v_2_found) ||
+                 v_1_component == components.end() ||
+                 v_2_component == components.end())) {
+            
+            if (!v_1_found) {
+                if (v_1_component->contains(v_1)) {
+                    v_1_found = true;
+                }
+                else {
+                    ++v_1_component;
+                }
+            }
+
+            if (!v_2_found) {
+                if (v_2_component->contains(v_2)) {
+                    v_2_found = true;
+                }
+                else {
+                    ++v_2_component;
+                }
+            }
+        }
+
+        if (v_1_found && v_2_found) {
+            if (v_1_component != v_2_component) {
+                v_1_component->merge(*v_2_component);
+                components.erase(v_2_component);
+            }
+        } else if (v_1_found) {
+            v_1_component->insert(v_2);
+        } else if (v_2_found) {
+            v_2_component->insert(v_1);
+        } else {
+            components.push_back(std::set<uint>{v_1, v_2});
+        }
+    }
+
+    if (components.size() == 1) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix(
+    const std::vector<std::pair<uint, uint>> &edge_list) {
+    uint m = MatrixGenerator<scalar>::m;
+    uint n = MatrixGenerator<scalar>::n;
+
+    Eigen::MatrixX<scalar> M = Eigen::MatrixX<scalar>::Zero(m + 1, n);
+    for (uint j = 0; j < n; ++j) {
+        auto [v_1, v_2] = edge_list[j];
+        M(v_1, j) = 1;
+        M(v_2, j) = 1;
+    }
+
+    return M;
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
+
+    auto edge_list = randomEdgeList();
+    while (!checkConnectivity(edge_list)) {
+        std::cerr << "Graph is not connected, trying again" << std::endl;
+        edge_list = randomEdgeList();
+    }
+
+    Eigen::MatrixX<scalar> M = incidenceMatrix(edge_list);
+    Eigen::BDCSVD svd(M, Eigen::ComputeThinV);
+    return svd.matrixV().topRows(MatrixGenerator<scalar>::m);
+}
 
 } // namespace SubsetSelection
