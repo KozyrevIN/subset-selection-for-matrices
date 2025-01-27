@@ -328,4 +328,32 @@ WeightedGraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
     return svd.matrixV().transpose();
 }
 
+// SmoluchowskiMatrixGenerator class
+
+template <typename scalar>
+SmoluchowskiMatrixGenerator<scalar>::SmoluchowskiMatrixGenerator(uint m, uint n)
+    : MatrixGenerator<scalar>(m, n) {}
+
+template <typename scalar>
+SmoluchowskiMatrixGenerator<scalar>::SmoluchowskiMatrixGenerator(uint m, uint n,
+                                                                 int seed)
+    : MatrixGenerator<scalar>(m, n, seed) {}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> SmoluchowskiMatrixGenerator<scalar>::generateMatrix() {
+    uint m = MatrixGenerator<scalar>::m;
+    uint n = MatrixGenerator<scalar>::n;
+
+    Eigen::MatrixX<scalar> M(n, n);
+    for (uint i = 1; i <= n; ++i) {
+        for (uint j = 1; j <= n; ++j) {
+            M(i - 1, j - 1) = std::pow(std::pow(i, 1.d / 3) + std::pow(j, 1.d / 3), 2) *
+                      std::sqrt(1.d / i + 1.d / j);
+        }
+    }
+
+    Eigen::BDCSVD svd(M, Eigen::ComputeFullV);
+    return svd.matrixV().transpose().topRows(m);
+}
+
 } // namespace SubsetSelection

@@ -112,6 +112,18 @@ class WeightedGraphIncidenceMatrixGenerator
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
+/*
+Generator of a matrix encountered when solving Smoluchowski equations. This
+matrix usually presents problems for approximation algorithms.
+*/
+template <typename scalar>
+class SmoluchowskiMatrixGenerator : public MatrixGenerator<scalar> {
+  public:
+    SmoluchowskiMatrixGenerator(uint m, uint n);
+    SmoluchowskiMatrixGenerator(uint m, uint n, int seed);
+    Eigen::MatrixX<scalar> generateMatrix() override;
+};
+
 } // namespace SubsetSelection
 
 #include "../src/matrix_generator.hpp"
