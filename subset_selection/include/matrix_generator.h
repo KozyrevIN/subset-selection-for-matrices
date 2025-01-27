@@ -80,7 +80,7 @@ class NearSingularMatrixGenerator : public SigmaMatrixGenerator<scalar> {
 
 /*
 Generator of a matrix of right singular vectors of an edge-vertex incidence
-matrix of a random fully-connected graph with m verticies and n edges.
+matrix of a random fully-connected graph with m + 1 verticies and n edges.
 */
 template <typename scalar>
 class GraphIncidenceMatrixGenerator : public MatrixGenerator<scalar> {
@@ -89,12 +89,26 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<scalar> {
 
     bool checkConnectivity(const std::vector<std::pair<uint, uint>> &edge_list);
 
-    Eigen::MatrixX<scalar>
-    incidenceMatrix(const std::vector<std::pair<uint, uint>> &edge_list);
+  protected:
+    Eigen::MatrixX<scalar> incidenceMatrix();
 
   public:
     GraphIncidenceMatrixGenerator(uint m, uint n);
     GraphIncidenceMatrixGenerator(uint m, uint n, int seed);
+    Eigen::MatrixX<scalar> generateMatrix() override;
+};
+
+/*
+Generator of a matrix of right singular vectors of an edge-vertex incidence
+matrix of a random weighted fully-connected graph with m + 1 verticies and n
+edges.
+*/
+template <typename scalar>
+class WeightedGraphIncidenceMatrixGenerator
+    : public GraphIncidenceMatrixGenerator<scalar> {
+  public:
+    WeightedGraphIncidenceMatrixGenerator(uint m, uint n);
+    WeightedGraphIncidenceMatrixGenerator(uint m, uint n, int seed);
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 

@@ -226,12 +226,11 @@ bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
         while (!((v_1_found && v_2_found) ||
                  v_1_component == components.end() ||
                  v_2_component == components.end())) {
-            
+
             if (!v_1_found) {
                 if (v_1_component->contains(v_1)) {
                     v_1_found = true;
-                }
-                else {
+                } else {
                     ++v_1_component;
                 }
             }
@@ -239,8 +238,7 @@ bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
             if (!v_2_found) {
                 if (v_2_component->contains(v_2)) {
                     v_2_found = true;
-                }
-                else {
+                } else {
                     ++v_2_component;
                 }
             }
@@ -268,10 +266,17 @@ bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
 }
 
 template <typename scalar>
-Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix(
-    const std::vector<std::pair<uint, uint>> &edge_list) {
+Eigen::MatrixX<scalar>
+GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix() {
     uint m = MatrixGenerator<scalar>::m;
     uint n = MatrixGenerator<scalar>::n;
+
+    auto edge_list = randomEdgeList();
+    while (!checkConnectivity(edge_list)) {
+        std::cerr << "Generated graph isn't connected, trying again"
+                  << std::endl;
+        edge_list = randomEdgeList();
+    }
 
     Eigen::MatrixX<scalar> M = Eigen::MatrixX<scalar>::Zero(m + 1, n);
     for (uint j = 0; j < n; ++j) {
@@ -285,16 +290,42 @@ Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix(
 
 template <typename scalar>
 Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
+    Eigen::MatrixX<scalar> M = incidenceMatrix();
+    Eigen::BDCSVD svd(M, Eigen::ComputeThinV);
+    return svd.matrixV().transpose();
+}
 
-    auto edge_list = randomEdgeList();
-    while (!checkConnectivity(edge_list)) {
-        std::cerr << "Graph is not connected, trying again" << std::endl;
-        edge_list = randomEdgeList();
+// WeightedGraphIncidenceMatrixGenerator class
+
+template <typename scalar>
+WeightedGraphIncidenceMatrixGenerator<
+    scalar>::WeightedGraphIncidenceMatrixGenerator(uint m, uint n)
+    : GraphIncidenceMatrixGenerator<scalar>(m, n) {}
+
+template <typename scalar>
+WeightedGraphIncidenceMatrixGenerator<
+    scalar>::WeightedGraphIncidenceMatrixGenerator(uint m, uint n, int seed)
+    : GraphIncidenceMatrixGenerator<scalar>(m, n, seed) {}
+
+template <typename scalar>
+Eigen::MatrixX<scalar>
+WeightedGraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
+    uint m = MatrixGenerator<scalar>::m;
+    uint n = MatrixGenerator<scalar>::n;
+
+    std::uniform_real_distribution<scalar> dis(0, 1);
+    Eigen::VectorX<scalar> weights(n);
+    weights.setConstant(1);
+    for (uint i = 0; i < n; ++i) {
+        weights(i) -= dis(MatrixGenerator<scalar>::gen);
     }
 
-    Eigen::MatrixX<scalar> M = incidenceMatrix(edge_list);
+    Eigen::MatrixX<scalar> M =
+        GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix() *
+        weights.cwiseSqrt().asDiagonal();
+
     Eigen::BDCSVD svd(M, Eigen::ComputeThinV);
-    return svd.matrixV().topRows(MatrixGenerator<scalar>::m);
+    return svd.matrixV().transpose();
 }
 
 } // namespace SubsetSelection

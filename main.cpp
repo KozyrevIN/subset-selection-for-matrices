@@ -6,7 +6,7 @@ using namespace SubsetSelection;
 
 int main()
 {
-    auto mat_gen = new GraphIncidenceMatrixGenerator<double>(10, 10);
+    auto mat_gen = new WeightedGraphIncidenceMatrixGenerator<double>(50, 1275);
     //auto A = mat_gen.generateMatrix();
     SpectralSelectionSelector<double> selector_1;
     //VolumeRemovalSelector<double> selector_2;
@@ -24,7 +24,7 @@ int main()
     //alg_list.push_back(&selector_6);
 
     Tester<double> t;
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 10, 10);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 2);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_1, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_2, 100);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_3, 100);
