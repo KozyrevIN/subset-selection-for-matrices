@@ -14,7 +14,7 @@ class FrobeniusRemovalSelector : public SubsetSelector<scalar> {
                      Eigen::ArrayX<scalar> &d, Eigen::MatrixX<scalar> &V,
                      Eigen::MatrixX<scalar> &V_dag, uint j) const;
 
-    static scalar boundInternal(uint m, uint n, uint k, Norm norm) override;
+    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
   public:
     FrobeniusRemovalSelector(scalar eps = 1e-6);

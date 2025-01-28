@@ -17,7 +17,7 @@ class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
     void fYFromPY(Eigen::VectorX<scalar> &p_y, const uint m, const uint n,
                   const uint k, const uint i) const;
 
-    static scalar boundInternal(uint m, uint n, uint k, Norm norm) override;
+    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
   public:
     InterlacingFamiliesSelector(scalar eps = 1e-2);

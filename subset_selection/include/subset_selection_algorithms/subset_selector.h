@@ -13,7 +13,7 @@ Virtual base class for selecting k columns from m x n matrix (n >= k >= m)
 */
 template <typename scalar> class SubsetSelector {
   private:
-    static scalar boundInternal(uint m, uint n, uint k, Norm norm);
+    virtual scalar boundInternal(uint m, uint n, uint k, Norm norm) const;
 
   public:
     SubsetSelector();
@@ -24,9 +24,10 @@ template <typename scalar> class SubsetSelector {
                                            uint k);
 
     // lower bound on \vert X^\dag \vert_2 / \vert X_S^\dag \vert_2
-    template <Norm norm> static scalar bound(const Eigen::MatrixX<scalar> &X, uint k);
+    template <Norm norm>
+    scalar bound(const Eigen::MatrixX<scalar> &X, uint k) const;
 
-    template <Norm norm> static scalar bound(uint m, uint n, uint k);
+    template <Norm norm> scalar bound(uint m, uint n, uint k) const;
 };
 
 } // namespace SubsetSelection

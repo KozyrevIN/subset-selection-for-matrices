@@ -21,7 +21,7 @@ SubsetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
 
 template <typename scalar>
 template <Norm norm>
-scalar SubsetSelector<scalar>::bound(const Eigen::MatrixX<scalar> &X, uint k) {
+scalar SubsetSelector<scalar>::bound(const Eigen::MatrixX<scalar> &X, uint k) const {
     static_assert(norm == Norm::Frobenius || norm == Norm::L2,
                   "This norm is unsopported!");
     return boundInternal(X.rows(), X.cols(), k, norm);
@@ -29,7 +29,7 @@ scalar SubsetSelector<scalar>::bound(const Eigen::MatrixX<scalar> &X, uint k) {
 
 template <typename scalar>
 template <Norm norm>
-scalar SubsetSelector<scalar>::bound(uint m, uint n, uint k) {
+scalar SubsetSelector<scalar>::bound(uint m, uint n, uint k) const {
     static_assert(norm == Norm::Frobenius || norm == Norm::L2,
                   "This norm is unsopported!");
     return boundInternal(m, n, k, norm);
@@ -37,7 +37,7 @@ scalar SubsetSelector<scalar>::bound(uint m, uint n, uint k) {
 
 template <typename scalar>
 scalar SubsetSelector<scalar>::boundInternal(uint m, uint n, uint k,
-                                             Norm norm) {
+                                             Norm norm) const {
     return 0;
 }
 

@@ -87,7 +87,7 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
 }
 
 template <typename scalar>
-scalar DualSetSelector<scalar>::boundInternal(uint m, uint n, uint k, Norm norm) {
+scalar DualSetSelector<scalar>::boundInternal(uint m, uint n, uint k, Norm norm) const {
     return (std::pow(k, 0.5) - std::pow(m, 0.5)) /
            (std::pow(n, 0.5) - std::pow(k, 0.5));
 }

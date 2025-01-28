@@ -1,6 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <jsoncpp/json/json.h>
 #include <omp.h>
 
 #include "../include/matrix_utilities.h"
@@ -18,7 +19,7 @@ Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar> &A,
                                       SubsetSelector<scalar> *algorithm,
                                       uint k) {
     std::string results;
-    
+
     auto t1 = std::chrono::high_resolution_clock::now();
     auto subset = algorithm->selectSubset(A, k);
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -142,54 +143,97 @@ void Tester<scalar>::scatterPoints(
     MatrixGenerator<scalar> *mat_gen,
     std::vector<SubsetSelector<scalar> *> algorithms, uint k_start,
     uint k_finish, uint points_per_k) {
-    
-    /*
-    // initializing output to file
+
+    // initializing output to directory
     std::filesystem::path absolutePath = std::filesystem::absolute(__FILE__);
     std::filesystem::path parentPath = absolutePath.parent_path();
     std::filesystem::current_path(parentPath);
 
     const auto now = std::chrono::system_clock::now();
-    std::string path = "../../out/" + std::format("{:%d-%m-%Y_%H:%M:%OS}", now);
+    const auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    const auto *now_local = std::localtime(&now_time_t);
+    std::string path = "../../out/run_";
+    path += std::format("{:02d}-{:02d}-{:04d}_{:02d}:{:02d}:{:02d}",
+                        now_local->tm_mday, now_local->tm_mon + 1,
+                        now_local->tm_year + 1900, now_local->tm_hour,
+                        now_local->tm_min, now_local->tm_sec);
     std::filesystem::create_directory(path);
 
-    // getting matrix parameters
+    // writing run info
+    Json::Value run_info;
+
     auto [m, n] = mat_gen->getMatrixSize();
-    std::string matrix_type = mat_gen->matrix_type;
+    std::string matrix_type = mat_gen->getMatrixType();
+    run_info["matrix parameters"]["m"] = m;
+    run_info["matrix parameters"]["n"] = n;
+    run_info["matrix parameters"]["type"] = matrix_type;
 
-    std::ofstream output_points;
-    output_points.open(path + "/points.csv");
-    output_points << "k,value\n";
+    run_info["testing parameters"]["k start"] = k_start;
+    run_info["testing parameters"]["k finish"] = k_finish;
+    run_info["testing parameters"]["points per k"] = points_per_k;
 
-    std::ofstream output_bound;
-    output_bound.open(path + "/bound.csv");
-    output_bound << "k,value\n";
-
-    
-
-    // writing bound
-    for (uint k = m; k <= n; ++k) {
-        output_bound << k << ',' << algorithm->template bound<norm>(m, n, k)
-                     << '\n';
+    for (auto algorithm : algorithms) {
+        run_info["algorithms"].append(algorithm->getAlgorithmName());
     }
 
-    // scattering points
-    for (uint k = m; k <= n; ++k) {
+    Json::StyledWriter writer;
+    std::string json_string = writer.write(run_info);
+    std::ofstream run_info_file(path + "/run_info.json");
+    run_info_file << json_string << std::endl;
+    run_info_file.close();
+
+    // creating algorithm names with underscores, which will be used as
+    // filenames
+    std::vector<std::string> underscored_names;
+
+    for (auto algorithm : algorithms) {
+        std::string name = algorithm->getAlgorithmName();
+        std::replace(name.begin(), name.end(), ' ', '_');
+        underscored_names.push_back(name);
+    }
+
+    // writing bounds to files
+    for (uint i = 0; i < algorithms.size(); ++i) {
+        std::ofstream bound_file(path + "/" + underscored_names[i] +
+                                 "_bound.csv");
+
+        for (uint k = k_start; k <= k_finish; ++k) {
+            bound_file << k << ','
+                       << algorithms[i]->template bound<norm>(m, n, k) << '\n';
+        }
+        bound_file.close();
+    }
+
+    // opening files to save testing results
+    std::vector<std::ofstream> points_files;
+    for (uint i = 0; i < algorithms.size(); ++i) {
+        points_files.push_back(
+            std::ofstream(path + "/" + underscored_names[i] + "_points.csv"));
+    }
+
+    // testing algorithms and outputting results
+    for (uint k = k_start; k <= k_finish; ++k) {
 #pragma omp parallel for
-        for (uint i = 0; i < points_for_k; ++i) {
+        for (uint point = 0; point < points_per_k; ++point) {
             auto A = mat_gen->generateMatrix();
-            auto subset = algorithm->selectSubset(A, k);
-            scalar pinv_norm_1 = pinv_norm<scalar, norm>(A(Eigen::all, subset));
-            scalar pinv_norm_0 = pinv_norm<scalar, norm>(A);
+            for (uint i = 0; i < algorithms.size(); ++i) {
+                auto subset = algorithms[i]->selectSubset(A, k);
+                scalar pinv_norm_1 =
+                    pinv_norm<scalar, norm>(A(Eigen::all, subset));
+                scalar pinv_norm_0 = pinv_norm<scalar, norm>(A);
 #pragma omp critical
-            { output_points << k << ',' << pinv_norm_0 / pinv_norm_1 << '\n'; }
+                {
+                    points_files[i] << k << ',' << pinv_norm_0 / pinv_norm_1
+                                     << '\n';
+                }
+            }
         }
     }
 
     // closing files
-    output_points.close();
-    output_bound.close();
-    */
+    for (uint i = 0; i < algorithms.size(); ++i) {
+        points_files[i].close();
+    }
 }
 
 } // namespace SubsetSelection

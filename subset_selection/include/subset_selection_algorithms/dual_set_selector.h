@@ -16,7 +16,7 @@ class DualSetSelector : public SubsetSelector<scalar> {
                                    uint k) override;
 
   private:
-    static scalar boundInternal(uint m, uint n, uint k, Norm norm) override;
+    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
     Eigen::ArrayX<scalar> calculateL(const Eigen::MatrixX<scalar> &V,
                                      scalar delta_l,
