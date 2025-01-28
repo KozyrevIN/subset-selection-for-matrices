@@ -8,45 +8,61 @@ namespace SubsetSelection {
 // MatrixGenerator class
 
 template <typename scalar>
-MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n) : m(m), n(n) {
+MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n) : matrixSize{m, n} {
+
     std::random_device rd;
     gen = std::mt19937(rd());
 }
 
 template <typename scalar>
 MatrixGenerator<scalar>::MatrixGenerator(uint m, uint n, int seed)
-    : m(m), n(n) {
+    : matrixSize{m, n} {
+
     gen = std::mt19937(seed);
 }
 
 template <typename scalar>
-std::pair<uint, uint> MatrixGenerator<scalar>::getMatrixSize() {
-    return std::make_pair(m, n);
+std::pair<uint, uint> MatrixGenerator<scalar>::getMatrixSize() const {
+
+    return matrixSize;
+}
+
+template <typename scalar>
+std::string MatrixGenerator<scalar>::getMatrixType() const {
+
+    return "not specified";
 }
 
 template <typename scalar>
 Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix() {
+
+    auto [m, n] = matrixSize;
     return Eigen::MatrixX<scalar>(m, n);
 }
 
-// OrthonormalEntriesMatrixGenerator class
+// OrthonormalVectorsMatrixGenerator class
 
 template <typename scalar>
-OrthonormalEntriesMatrixGenerator<scalar>::OrthonormalEntriesMatrixGenerator(
+OrthonormalVectorsMatrixGenerator<scalar>::OrthonormalVectorsMatrixGenerator(
     uint m, uint n)
     : MatrixGenerator<scalar>(m, n) {}
 
 template <typename scalar>
-OrthonormalEntriesMatrixGenerator<scalar>::OrthonormalEntriesMatrixGenerator(
+OrthonormalVectorsMatrixGenerator<scalar>::OrthonormalVectorsMatrixGenerator(
     uint m, uint n, int seed)
     : MatrixGenerator<scalar>(m, n, seed) {}
 
 template <typename scalar>
-Eigen::MatrixX<scalar>
-OrthonormalEntriesMatrixGenerator<scalar>::generateMatrix() {
+std::string
+OrthonormalVectorsMatrixGenerator<scalar>::getMatrixType() const {
+    return "matrix with orthonormal rows/columns";
+}
 
-    uint m = MatrixGenerator<scalar>::m;
-    uint n = MatrixGenerator<scalar>::n;
+template <typename scalar>
+Eigen::MatrixX<scalar>
+OrthonormalVectorsMatrixGenerator<scalar>::generateMatrix() {
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
 
     bool orthonormal_rows = false;
     if (m < n) {
@@ -85,7 +101,7 @@ OrthonormalEntriesMatrixGenerator<scalar>::generateMatrix() {
 template <typename scalar>
 SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(
     uint m, uint n, const Eigen::VectorX<scalar> &sigma)
-    : MatrixGenerator<scalar>(m, n), sigma(sigma) {
+    : sigma(sigma), MatrixGenerator<scalar>(m, n) {
 
     assert(sigma.size() <= std::min(m, n) &&
            "Invalid number of singular values, must be less or equal to the "
@@ -95,7 +111,7 @@ SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(
 template <typename scalar>
 SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(
     uint m, uint n, int seed, const Eigen::VectorX<scalar> &sigma)
-    : MatrixGenerator<scalar>(m, n, seed), sigma(sigma) {
+    : sigma(sigma), MatrixGenerator<scalar>(m, n, seed) {
 
     assert(sigma.size() <= std::min(m, n) &&
            "Invalid number of singular values, must be less or equal to the "
@@ -103,14 +119,21 @@ SigmaMatrixGenerator<scalar>::SigmaMatrixGenerator(
 }
 
 template <typename scalar>
+std::string SigmaMatrixGenerator<scalar>::getMatrixType() const {
+    std::stringstream ss;
+    ss << sigma.transpose();
+    return "matrix with given $\\sigma$, $\\sigma = " + ss.str() + "$";
+}
+
+template <typename scalar>
 Eigen::MatrixX<scalar> SigmaMatrixGenerator<scalar>::generateMatrix() {
-    uint m = MatrixGenerator<scalar>::m;
-    uint n = MatrixGenerator<scalar>::n;
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
     uint k = sigma.size();
 
-    OrthonormalEntriesMatrixGenerator<scalar> u_gen(
+    OrthonormalVectorsMatrixGenerator<scalar> u_gen(
         m, k, MatrixGenerator<scalar>::gen());
-    OrthonormalEntriesMatrixGenerator<scalar> v_gen(
+    OrthonormalVectorsMatrixGenerator<scalar> v_gen(
         n, k, MatrixGenerator<scalar>::gen());
 
     return u_gen.generateMatrix() * sigma.asDiagonal() *
@@ -121,7 +144,7 @@ Eigen::MatrixX<scalar> SigmaMatrixGenerator<scalar>::generateMatrix() {
 
 template <typename scalar>
 Eigen::VectorX<scalar>
-NearRankOneMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) {
+NearRankOneMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) const {
 
     Eigen::VectorX<scalar> sigma =
         Eigen::VectorX<scalar>::Constant(std::min(m, n), eps);
@@ -132,19 +155,24 @@ NearRankOneMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) {
 template <typename scalar>
 NearRankOneMatrixGenerator<scalar>::NearRankOneMatrixGenerator(uint m, uint n,
                                                                scalar eps)
-    : SigmaMatrixGenerator<scalar>(m, n, getSigma(m, n, eps)) {}
+    : eps(eps), SigmaMatrixGenerator<scalar>(m, n, getSigma(m, n, eps)) {}
 
 template <typename scalar>
 NearRankOneMatrixGenerator<scalar>::NearRankOneMatrixGenerator(uint m, uint n,
                                                                scalar eps,
                                                                int seed)
-    : SigmaMatrixGenerator<scalar>(m, n, seed, getSigma(m, n, eps)) {}
+    : eps(eps), SigmaMatrixGenerator<scalar>(m, n, seed, getSigma(m, n, eps)) {}
+
+template <typename scalar>
+std::string NearRankOneMatrixGenerator<scalar>::getMatrixType() const {
+    return "near rank-one matrix, $\\varepsilon = " + std::to_string(eps) + "$";
+}
 
 // NearSingularMatrixGenerator class
 
 template <typename scalar>
 Eigen::VectorX<scalar>
-NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) {
+NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) const {
 
     Eigen::VectorX<scalar> sigma =
         Eigen::VectorX<scalar>::Constant(std::min(m, n), 1);
@@ -155,13 +183,18 @@ NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) {
 template <typename scalar>
 NearSingularMatrixGenerator<scalar>::NearSingularMatrixGenerator(uint m, uint n,
                                                                  scalar eps)
-    : SigmaMatrixGenerator<scalar>(m, n, getSigma(m, n, eps)) {}
+    : eps(eps), SigmaMatrixGenerator<scalar>(m, n, getSigma(m, n, eps)) {}
 
 template <typename scalar>
 NearSingularMatrixGenerator<scalar>::NearSingularMatrixGenerator(uint m, uint n,
                                                                  scalar eps,
                                                                  int seed)
-    : SigmaMatrixGenerator<scalar>(m, n, seed, getSigma(m, n, eps)) {}
+    : eps(eps), SigmaMatrixGenerator<scalar>(m, n, seed, getSigma(m, n, eps)) {}
+
+template <typename scalar>
+std::string NearSingularMatrixGenerator<scalar>::getMatrixType() const {
+    return "near singular matrix, $\\varepsilon = " + std::to_string(eps) + "$";
+}
 
 // GraphIncidenceMatrixGenerator class
 
@@ -187,10 +220,17 @@ GraphIncidenceMatrixGenerator<scalar>::GraphIncidenceMatrixGenerator(uint m,
 }
 
 template <typename scalar>
+std::string GraphIncidenceMatrixGenerator<scalar>::getMatrixType() const {
+    return "graph incidence matrix";
+}
+
+template <typename scalar>
 std::vector<std::pair<uint, uint>>
 GraphIncidenceMatrixGenerator<scalar>::randomEdgeList() {
-    uint num_v = MatrixGenerator<scalar>::m + 1;
-    uint num_e = MatrixGenerator<scalar>::n;
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
+    uint num_v = m + 1;
+    uint num_e = n;
 
     std::vector<std::pair<uint, uint>> edge_list;
     edge_list.reserve((num_v * (num_v - 1) / 2));
@@ -210,7 +250,7 @@ GraphIncidenceMatrixGenerator<scalar>::randomEdgeList() {
 
 template <typename scalar>
 bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
-    const std::vector<std::pair<uint, uint>> &edge_list) {
+    const std::vector<std::pair<uint, uint>> &edge_list) const {
 
     auto [v_1, v_2] = edge_list[0];
     std::set<uint> seed{v_1, v_2};
@@ -268,8 +308,8 @@ bool GraphIncidenceMatrixGenerator<scalar>::checkConnectivity(
 template <typename scalar>
 Eigen::MatrixX<scalar>
 GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix() {
-    uint m = MatrixGenerator<scalar>::m;
-    uint n = MatrixGenerator<scalar>::n;
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
 
     auto edge_list = randomEdgeList();
     while (!checkConnectivity(edge_list)) {
@@ -308,10 +348,15 @@ WeightedGraphIncidenceMatrixGenerator<
     : GraphIncidenceMatrixGenerator<scalar>(m, n, seed) {}
 
 template <typename scalar>
+std::string WeightedGraphIncidenceMatrixGenerator<scalar>::getMatrixType() const {
+    return "weighted graph incidence matrix";
+}
+
+template <typename scalar>
 Eigen::MatrixX<scalar>
 WeightedGraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
-    uint m = MatrixGenerator<scalar>::m;
-    uint n = MatrixGenerator<scalar>::n;
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
 
     std::uniform_real_distribution<scalar> dis(0, 1);
     Eigen::VectorX<scalar> weights(n);
@@ -340,15 +385,21 @@ SmoluchowskiMatrixGenerator<scalar>::SmoluchowskiMatrixGenerator(uint m, uint n,
     : MatrixGenerator<scalar>(m, n, seed) {}
 
 template <typename scalar>
+std::string SmoluchowskiMatrixGenerator<scalar>::getMatrixType() const {
+    return "Smoluchowski equations matrix";
+}
+
+template <typename scalar>
 Eigen::MatrixX<scalar> SmoluchowskiMatrixGenerator<scalar>::generateMatrix() {
-    uint m = MatrixGenerator<scalar>::m;
-    uint n = MatrixGenerator<scalar>::n;
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
 
     Eigen::MatrixX<scalar> M(n, n);
     for (uint i = 1; i <= n; ++i) {
         for (uint j = 1; j <= n; ++j) {
-            M(i - 1, j - 1) = std::pow(std::pow(i, 1.d / 3) + std::pow(j, 1.d / 3), 2) *
-                      std::sqrt(1.d / i + 1.d / j);
+            M(i - 1, j - 1) =
+                std::pow(std::pow(i, 1.d / 3) + std::pow(j, 1.d / 3), 2) *
+                std::sqrt(1.d / i + 1.d / j);
         }
     }
 

@@ -3,6 +3,7 @@
 
 #include <eigen3/Eigen/Dense>
 #include <random>
+#include <string>
 
 namespace SubsetSelection {
 
@@ -11,14 +12,16 @@ Base matrix generator class
 */
 template <typename scalar> class MatrixGenerator {
   protected:
-    uint m;
-    uint n;
     std::mt19937 gen;
+    const std::pair<uint, uint> matrixSize;
 
   public:
     MatrixGenerator(uint m, uint n);
     MatrixGenerator(uint m, uint n, int seed);
-    std::pair<uint, uint> getMatrixSize();
+
+    std::pair<uint, uint> getMatrixSize() const;
+    virtual std::string getMatrixType() const;
+
     virtual Eigen::MatrixX<scalar> generateMatrix();
 };
 
@@ -27,10 +30,13 @@ Generator of a random matrix with orthonormal columns/rows
 (depending on which of m and n is larger)
 */
 template <typename scalar>
-class OrthonormalEntriesMatrixGenerator : public MatrixGenerator<scalar> {
+class OrthonormalVectorsMatrixGenerator : public MatrixGenerator<scalar> {
   public:
-    OrthonormalEntriesMatrixGenerator(uint m, uint n);
-    OrthonormalEntriesMatrixGenerator(uint m, uint n, int seed);
+    OrthonormalVectorsMatrixGenerator(uint m, uint n);
+    OrthonormalVectorsMatrixGenerator(uint m, uint n, int seed);
+
+    std::string getMatrixType() const override;
+
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -46,6 +52,9 @@ class SigmaMatrixGenerator : public MatrixGenerator<scalar> {
     SigmaMatrixGenerator(uint m, uint n, const Eigen::VectorX<scalar> &sigma);
     SigmaMatrixGenerator(uint m, uint n, int seed,
                          const Eigen::VectorX<scalar> &sigma);
+
+    std::string getMatrixType() const override;
+
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -56,11 +65,14 @@ and other to eps (nearly rank-one matrix)
 template <typename scalar>
 class NearRankOneMatrixGenerator : public SigmaMatrixGenerator<scalar> {
   private:
-    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps);
+    scalar eps;
+    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps) const;
 
   public:
     NearRankOneMatrixGenerator(uint m, uint n, scalar eps);
     NearRankOneMatrixGenerator(uint m, uint n, scalar eps, int seed);
+
+    std::string getMatrixType() const override;
 };
 
 /*
@@ -71,11 +83,14 @@ singular)
 template <typename scalar>
 class NearSingularMatrixGenerator : public SigmaMatrixGenerator<scalar> {
   private:
-    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps);
+    scalar eps;
+    Eigen::VectorX<scalar> getSigma(uint m, uint n, scalar eps) const;
 
   public:
     NearSingularMatrixGenerator(uint m, uint n, scalar eps);
     NearSingularMatrixGenerator(uint m, uint n, scalar eps, int seed);
+
+    std::string getMatrixType() const override;
 };
 
 /*
@@ -87,7 +102,7 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<scalar> {
   private:
     std::vector<std::pair<uint, uint>> randomEdgeList();
 
-    bool checkConnectivity(const std::vector<std::pair<uint, uint>> &edge_list);
+    bool checkConnectivity(const std::vector<std::pair<uint, uint>> &edge_list) const;
 
   protected:
     Eigen::MatrixX<scalar> incidenceMatrix();
@@ -95,6 +110,9 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<scalar> {
   public:
     GraphIncidenceMatrixGenerator(uint m, uint n);
     GraphIncidenceMatrixGenerator(uint m, uint n, int seed);
+
+    std::string getMatrixType() const override;
+
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -109,6 +127,9 @@ class WeightedGraphIncidenceMatrixGenerator
   public:
     WeightedGraphIncidenceMatrixGenerator(uint m, uint n);
     WeightedGraphIncidenceMatrixGenerator(uint m, uint n, int seed);
+
+    std::string getMatrixType() const override;
+
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 
@@ -121,6 +142,9 @@ class SmoluchowskiMatrixGenerator : public MatrixGenerator<scalar> {
   public:
     SmoluchowskiMatrixGenerator(uint m, uint n);
     SmoluchowskiMatrixGenerator(uint m, uint n, int seed);
+
+    std::string getMatrixType() const override;
+
     Eigen::MatrixX<scalar> generateMatrix() override;
 };
 

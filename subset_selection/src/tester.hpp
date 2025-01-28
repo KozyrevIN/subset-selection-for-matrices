@@ -18,7 +18,7 @@ Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar> &A,
                                       SubsetSelector<scalar> *algorithm,
                                       uint k) {
     std::string results;
-
+    
     auto t1 = std::chrono::high_resolution_clock::now();
     auto subset = algorithm->selectSubset(A, k);
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -138,17 +138,24 @@ std::string Tester<scalar>::testAlgorithmsOnMatrix(
 
 template <typename scalar>
 template <Norm norm>
-void Tester<scalar>::scatterPoints(MatrixGenerator<scalar> *mat_gen,
-                                   SubsetSelector<scalar> *algorithm,
-                                   uint points_for_k) {
+void Tester<scalar>::scatterPoints(
+    MatrixGenerator<scalar> *mat_gen,
+    std::vector<SubsetSelector<scalar> *> algorithms, uint k_start,
+    uint k_finish, uint points_per_k) {
+    
+    /*
     // initializing output to file
     std::filesystem::path absolutePath = std::filesystem::absolute(__FILE__);
     std::filesystem::path parentPath = absolutePath.parent_path();
     std::filesystem::current_path(parentPath);
 
-    std::string path = "../../out/" + algorithm->algorithmName + "_" +
-                       std::to_string(points_for_k);
+    const auto now = std::chrono::system_clock::now();
+    std::string path = "../../out/" + std::format("{:%d-%m-%Y_%H:%M:%OS}", now);
     std::filesystem::create_directory(path);
+
+    // getting matrix parameters
+    auto [m, n] = mat_gen->getMatrixSize();
+    std::string matrix_type = mat_gen->matrix_type;
 
     std::ofstream output_points;
     output_points.open(path + "/points.csv");
@@ -158,8 +165,7 @@ void Tester<scalar>::scatterPoints(MatrixGenerator<scalar> *mat_gen,
     output_bound.open(path + "/bound.csv");
     output_bound << "k,value\n";
 
-    // getting matrix parameters
-    auto [m, n] = mat_gen->getMatrixSize();
+    
 
     // writing bound
     for (uint k = m; k <= n; ++k) {
@@ -183,6 +189,7 @@ void Tester<scalar>::scatterPoints(MatrixGenerator<scalar> *mat_gen,
     // closing files
     output_points.close();
     output_bound.close();
+    */
 }
 
 } // namespace SubsetSelection
