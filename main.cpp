@@ -24,6 +24,8 @@ int main()
     alg_list.push_back(&selector_5);
     //alg_list.push_back(&selector_6);
 
+    std::cerr << selector_1.bound<SubsetSelection::Norm::L2>(10, 20, 13) << std::endl;
+
     Tester<double> t;
     std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 50, 2);
     //t.scatterPoints<Norm::L2>(mat_gen, &selector_1, 100);

@@ -12,15 +12,15 @@ class SpectralSelectionSelector : public SubsetSelector<scalar> {
   private:
     scalar eps;
 
-    scalar calculateEpsilon(uint m, uint n, uint k) const;
+    static scalar calculateEpsilon(uint m, uint n, uint k);
 
-    scalar calculateDelta(uint m, uint n, uint k, scalar epsilon, scalar l,
-                          uint cols_remaining_size) const;
+    static scalar calculateDelta(uint m, uint n, uint k, scalar epsilon, scalar l,
+                          uint cols_remaining_size);
 
     scalar binarySearch(scalar l, scalar r,
                         const std::function<scalar(scalar)> &f) const;
 
-    scalar bound(uint m, uint n, uint k, Norm norm) const override;
+    static scalar boundInternal(uint m, uint n, uint k, Norm norm);
 
   public:
     SpectralSelectionSelector(scalar eps = 1e-6);

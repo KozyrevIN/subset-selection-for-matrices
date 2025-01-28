@@ -16,7 +16,7 @@ std::string SpectralSelectionSelector<scalar>::getAlgorithmName() const {
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::calculateEpsilon(uint m, uint n,
-                                                           uint k) const {
+                                                           uint k) {
     scalar epsilon;
     if (m == 1) {
         epsilon = 0.5;
@@ -31,9 +31,10 @@ scalar SpectralSelectionSelector<scalar>::calculateEpsilon(uint m, uint n,
 }
 
 template <typename scalar>
-scalar SpectralSelectionSelector<scalar>::calculateDelta(
-    uint m, uint n, uint k, scalar epsilon, scalar l,
-    uint cols_remaining_size) const {
+scalar
+SpectralSelectionSelector<scalar>::calculateDelta(uint m, uint n, uint k,
+                                                  scalar epsilon, scalar l,
+                                                  uint cols_remaining_size) {
 
     scalar a = epsilon / m;
     scalar b = -1 - epsilon * (1 - l - m / epsilon) / cols_remaining_size;
@@ -128,8 +129,8 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 }
 
 template <typename scalar>
-scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k,
-                                                Norm norm) const {
+scalar SpectralSelectionSelector<scalar>::boundInternal(uint m, uint n, uint k,
+                                                        Norm norm) {
     scalar epsilon = calculateEpsilon(m, n, k);
     scalar l = -(m / epsilon);
 

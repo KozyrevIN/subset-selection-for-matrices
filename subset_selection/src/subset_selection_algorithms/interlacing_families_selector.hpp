@@ -58,6 +58,7 @@ void InterlacingFamiliesSelector<scalar>::fYFromPY(Eigen::VectorX<scalar> &p_y,
 template <typename scalar>
 std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
     const Eigen::MatrixX<scalar> &X, uint k) {
+
     uint m = X.rows();
     uint n = X.cols();
 
@@ -111,8 +112,8 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
 }
 
 template <typename scalar>
-scalar InterlacingFamiliesSelector<scalar>::bound(uint m, uint n, uint k,
-                                                  Norm norm) const {
+scalar InterlacingFamiliesSelector<scalar>::boundInternal(uint m, uint n,
+                                                          uint k, Norm norm) {
 
     return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n;
 }

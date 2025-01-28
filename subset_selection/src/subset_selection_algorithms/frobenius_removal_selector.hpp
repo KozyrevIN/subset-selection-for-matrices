@@ -87,8 +87,8 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 }
 
 template <typename scalar>
-scalar FrobeniusRemovalSelector<scalar>::bound(uint m, uint n, uint k,
-                                               Norm norm) const {
+scalar FrobeniusRemovalSelector<scalar>::boundInternal(uint m, uint n, uint k,
+                                                       Norm norm) {
     scalar bound = std::sqrt((scalar)(k - m + 1) / (scalar)(n - m + 1));
     if (norm == Norm::L2) {
         bound /= std::sqrt(n);
