@@ -8,7 +8,7 @@ set(SOURCES
     main.cpp
 )
 
-set(CMAKE_CXX_FLAGS "-fopenmp")
+set(CMAKE_CXX_FLAGS "-O3 -fopenmp")
 
 add_executable(main ${SOURCES})
 
