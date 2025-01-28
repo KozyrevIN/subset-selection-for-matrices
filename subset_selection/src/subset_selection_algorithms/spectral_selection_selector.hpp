@@ -6,13 +6,17 @@ namespace SubsetSelection {
 
 template <typename scalar>
 SpectralSelectionSelector<scalar>::SpectralSelectionSelector(scalar eps)
-    : SubsetSelector<scalar>("spectral_selection"), eps(eps) {
-    // do nothing
+    : eps(eps) {}
+
+template <typename scalar>
+std::string SpectralSelectionSelector<scalar>::getAlgorithmName() const {
+
+    return "spectral selection";
 }
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::calculateEpsilon(uint m, uint n,
-                                                           uint k) {
+                                                           uint k) const {
     scalar epsilon;
     if (m == 1) {
         epsilon = 0.5;
@@ -27,10 +31,9 @@ scalar SpectralSelectionSelector<scalar>::calculateEpsilon(uint m, uint n,
 }
 
 template <typename scalar>
-scalar
-SpectralSelectionSelector<scalar>::calculateDelta(uint m, uint n, uint k,
-                                                  scalar epsilon, scalar l,
-                                                  uint cols_remaining_size) {
+scalar SpectralSelectionSelector<scalar>::calculateDelta(
+    uint m, uint n, uint k, scalar epsilon, scalar l,
+    uint cols_remaining_size) const {
 
     scalar a = epsilon / m;
     scalar b = -1 - epsilon * (1 - l - m / epsilon) / cols_remaining_size;
@@ -42,7 +45,7 @@ SpectralSelectionSelector<scalar>::calculateDelta(uint m, uint n, uint k,
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::binarySearch(
-    scalar l, scalar r, const std::function<scalar(scalar)> &f) {
+    scalar l, scalar r, const std::function<scalar(scalar)> &f) const {
 
     scalar f_l = f(l);
     scalar f_r = f(r);
@@ -126,7 +129,7 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::bound(uint m, uint n, uint k,
-                                                Norm norm) {
+                                                Norm norm) const {
     scalar epsilon = calculateEpsilon(m, n, k);
     scalar l = -(m / epsilon);
 

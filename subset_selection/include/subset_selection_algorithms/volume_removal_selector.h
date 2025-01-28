@@ -11,11 +11,13 @@ class VolumeRemovalSelector : public SubsetSelector<scalar> {
     scalar eps;
 
   public:
-    VolumeRemovalSelector(scalar eps = 1e-8);
+    VolumeRemovalSelector(scalar eps = 1e-6);
+
+    std::string getAlgorithmName() const override;
 
     void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &d,
                      Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag,
-                     uint j);
+                     uint j) const;
 
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;

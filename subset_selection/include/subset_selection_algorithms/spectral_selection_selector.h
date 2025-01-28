@@ -12,21 +12,23 @@ class SpectralSelectionSelector : public SubsetSelector<scalar> {
   private:
     scalar eps;
 
-    scalar calculateEpsilon(uint m, uint n, uint k);
+    scalar calculateEpsilon(uint m, uint n, uint k) const;
 
     scalar calculateDelta(uint m, uint n, uint k, scalar epsilon, scalar l,
-                          uint cols_remaining_size);
+                          uint cols_remaining_size) const;
 
     scalar binarySearch(scalar l, scalar r,
-                        const std::function<scalar(scalar)> &f);
+                        const std::function<scalar(scalar)> &f) const;
+
+    scalar bound(uint m, uint n, uint k, Norm norm) const override;
 
   public:
     SpectralSelectionSelector(scalar eps = 1e-6);
 
+    std::string getAlgorithmName() const override;
+
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;
-
-    scalar bound(uint m, uint n, uint k, Norm norm) override;
 };
 
 } // namespace SubsetSelection

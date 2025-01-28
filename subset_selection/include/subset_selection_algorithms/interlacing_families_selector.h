@@ -12,18 +12,20 @@ class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
   private:
     scalar eps;
 
-    Eigen::VectorX<scalar> polyFromRoots(const Eigen::VectorX<scalar> &roots);
+    Eigen::VectorX<scalar> polyFromRoots(const Eigen::VectorX<scalar> &roots) const;
 
     void fYFromPY(Eigen::VectorX<scalar> &p_y, const uint m, const uint n,
-                  const uint k, const uint i);
+                  const uint k, const uint i) const;
+
+    scalar bound(uint m, uint n, uint k, Norm norm) const override;
 
   public:
     InterlacingFamiliesSelector(scalar eps = 1e-2);
 
+    std::string getAlgorithmName() const override;
+
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;
-
-    scalar bound(uint m, uint n, uint k, Norm norm) override;
 };
 
 } // namespace SubsetSelection

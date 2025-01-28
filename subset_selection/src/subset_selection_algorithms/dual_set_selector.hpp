@@ -1,16 +1,17 @@
 namespace SubsetSelection {
 
+template <typename scalar> DualSetSelector<scalar>::DualSetSelector() {}
+
 template <typename scalar>
-DualSetSelector<scalar>::DualSetSelector()
-    : SubsetSelector<scalar>("dual_set") {
-    // do nothing
+std::string DualSetSelector<scalar>::getAlgorithmName() const {
+
+    return "dual set";
 }
 
 template <typename scalar>
-Eigen::ArrayX<scalar>
-DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
-                                    scalar delta_l,
-                                    const Eigen::MatrixX<scalar> &A, scalar l) {
+Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateL(
+    const Eigen::MatrixX<scalar> &V, scalar delta_l,
+    const Eigen::MatrixX<scalar> &A, scalar l) const {
 
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
     Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
@@ -26,9 +27,9 @@ DualSetSelector<scalar>::calculateL(const Eigen::MatrixX<scalar> &V,
 }
 
 template <typename scalar>
-Eigen::ArrayX<scalar>
-DualSetSelector<scalar>::calculateU(scalar delta_u,
-                                    const Eigen::ArrayX<scalar> &B, scalar u) {
+Eigen::ArrayX<scalar> DualSetSelector<scalar>::calculateU(
+    scalar delta_u, const Eigen::ArrayX<scalar> &B, scalar u) const {
+
     return ((u + delta_u) - B).inverse() +
            ((u + delta_u) - B).inverse().square() /
                ((u - B).inverse().sum() - ((u + delta_u) - B).inverse().sum());
@@ -37,6 +38,7 @@ DualSetSelector<scalar>::calculateU(scalar delta_u,
 template <typename scalar>
 std::vector<uint>
 DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
+
     uint m = X.rows();
     uint n = X.cols();
 
@@ -85,7 +87,7 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
 }
 
 template <typename scalar>
-scalar DualSetSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) {
+scalar DualSetSelector<scalar>::bound(uint m, uint n, uint k, Norm norm) const {
     return (std::pow(k, 0.5) - std::pow(m, 0.5)) /
            (std::pow(n, 0.5) - std::pow(k, 0.5));
 }

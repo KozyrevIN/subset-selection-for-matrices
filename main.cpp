@@ -13,7 +13,7 @@ int main()
     //VolumeRemovalSelector<double> selector_2;
     //DualSetSelector<double> selector_3;
     //FrobeniusRemovalSelector<double> selector_4;
-    SubsetSelector<double> selector_5("random");
+    SubsetSelector<double> selector_5;
     //InterlacingFamiliesSelector<double> selector_6;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();

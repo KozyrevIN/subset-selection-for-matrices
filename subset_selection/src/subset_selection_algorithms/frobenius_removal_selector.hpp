@@ -4,14 +4,18 @@ namespace SubsetSelection {
 
 template <typename scalar>
 FrobeniusRemovalSelector<scalar>::FrobeniusRemovalSelector(scalar eps)
-    : SubsetSelector<scalar>("frobenius_removal"), eps(eps) {
-    // do nothing
+    : eps(eps) {}
+
+template <typename scalar>
+std::string FrobeniusRemovalSelector<scalar>::getAlgorithmName() const {
+
+    return "frobenius removal";
 }
 
 template <typename scalar>
 void FrobeniusRemovalSelector<scalar>::removeByIdx(
     std::vector<uint> &cols, Eigen::ArrayX<scalar> &l, Eigen::ArrayX<scalar> &d,
-    Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag, uint j) {
+    Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag, uint j) const {
 
     uint new_size = cols.size() - 1;
 
@@ -84,7 +88,7 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 
 template <typename scalar>
 scalar FrobeniusRemovalSelector<scalar>::bound(uint m, uint n, uint k,
-                                               Norm norm) {
+                                               Norm norm) const {
     scalar bound = std::sqrt((scalar)(k - m + 1) / (scalar)(n - m + 1));
     if (norm == Norm::L2) {
         bound /= std::sqrt(n);

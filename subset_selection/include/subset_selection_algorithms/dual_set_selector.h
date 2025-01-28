@@ -10,18 +10,20 @@ class DualSetSelector : public SubsetSelector<scalar> {
   public:
     DualSetSelector();
 
+    std::string getAlgorithmName() const override;
+
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;
 
-    scalar bound(uint m, uint n, uint k, Norm norm) override;
-
   private:
+    scalar bound(uint m, uint n, uint k, Norm norm) const override;
+
     Eigen::ArrayX<scalar> calculateL(const Eigen::MatrixX<scalar> &V,
                                      scalar delta_l,
-                                     const Eigen::MatrixX<scalar> &A, scalar l);
+                                     const Eigen::MatrixX<scalar> &A, scalar l) const;
                                      
     Eigen::ArrayX<scalar> calculateU(scalar delta_u,
-                                     const Eigen::ArrayX<scalar> &B, scalar u);
+                                     const Eigen::ArrayX<scalar> &B, scalar u) const;
 };
 
 } // namespace SubsetSelection

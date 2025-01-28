@@ -13,20 +13,20 @@ Virtual base class for selecting k columns from m x n matrix (n >= k >= m)
 */
 template <typename scalar> class SubsetSelector {
   protected:
-    virtual scalar bound(uint m, uint n, uint k, Norm norm);
+    virtual scalar bound(uint m, uint n, uint k, Norm norm) const;
 
   public:
-    const std::string algorithmName;
+    SubsetSelector();
 
-    SubsetSelector(const std::string &algorithm_name);
+    virtual std::string getAlgorithmName() const;
 
     virtual std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
                                            uint k);
 
-    template <Norm norm> scalar bound(const Eigen::MatrixX<scalar> &X, uint k);
+    template <Norm norm> scalar bound(const Eigen::MatrixX<scalar> &X, uint k) const;
 
     // lower bound on \vert X^\dag \vert_2 / \vert X_S^\dag \vert_2
-    template <Norm norm> scalar bound(uint m, uint n, uint k);
+    template <Norm norm> scalar bound(uint m, uint n, uint k) const;
 };
 
 } // namespace SubsetSelection

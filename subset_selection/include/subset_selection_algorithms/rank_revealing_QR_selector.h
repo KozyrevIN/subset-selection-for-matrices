@@ -10,6 +10,8 @@ class RankRevealingQRSelector : public SubsetSelector<scalar> {
   public:
     RankRevealingQRSelector();
 
+    std::string getAlgorithmName() const override;
+
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;
 };

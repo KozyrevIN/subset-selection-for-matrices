@@ -90,7 +90,7 @@ Tester<scalar>::testAlgorithmOnMatrix(MatrixGenerator<scalar> *mat_gen,
                       .count();
     }
     results =
-        algorithm->algorithmName +
+        algorithm->getAlgorithmName() +
         ":\n"
         "    frobenius volume reduction = " +
         std::to_string(frobeinus_volume_reduction.mean()) + " +- " +

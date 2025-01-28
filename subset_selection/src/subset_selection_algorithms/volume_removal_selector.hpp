@@ -3,9 +3,12 @@
 namespace SubsetSelection {
 
 template <typename scalar>
-VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps)
-    : SubsetSelector<scalar>("volume_removal"), eps(eps) {
-    // do nothing
+VolumeRemovalSelector<scalar>::VolumeRemovalSelector(scalar eps) : eps(eps) {}
+
+template <typename scalar>
+std::string VolumeRemovalSelector<scalar>::getAlgorithmName() const {
+
+    return "volume removal";
 }
 
 template <typename scalar>
@@ -13,7 +16,7 @@ void VolumeRemovalSelector<scalar>::removeByIdx(std::vector<uint> &cols,
                                                 Eigen::ArrayX<scalar> &d,
                                                 Eigen::MatrixX<scalar> &V,
                                                 Eigen::MatrixX<scalar> &V_dag,
-                                                uint j) {
+                                                uint j) const {
 
     uint new_size = cols.size() - 1;
 

@@ -2,21 +2,25 @@
 #include <eigen3/Eigen/SVD>
 #include <eigen3/unsupported/Eigen/Polynomials>
 #include <functional>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <vector>
 
 namespace SubsetSelection {
 
 template <typename scalar>
 InterlacingFamiliesSelector<scalar>::InterlacingFamiliesSelector(scalar eps)
-    : SubsetSelector<scalar>("interlacing_families"), eps(eps) {
-    // do nothing
+    : eps(eps) {}
+
+template <typename scalar>
+std::string InterlacingFamiliesSelector<scalar>::getAlgorithmName() const {
+
+    return "interlacing families";
 }
 
 template <typename scalar>
 Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::polyFromRoots(
-    const Eigen::VectorX<scalar> &roots) {
+    const Eigen::VectorX<scalar> &roots) const {
 
     uint l = roots.size();
     Eigen::VectorX<scalar> poly = Eigen::VectorX<scalar>::Zero(l + 1);
@@ -32,7 +36,8 @@ Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::polyFromRoots(
 template <typename scalar>
 void InterlacingFamiliesSelector<scalar>::fYFromPY(Eigen::VectorX<scalar> &p_y,
                                                    const uint m, const uint n,
-                                                   const uint k, const uint i) {
+                                                   const uint k,
+                                                   const uint i) const {
     if (k <= n - m) {
         scalar coeff = 1;
         for (uint j = 1; j < p_y.size(); ++j) {
@@ -75,13 +80,14 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
         Eigen::VectorX<scalar> lambdas(cols_remaining.size());
 
         for (uint j = 0; j < cols_remaining.size(); ++j) {
-            decomposition.compute(Y + V.col(j) * V.col(j).transpose(), Eigen::EigenvaluesOnly);
+            decomposition.compute(Y + V.col(j) * V.col(j).transpose(),
+                                  Eigen::EigenvaluesOnly);
             Eigen::VectorX<scalar> p_roots = decomposition.eigenvalues();
             // y = x - 1
             Eigen::VectorX<scalar> p_roots_y = p_roots.array() - 1;
             Eigen::VectorX<scalar> p_y = polyFromRoots(p_roots_y);
             fYFromPY(p_y, m, n, k, i);
-            
+
             poly_solver.compute(p_y);
 
             bool has_root;
@@ -106,7 +112,8 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
 
 template <typename scalar>
 scalar InterlacingFamiliesSelector<scalar>::bound(uint m, uint n, uint k,
-                                                  Norm norm) {
+                                                  Norm norm) const {
+
     return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n;
 }
 

@@ -12,15 +12,17 @@ class FrobeniusRemovalSelector : public SubsetSelector<scalar> {
 
     void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &l,
                      Eigen::ArrayX<scalar> &d, Eigen::MatrixX<scalar> &V,
-                     Eigen::MatrixX<scalar> &V_dag, uint j);
+                     Eigen::MatrixX<scalar> &V_dag, uint j) const;
+    
+    scalar bound(uint m, uint n, uint k, Norm norm) const override;
 
   public:
     FrobeniusRemovalSelector(scalar eps = 1e-6);
 
+    std::string getAlgorithmName() const override;
+
     std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
                                    uint k) override;
-
-    scalar bound(uint m, uint n, uint k, Norm norm) override;
 };
 
 } // namespace SubsetSelection
