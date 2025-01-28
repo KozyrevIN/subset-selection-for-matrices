@@ -31,19 +31,19 @@ Tester<scalar>::testAlgorithmOnMatrix(const Eigen::MatrixX<scalar> &A,
     scalar pinv_l2_norm_1 = pinv_norm<scalar, Norm::L2>(A(Eigen::all, subset));
     scalar pinv_l2_norm_0 = pinv_norm<scalar, Norm::L2>(A);
 
-    scalar frobenius_volume_reduction =
+    scalar frobenius_norm_reduction =
         pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
-    scalar l2_volume_reduction = pinv_l2_norm_0 / pinv_l2_norm_1;
+    scalar l2_norm_reduction = pinv_l2_norm_0 / pinv_l2_norm_1;
 
     auto time =
         std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    results =
-        algorithm->algorithmName +
-        ":\n"
-        "    frobenius volume reduction = " +
-        std::to_string(frobenius_volume_reduction) + "\n" +
-        "    l_2 volume reduction = " + std::to_string(l2_volume_reduction) +
-        "\n" + "    time = " + std::to_string(time) + " ms \n";
+    results = algorithm->algorithmName +
+              ":\n"
+              "    frobenius volume reduction = " +
+              std::to_string(std::pow(frobenius_norm_reduction, 2)) + "\n" +
+              "    l_2 volume reduction = " +
+              std::to_string(std::pow(l2_norm_reduction, 2)) + "\n" +
+              "    time = " + std::to_string(time) + " ms \n";
 
     return results;
 }
@@ -65,8 +65,8 @@ Tester<scalar>::testAlgorithmOnMatrix(MatrixGenerator<scalar> *mat_gen,
                                       uint cycles) {
     std::string results;
     Eigen::ArrayX<double> time(cycles);
-    Eigen::ArrayX<scalar> frobeinus_volume_reduction(cycles);
-    Eigen::ArrayX<scalar> l2_volume_reduction(cycles);
+    Eigen::ArrayX<scalar> frobeinus_norm_reduction_sq(cycles);
+    Eigen::ArrayX<scalar> l2_norm_reduction_sq(cycles);
 
     for (uint i = 0; i < cycles; ++i) {
         auto A = mat_gen->generateMatrix();
@@ -83,32 +83,33 @@ Tester<scalar>::testAlgorithmOnMatrix(MatrixGenerator<scalar> *mat_gen,
             pinv_norm<scalar, Norm::L2>(A(Eigen::all, subset));
         scalar pinv_l2_norm_0 = pinv_norm<scalar, Norm::L2>(A);
 
-        frobeinus_volume_reduction(i) =
-            pinv_frobenius_norm_0 / pinv_frobenius_norm_1;
-        l2_volume_reduction(i) = pinv_l2_norm_0 / pinv_l2_norm_1;
+        frobeinus_norm_reduction_sq(i) =
+            std::pow(pinv_frobenius_norm_0 / pinv_frobenius_norm_1, 2);
+        l2_norm_reduction_sq(i) = std::pow(pinv_l2_norm_0 / pinv_l2_norm_1, 2);
 
         time(i) = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1)
                       .count();
     }
-    results =
-        algorithm->getAlgorithmName() +
-        ":\n"
-        "    frobenius volume reduction = " +
-        std::to_string(frobeinus_volume_reduction.mean()) + " +- " +
-        std::to_string(std::sqrt(
-            (frobeinus_volume_reduction - frobeinus_volume_reduction.mean())
-                .square()
-                .sum() /
-            (cycles - 1))) +
-        "\n" + "    l_2 volume reduction = " +
-        std::to_string(l2_volume_reduction.mean()) + " +- " +
-        std::to_string(std::sqrt(
-            (l2_volume_reduction - l2_volume_reduction.mean()).square().sum() /
-            (cycles - 1))) +
-        "\n" + "    time = " + std::to_string(time.mean()) + " +- " +
-        std::to_string(
-            std::sqrt((time - time.mean()).square().sum() / (cycles - 1))) +
-        " ms \n";
+    results = algorithm->getAlgorithmName() +
+              ":\n"
+              "    frobenius volume reduction = " +
+              std::to_string(frobeinus_norm_reduction_sq.mean()) + " +- " +
+              std::to_string(std::sqrt((frobeinus_norm_reduction_sq -
+                                        frobeinus_norm_reduction_sq.mean())
+                                           .square()
+                                           .sum() /
+                                       (cycles - 1))) +
+              "\n" + "    l_2 volume reduction = " +
+              std::to_string(l2_norm_reduction_sq.mean()) + " +- " +
+              std::to_string(
+                  std::sqrt((l2_norm_reduction_sq - l2_norm_reduction_sq.mean())
+                                .square()
+                                .sum() /
+                            (cycles - 1))) +
+              "\n" + "    time = " + std::to_string(time.mean()) + " +- " +
+              std::to_string(std::sqrt((time - time.mean()).square().sum() /
+                                       (cycles - 1))) +
+              " ms \n";
 
     return results;
 }
@@ -213,7 +214,7 @@ void Tester<scalar>::scatterPoints(
     }
 
     // testing algorithms and outputting results
-#pragma omp parallel for schedule(dynamic,1)
+#pragma omp parallel for schedule(dynamic, 1)
     for (uint k = k_start; k <= k_finish; ++k) {
         for (uint point = 0; point < points_per_k; ++point) {
             auto A = mat_gen->generateMatrix();
@@ -224,8 +225,9 @@ void Tester<scalar>::scatterPoints(
                 scalar pinv_norm_0 = pinv_norm<scalar, norm>(A);
 #pragma omp critical
                 {
-                    points_files[i] << k << ',' << pinv_norm_0 / pinv_norm_1
-                                     << '\n';
+                    points_files[i] << k << ','
+                                    << std::pow(pinv_norm_0 / pinv_norm_1, 2)
+                                    << '\n';
                 }
             }
         }

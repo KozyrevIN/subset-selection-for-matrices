@@ -116,7 +116,7 @@ scalar InterlacingFamiliesSelector<scalar>::boundInternal(uint m, uint n,
                                                           uint k,
                                                           Norm norm) const {
 
-    return (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n;
+    return std::pow((std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n, 2);
 }
 
 } // namespace SubsetSelection

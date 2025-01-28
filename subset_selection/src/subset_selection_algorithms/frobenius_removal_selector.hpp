@@ -94,7 +94,7 @@ scalar FrobeniusRemovalSelector<scalar>::boundInternal(uint m, uint n, uint k,
         bound /= std::sqrt(n);
     }
 
-    return bound;
+    return bound * bound;
 }
 
 } // namespace SubsetSelection
