@@ -42,7 +42,8 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
-    Eigen::MatrixX<scalar> V = X;
+    Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
+    Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
     Eigen::MatrixX<scalar> A = Eigen::MatrixX<scalar>::Zero(m, m);
     Eigen::VectorX<scalar> s = Eigen::VectorX<scalar>::Zero(n);
 
