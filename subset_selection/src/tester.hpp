@@ -143,7 +143,7 @@ template <Norm norm>
 void Tester<scalar>::scatterPoints(
     MatrixGenerator<scalar> *mat_gen,
     std::vector<SubsetSelector<scalar> *> algorithms, uint k_start,
-    uint k_finish, uint points_per_k) {
+    uint k_finish, uint k_step, uint points_per_k) {
 
     // initializing output to directory
     std::filesystem::path absolutePath = std::filesystem::absolute(__FILE__);
@@ -171,6 +171,7 @@ void Tester<scalar>::scatterPoints(
 
     run_info["testing parameters"]["k start"] = k_start;
     run_info["testing parameters"]["k finish"] = k_finish;
+    run_info["testing parameters"]["k step"] = k_step;
     run_info["testing parameters"]["points per k"] = points_per_k;
 
     for (auto algorithm : algorithms) {
@@ -198,7 +199,7 @@ void Tester<scalar>::scatterPoints(
         std::ofstream bound_file(path + "/" + underscored_names[i] +
                                  "_bound.csv");
         bound_file << "k,value\n";
-        for (uint k = k_start; k <= k_finish; ++k) {
+        for (uint k = k_start; k <= k_finish; k += k_step) {
             bound_file << k << ','
                        << algorithms[i]->template bound<norm>(m, n, k) << '\n';
         }
@@ -215,7 +216,7 @@ void Tester<scalar>::scatterPoints(
 
     // testing algorithms and outputting results
 #pragma omp parallel for schedule(dynamic, 1)
-    for (uint k = k_start; k <= k_finish; ++k) {
+    for (uint k = k_start; k <= k_finish; k += k_step) {
         for (uint point = 0; point < points_per_k; ++point) {
             auto A = mat_gen->generateMatrix();
             for (uint i = 0; i < algorithms.size(); ++i) {

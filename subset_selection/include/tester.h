@@ -38,7 +38,8 @@ template <typename scalar> class Tester {
     template <Norm norm>
     void scatterPoints(MatrixGenerator<scalar> *mat_gen,
                        std::vector<SubsetSelector<scalar> *> algorithms,
-                       uint k_start, uint k_finish, uint points_per_k);
+                       uint k_start, uint k_finish, uint k_step,
+                       uint points_per_k);
 };
 
 } // namespace SubsetSelection

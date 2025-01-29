@@ -27,7 +27,7 @@ scalar SpectralRemovalSelector<scalar>::boundInternal(uint m, uint n, uint k,
                                                        Norm norm) const {
     scalar bound;
     if (norm == Norm::L2) {
-        bound = 1 / (1 + m * (n - k) / (k - m + 1));
+        bound = 1 / (1 + (scalar)(m * (n - k)) / (k - m + 1));
     } else if (norm == Norm::Frobenius) {
         bound = (scalar)(k - m + 1) / (n - m + 1) / m;
     }
