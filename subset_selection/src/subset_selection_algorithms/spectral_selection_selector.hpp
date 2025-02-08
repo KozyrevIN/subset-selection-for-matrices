@@ -45,12 +45,13 @@ scalar SpectralSelectionSelector<scalar>::calculateDelta(
 
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::binarySearch(
-    scalar l, scalar r, const std::function<scalar(scalar)> &f) const {
+    scalar l, scalar r, const std::function<scalar(scalar)> &f,
+    scalar tol) const {
 
     scalar f_l = f(l);
     scalar f_r = f(r);
 
-    while (r - l > eps) {
+    while (r - l > tol) {
         scalar m = (r + l) / 2;
         scalar f_m = f(m);
 
@@ -120,8 +121,10 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
 
-        auto f = [&S](scalar l) { return (S - l).inverse().sum(); };
-        l = binarySearch(l, S(0), f);
+        auto f = [&S, &epsilon](scalar l) {
+            return (S - l).inverse().sum() - epsilon;
+        };
+        l = binarySearch(l, S(0), f, delta * eps);
     }
 
     return cols_selected;
