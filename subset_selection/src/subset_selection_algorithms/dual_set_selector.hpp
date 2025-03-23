@@ -91,7 +91,7 @@ template <typename scalar>
 scalar DualSetSelector<scalar>::boundInternal(uint m, uint n, uint k,
                                               Norm norm) const {
 
-    return std::pow((std::sqrt(k) - std::sqrt(m)) / (std::sqrt(n) + std::sqrt(k)), 2);
+    return std::pow((std::sqrt(k + 1) - std::sqrt(m)) / (std::sqrt(n) + std::sqrt(k + 1)), 2);
 }
 
 } // namespace SubsetSelection
