@@ -2,7 +2,6 @@
 #include <eigen3/Eigen/SVD>
 #include <eigen3/unsupported/Eigen/Polynomials>
 #include <functional>
-#include <iomanip>
 #include <iostream>
 #include <vector>
 
@@ -34,25 +33,40 @@ Eigen::VectorX<scalar> InterlacingFamiliesSelector<scalar>::polyFromRoots(
 }
 
 template <typename scalar>
-void InterlacingFamiliesSelector<scalar>::fYFromPY(Eigen::VectorX<scalar> &p_y,
-                                                   const uint m, const uint n,
-                                                   const uint k,
-                                                   const uint i) const {
+Eigen::ArrayX<scalar>
+InterlacingFamiliesSelector<scalar>::PtoFArray(uint m, uint n, uint k,
+                                               uint i) const {
+    Eigen::ArrayX<scalar> arr;
+
     if (k <= n - m) {
-        scalar coeff = 1;
-        for (uint j = 1; j < p_y.size(); ++j) {
-            coeff *= j + n - m - i;
-            coeff /= j + n - m - k;
-            p_y(j) *= coeff;
+        arr = Eigen::ArrayX<scalar>::Constant(m + 1, 1);
+        for (uint j = 1; j < m + 1; ++j) {
+            arr(j) = arr(j - 1) * (j + n - m - i) / (j + n - m - k);
         }
     } else {
-        p_y = p_y.tail(n - k + 1);
-        scalar coeff = 1;
-        for (uint j = 1; j < p_y.size(); ++j) {
-            coeff *= j + k - i;
-            coeff /= j;
+        arr = Eigen::ArrayX<scalar>::Constant(n - k + 1, 1);
+        for (uint j = 1; j < n - k + 1; ++j) {
+            arr(j) = arr(j - 1) * (j + k - i) / j;
         }
     }
+
+    return arr;
+}
+
+// z = y + shift
+template <typename scalar>
+Eigen::MatrixX<scalar>
+InterlacingFamiliesSelector<scalar>::YtoZMatrix(uint m, scalar shift) const {
+
+    Eigen::MatrixX<scalar> M = Eigen::MatrixX<scalar>::Zero(m, m);
+
+    M(0, 0) = 1;
+    for (uint i = 1; i < m; ++i) {
+        M.col(i).tail(m - 1) = M.col(i - 1).head(m - 1);
+        M.col(i) -= shift * M.col(i - 1);
+    }
+
+    return M;
 }
 
 template <typename scalar>
@@ -77,20 +91,29 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
     std::vector<uint> cols_selected;
     cols_selected.reserve(k);
 
+    scalar lambda_max_prev = 0;
+
     for (uint i = 1; i <= k; ++i) {
         Eigen::VectorX<scalar> lambdas(cols_remaining.size());
+
+        Eigen::ArrayX<scalar> PtoF = PtoFArray(m, n, k, i);
+        uint f_len = PtoF.size();
+        Eigen::MatrixX<scalar> YtoZ = YtoZMatrix(f_len, 1 - lambda_max_prev);
 
         for (uint j = 0; j < cols_remaining.size(); ++j) {
             decomposition.compute(Y + V.col(j) * V.col(j).transpose(),
                                   Eigen::EigenvaluesOnly);
-            Eigen::VectorX<scalar> p_roots = decomposition.eigenvalues();
+            Eigen::ArrayX<scalar> p_roots_x = decomposition.eigenvalues();
             // y = x - 1
-            Eigen::VectorX<scalar> p_roots_y = p_roots.array() - 1;
-            Eigen::VectorX<scalar> p_y = polyFromRoots(p_roots_y);
-            fYFromPY(p_y, m, n, k, i);
+            Eigen::ArrayX<scalar> p_roots_y = p_roots_x.array() - 1;
+            Eigen::ArrayX<scalar> p_y = polyFromRoots(p_roots_y);
+            Eigen::VectorX<scalar> f_y = PtoF * p_y.tail(f_len);
+            // z = x - \lambda_m(Y) = y + 1 - \lambda_m(Y) obtained on previous
+            // step changing the basis to make the problem of finding roots well
+            // conditioned
+            Eigen::VectorX<scalar> f_z = YtoZ * f_y;
 
-            poly_solver.compute(p_y);
-
+            poly_solver.compute(f_z);
             bool has_root;
             lambdas(j) = poly_solver.smallestRealRoot(has_root, 0.01);
         }
@@ -98,6 +121,8 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
         uint j_max;
         lambdas.maxCoeff(&j_max);
         Y += V.col(j_max) * V.col(j_max).transpose();
+        lambda_max_prev += lambdas(j_max);
+        std::cerr << lambda_max_prev << std::endl;
 
         decomposition.compute(Y);
 
@@ -116,7 +141,8 @@ scalar InterlacingFamiliesSelector<scalar>::boundInternal(uint m, uint n,
                                                           uint k,
                                                           Norm norm) const {
 
-    return std::pow((std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n, 2);
+    return std::pow(
+        (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n, 2);
 }
 
 } // namespace SubsetSelection

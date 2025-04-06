@@ -12,10 +12,12 @@ class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
   private:
     scalar eps;
 
-    Eigen::VectorX<scalar> polyFromRoots(const Eigen::VectorX<scalar> &roots) const;
+    Eigen::VectorX<scalar>
+    polyFromRoots(const Eigen::VectorX<scalar> &roots) const;
 
-    void fYFromPY(Eigen::VectorX<scalar> &p_y, const uint m, const uint n,
-                  const uint k, const uint i) const;
+    Eigen::ArrayX<scalar> PtoFArray(uint m, uint n, uint k, uint i) const;
+
+    Eigen::MatrixX<scalar> YtoZMatrix(uint m, scalar shift) const;
 
     scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
