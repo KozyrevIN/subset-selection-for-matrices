@@ -1,8 +1,6 @@
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/SVD>
 #include <eigen3/unsupported/Eigen/Polynomials>
-#include <functional>
-#include <iostream>
 #include <vector>
 
 namespace SubsetSelection {
@@ -122,7 +120,6 @@ std::vector<uint> InterlacingFamiliesSelector<scalar>::selectSubset(
         lambdas.maxCoeff(&j_max);
         Y += V.col(j_max) * V.col(j_max).transpose();
         lambda_max_prev += lambdas(j_max);
-        std::cerr << lambda_max_prev << std::endl;
 
         decomposition.compute(Y);
 
