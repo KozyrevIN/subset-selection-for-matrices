@@ -1,7 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <jsoncpp/json/json.h>
+#include <json/json.h>
 #include <omp.h>
 
 #include "../include/matrix_utilities.h"
