@@ -1,5 +1,5 @@
-#include <eigen3/Eigen/Eigenvalues>
-#include <eigen3/Eigen/QR>
+#include <Eigen/Eigenvalues>
+#include <Eigen/QR>
 #include <vector>
 
 namespace SubsetSelection {

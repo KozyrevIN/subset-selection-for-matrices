@@ -1,6 +1,6 @@
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/QR>
-#include <eigen3/Eigen/SVD>
+#include <Eigen/Dense>
+#include <Eigen/QR>
+#include <Eigen/SVD>
 
 namespace SubsetSelection {
 

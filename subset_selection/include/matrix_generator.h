@@ -1,7 +1,7 @@
 #ifndef MATRIX_GENERATOR_H
 #define MATRIX_GENERATOR_H
 
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 #include <random>
 #include <string>
 

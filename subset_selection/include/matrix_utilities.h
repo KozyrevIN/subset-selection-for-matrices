@@ -1,7 +1,7 @@
 #ifndef MATRIX_UTILITIES_H
 #define MATRIX_UTILITIES_H
 
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 
 #include "enums.h"
 

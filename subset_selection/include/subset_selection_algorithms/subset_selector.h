@@ -1,7 +1,7 @@
 #ifndef SUBSET_SELECTOR_H
 #define SUBSET_SELECTOR_H
 
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 #include <string>
 
 #include "../enums.h"

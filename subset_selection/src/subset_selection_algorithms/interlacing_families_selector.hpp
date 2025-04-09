@@ -1,6 +1,6 @@
-#include <eigen3/Eigen/Eigenvalues>
-#include <eigen3/Eigen/SVD>
-#include <eigen3/unsupported/Eigen/Polynomials>
+#include <Eigen/Eigenvalues>
+#include <Eigen/SVD>
+#include <unsupported/Eigen/Polynomials>
 #include <vector>
 
 namespace SubsetSelection {
