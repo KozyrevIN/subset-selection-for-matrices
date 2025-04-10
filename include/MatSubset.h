@@ -1,0 +1,8 @@
+#include "MatSubset/SelectorBase.h"
+#include "MatSubset/DualSetSelector.h"
+#include "MatSubset/FrobeniusRemovalSelector.h"
+#include "MatSubset/SpectralRemovalSelector.h"
+#include "MatSubset/RankRevealingQRSelector.h"
+#include "MatSubset/SpectralSelectionSelector.h"
+#include "MatSubset/VolumeRemovalSelector.h"
+#include "MatSubset/InterlacingFamiliesSelector.h"

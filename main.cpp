@@ -9,7 +9,7 @@ int main()
     auto mat_gen_1 = new OrthonormalVectorsMatrixGenerator<double>(100, 500);
     //auto mat_gen_2 = new WeightedGraphIncidenceMatrixGenerator<double>(100, 500);
     
-    SpectralSelectionSelector<double> selector_1;
+    Matss::SpectralSelectionSelector<double> selector_1;
     DualSetSelector<double> selector_2;
     SpectralRemovalSelector<double> selector_3;
     SubsetSelector<double> selector_4;
@@ -20,7 +20,7 @@ int main()
     alg_list.push_back(&selector_2);
     alg_list.push_back(&selector_3);
     alg_list.push_back(&selector_4);
-    alg_list.push_back(&selector_5);
+    //alg_list.push_back(&selector_5);
 
     Tester<double> t;
     //std::cout << t.testAlgorithmsOnMatrix(mat_gen, alg_list, 500, 1);
@@ -28,7 +28,7 @@ int main()
     //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_1, alg_list, 100, 200, 1, 32);
 
     //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_2, alg_list, 100, 500, 4, 16);
-    //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_2, alg_list, 100, 200, 1, 32);
+    t.scatterPoints<<MatSub::Norm::L2>(mat_gen_2, alg_list, 100, 200, 1, 32);
     //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_2, alg_list, 100, 200, 1, 32);
 
     std::cout << t.testAlgorithmsOnMatrix(mat_gen_1, alg_list, 100, 1);
