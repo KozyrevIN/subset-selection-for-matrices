@@ -1,30 +1,73 @@
 #ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 #define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 
-#include "subset_selector.h"
+#include "SelectorBase.h"
 
 namespace MatSubset {
 
 template <typename scalar>
 class VolumeRemovalSelector : public SelectorBase<scalar> {
+  public:
+    VolumeRemovalSelector(scalar eps = 1e-6) : eps(eps) {}
+
+    std::string getAlgorithmName() const override { return "volume removal"; }
+
+    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                   uint k) override {
+        uint m = X.rows();
+        uint n = X.cols();
+
+        std::vector<uint> cols(n);
+        for (uint j = 0; j < n; ++j) {
+            cols[j] = j;
+        }
+
+        Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
+        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
+
+        Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
+        Eigen::ArrayX<scalar> d =
+            1 - (V.transpose() * V_dag).diagonal().array();
+
+        while (cols.size() > k) {
+            uint j_max;
+            scalar d_max = d.maxCoeff(&j_max);
+
+            Eigen::VectorX<scalar> w = V.col(j_max);
+            Eigen::VectorX<scalar> w_dag = V_dag.col(j_max);
+
+            removeByIdx(cols, d, V, V_dag, j_max);
+
+            d -= (w.transpose() * V_dag).array().square() / d_max;
+            V_dag += w_dag * (w_dag.transpose() * V) / d_max;
+        }
+
+        return cols;
+    }
+
   private:
     scalar eps;
 
-  public:
-    VolumeRemovalSelector(scalar eps = 1e-6);
-
-    std::string getAlgorithmName() const override;
-
     void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &d,
                      Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag,
-                     uint j) const;
+                     uint j) const {
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
-                                   uint k) override;
+        uint new_size = cols.size() - 1;
+
+        cols[j] = cols[new_size];
+        cols.resize(new_size);
+
+        d(j) = d(new_size);
+        d.conservativeResize(new_size);
+
+        V.col(j) = V.col(new_size);
+        V.conservativeResize(Eigen::NoChange, new_size);
+
+        V_dag.col(j) = V_dag.col(new_size);
+        V_dag.conservativeResize(Eigen::NoChange, new_size);
+    }
 };
 
 } // namespace MatSubset
-
-#include "../../src/subset_selection_algorithms/volume_removal_selector.hpp"
 
 #endif

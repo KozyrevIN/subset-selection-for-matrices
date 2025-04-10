@@ -7,20 +7,34 @@ namespace MatSubset {
 
 template <typename scalar>
 class SpectralRemovalSelector : public FrobeniusRemovalSelector<scalar> {
-  private:
-    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
-
   public:
-    SpectralRemovalSelector(scalar eps = 1e-6);
+    SpectralRemovalSelector(scalar eps = 1e-6)
+        : FrobeniusRemovalSelector<scalar>(eps) {}
 
-    std::string getAlgorithmName() const override;
+    std::string getAlgorithmName() const override { return "spectral removal"; }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
-                                   uint k) override;
+    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                   uint k) override {
+
+        Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
+        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
+        return FrobeniusRemovalSelector<scalar>::selectSubset(V, k);
+    }
+
+  private:
+    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override {
+        
+        scalar bound;
+        if (norm == Norm::L2) {
+            bound = 1 / (1 + (scalar)(m * (n - k)) / (k - m + 1));
+        } else if (norm == Norm::Frobenius) {
+            bound = (scalar)(k - m + 1) / (n - m + 1) / m;
+        }
+
+        return bound;
+    }
 };
 
 } // namespace MatSubset
-
-#include "../../src/subset_selection_algorithms/spectral_removal_selector.hpp"
 
 #endif

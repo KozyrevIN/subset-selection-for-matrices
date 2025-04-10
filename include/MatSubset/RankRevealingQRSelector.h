@@ -8,16 +8,33 @@ namespace MatSubset {
 template <typename scalar>
 class RankRevealingQRSelector : public SelectorBase<scalar> {
   public:
-    RankRevealingQRSelector();
+    RankRevealingQRSelector() {}
 
-    std::string getAlgorithmName() const override;
+    std::string getAlgorithmName() const override {
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
-                                   uint k) override;
+        return "rank-revealing QR";
+    }
+
+    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                   uint k) override {
+
+        Eigen::ColPivHouseholderQR<Eigen::MatrixX<scalar>> qr(x);
+        Eigen::MatrixX<scalar> P = qr.colsPermutation();
+
+        std::vector<uint> vect(k);
+
+        for (int j = 0; j < k; ++j) {
+            int i = 0;
+            for (; std::abs(P(i, j)) == 0; ++i)
+            vect[j] = i;
+        }
+
+        std::sort(vect.begin(), vect.end());
+
+        return vect;
+    }
 };
 
 } // namespace MatSubset
-
-#include "../../src/subset_selection_algorithms/rank_revealing_QR_selector.hpp"
 
 #endif
