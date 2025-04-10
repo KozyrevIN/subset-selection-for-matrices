@@ -1,7 +1,7 @@
-#ifndef DUAL_SET_SELECTOR_H
-#define DUAL_SET_SELECTOR_H
+#ifndef MAT_SUBSET_DUAL_SET_SELECTOR_H
+#define MAT_SUBSET_DUAL_SET_SELECTOR_H
 
-#include "subset_selector.h"
+#include "SelectorBase.h"
 
 namespace MatSubset {
 

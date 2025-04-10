@@ -1,5 +1,5 @@
-#ifndef SPECTRAL_REMOVAL_H
-#define SPECTRAL_REMOVAL_H
+#ifndef MAT_SUBSET_SPECTRAL_REMOVAL_H
+#define MAT_SUBSET_SPECTRAL_REMOVAL_H
 
 #include "frobenius_removal_selector.h"
 

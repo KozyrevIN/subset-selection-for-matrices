@@ -1,5 +1,5 @@
-#ifndef SUBSET_SELECTOR_H
-#define SUBSET_SELECTOR_H
+#ifndef MAT_SUBSET_SUBSET_SELECTOR_H
+#define MAT_SUBSET_SUBSET_SELECTOR_H
 
 #include <Eigen/Dense>
 #include <string>
@@ -11,7 +11,7 @@ namespace MatSubset {
 /*
 Virtual base class for selecting k columns from m x n matrix (n >= k >= m)
 */
-template <typename scalar> class SubsetSelector {
+template <typename scalar> class SelectorBase {
   private:
     virtual scalar boundInternal(uint m, uint n, uint k, Norm norm) const;
 
