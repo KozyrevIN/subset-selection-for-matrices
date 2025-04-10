@@ -1,16 +1,56 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.5)
 
-project(Subset_selection)
+project(
+    MatSubset
+    VERSION 0.0.0
+    LANGUAGES CXX)
+
+add_library(${PROJECT_NAME} INTERFACE)
+
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(jsoncpp REQUIRED)
 
-set(SOURCES 
-    main.cpp
-)
+target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
-set(CMAKE_CXX_FLAGS "-O3 -fopenmp -DNDEBUG")
+include(GNUInstallDirs)
 
-add_executable(main ${SOURCES})
+target_include_directories(
+    ${PROJECT_NAME}
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-target_link_libraries(main Eigen3::Eigen JsonCpp::JsonCpp)
-target_compile_features(main PRIVATE cxx_std_20)
+# Install targets and export them to Targets.cmake
+install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets)
+
+# Configure and install the Config.cmake and ConfigVersion.cmake files
+include(CMakePackageConfigHelpers)
+
+# Generate the ConfigVersion.cmake file
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion)
+
+# Configure the Config.cmake file from the .in template
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+# Install the generated Config.cmake, ConfigVersion.cmake, and Targets.cmake
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+install(
+    EXPORT ${PROJECT_NAME}Targets
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+# Install headers
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/include/${PROJECT_NAME}/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
+
+        
+
