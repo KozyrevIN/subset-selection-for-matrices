@@ -1,2 +1,1 @@
-# Subset-selection
-Repo for subset selection problem article
+# subset-selection-for-matrices (or SSFM for short)
