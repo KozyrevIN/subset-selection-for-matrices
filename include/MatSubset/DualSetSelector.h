@@ -3,7 +3,7 @@
 
 #include "subset_selector.h"
 
-namespace SubsetSelection {
+namespace MatSubset {
 
 template <typename scalar>
 class DualSetSelector : public SubsetSelector<scalar> {
@@ -26,7 +26,7 @@ class DualSetSelector : public SubsetSelector<scalar> {
                                      const Eigen::ArrayX<scalar> &B, scalar u) const;
 };
 
-} // namespace SubsetSelection
+} // namespace MatSubset
 
 #include "../../src/subset_selection_algorithms/dual_set_selector.hpp"
 

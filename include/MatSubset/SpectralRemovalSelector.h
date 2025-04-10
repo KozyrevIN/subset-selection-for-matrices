@@ -3,7 +3,7 @@
 
 #include "frobenius_removal_selector.h"
 
-namespace SubsetSelection {
+namespace MatSubset {
 
 template <typename scalar>
 class SpectralRemovalSelector : public FrobeniusRemovalSelector<scalar> {
@@ -19,7 +19,7 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<scalar> {
                                    uint k) override;
 };
 
-} // namespace SubsetSelection
+} // namespace MatSubset
 
 #include "../../src/subset_selection_algorithms/spectral_removal_selector.hpp"
 

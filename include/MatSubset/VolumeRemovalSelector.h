@@ -3,7 +3,7 @@
 
 #include "subset_selector.h"
 
-namespace SubsetSelection {
+namespace MatSubset {
 
 template <typename scalar>
 class VolumeRemovalSelector : public SubsetSelector<scalar> {
@@ -23,7 +23,7 @@ class VolumeRemovalSelector : public SubsetSelector<scalar> {
                                    uint k) override;
 };
 
-} // namespace SubsetSelection
+} // namespace MatSubset
 
 #include "../../src/subset_selection_algorithms/volume_removal_selector.hpp"
 

@@ -5,7 +5,7 @@
 
 #include "subset_selector.h"
 
-namespace SubsetSelection {
+namespace MatSubset {
 
 template <typename scalar>
 class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
@@ -30,7 +30,7 @@ class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
                                    uint k) override;
 };
 
-} // namespace SubsetSelection
+} // namespace MatSubset
 
 #include "../../src/subset_selection_algorithms/interlacing_families_selector.hpp"
 
