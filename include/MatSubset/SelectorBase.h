@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <string>
 
-#include "../enums.h"
+#include "Enums.h"
 
 namespace MatSubset {
 
@@ -16,7 +16,7 @@ template <typename scalar> class SelectorBase {
     virtual scalar boundInternal(uint m, uint n, uint k, Norm norm) const;
 
   public:
-    SubsetSelector();
+    SelectorBase();
 
     virtual std::string getAlgorithmName() const;
 

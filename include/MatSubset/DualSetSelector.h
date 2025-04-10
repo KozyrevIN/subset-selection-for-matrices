@@ -6,7 +6,7 @@
 namespace MatSubset {
 
 template <typename scalar>
-class DualSetSelector : public SubsetSelector<scalar> {
+class DualSetSelector : public SelectorBase<scalar> {
   public:
     DualSetSelector();
 
@@ -20,10 +20,11 @@ class DualSetSelector : public SubsetSelector<scalar> {
 
     Eigen::ArrayX<scalar> calculateL(const Eigen::MatrixX<scalar> &V,
                                      scalar delta_l,
-                                     const Eigen::MatrixX<scalar> &A, scalar l) const;
-                                     
-    Eigen::ArrayX<scalar> calculateU(scalar delta_u,
-                                     const Eigen::ArrayX<scalar> &B, scalar u) const;
+                                     const Eigen::MatrixX<scalar> &A,
+                                     scalar l) const;
+
+    Eigen::ArrayX<scalar>
+    calculateU(scalar delta_u, const Eigen::ArrayX<scalar> &B, scalar u) const;
 };
 
 } // namespace MatSubset

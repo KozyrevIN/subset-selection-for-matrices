@@ -1,12 +1,12 @@
 #ifndef MAT_SUBSET_FROBENIUS_REMOVAL_SELECTOR_H
 #define MAT_SUBSET_FROBENIUS_REMOVAL_SELECTOR_H
 
-#include "subset_selector.h"
+#include "SelectorBase.h"
 
 namespace MatSubset {
 
 template <typename scalar>
-class FrobeniusRemovalSelector : public SubsetSelector<scalar> {
+class FrobeniusRemovalSelector : public SelectorBase<scalar> {
   private:
     scalar eps;
 

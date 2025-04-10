@@ -3,12 +3,12 @@
 
 #include <functional>
 
-#include "subset_selector.h"
+#include "SelectorBase.h"
 
 namespace MatSubset {
 
 template <typename scalar>
-class InterlacingFamiliesSelector : public SubsetSelector<scalar> {
+class InterlacingFamiliesSelector : public SelectorBase<scalar> {
   private:
     scalar eps;
 

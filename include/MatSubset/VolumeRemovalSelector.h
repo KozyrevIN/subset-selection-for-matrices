@@ -1,12 +1,12 @@
-#ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR
-#define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR
+#ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
+#define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 
 #include "subset_selector.h"
 
 namespace MatSubset {
 
 template <typename scalar>
-class VolumeRemovalSelector : public SubsetSelector<scalar> {
+class VolumeRemovalSelector : public SelectorBase<scalar> {
   private:
     scalar eps;
 

@@ -1,12 +1,12 @@
 #ifndef MAT_SUBSET_RANK_REVEALING_QR_SELECTOR_H
 #define MAT_SUBSET_RANK_REVEALING_QR_SELECTOR_H
 
-#include "subset_selector.h"
+#include "SelectorBase.h"
 
 namespace MatSubset {
 
 template <typename scalar>
-class RankRevealingQRSelector : public SubsetSelector<scalar> {
+class RankRevealingQRSelector : public SelectorBase<scalar> {
   public:
     RankRevealingQRSelector();
 

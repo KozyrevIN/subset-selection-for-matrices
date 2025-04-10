@@ -1,7 +1,7 @@
 #ifndef MAT_SUBSET_SPECTRAL_REMOVAL_H
 #define MAT_SUBSET_SPECTRAL_REMOVAL_H
 
-#include "frobenius_removal_selector.h"
+#include "FrobeniusRemovalSelector.h"
 
 namespace MatSubset {
 
