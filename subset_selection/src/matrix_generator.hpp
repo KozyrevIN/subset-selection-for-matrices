@@ -84,7 +84,7 @@ OrthonormalVectorsMatrixGenerator<scalar>::generateMatrix() {
     Eigen::VectorX<scalar> Rdiag = qr.matrixQR().diagonal();
 
     for (int i = 0; i < n; ++i) {
-        if (std::abs(Rdiag(i) != 0)) {
+        if (std::abs(Rdiag(i)) != 0) {
             Q.row(i) *= Rdiag(i) / std::abs(Rdiag(i));
         }
     }

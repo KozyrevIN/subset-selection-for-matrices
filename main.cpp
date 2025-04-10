@@ -6,7 +6,7 @@ using namespace SubsetSelection;
 
 int main()
 {
-    auto mat_gen_1 = new OrthonormalVectorsMatrixGenerator<double>(10, 50);
+    auto mat_gen_1 = new OrthonormalVectorsMatrixGenerator<double>(100, 500);
     //auto mat_gen_2 = new WeightedGraphIncidenceMatrixGenerator<double>(100, 500);
     
     SpectralSelectionSelector<double> selector_1;
@@ -31,7 +31,7 @@ int main()
     //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_2, alg_list, 100, 200, 1, 32);
     //t.scatterPoints<SubsetSelection::Norm::L2>(mat_gen_2, alg_list, 100, 200, 1, 32);
 
-    std::cout << t.testAlgorithmsOnMatrix(mat_gen_1, alg_list, 20, 1);
+    std::cout << t.testAlgorithmsOnMatrix(mat_gen_1, alg_list, 100, 1);
 
     delete mat_gen_1;
     //delete mat_gen_2;
