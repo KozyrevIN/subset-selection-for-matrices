@@ -9,9 +9,9 @@ project(
 
 option(MatSubset_INSTALL "Generate install target." ON)
 option(BUILD_EXAMPLES "Build examples" OFF)
-#option(BUILD_TESTS "Build tests" OFF)
-#option(BUILD_DOCUMENTATION "Build documentation" OFF)
-#option(BUILD_BENCHMARK "Build benchmark" OFF)
+#option(BUILD_TEST "Build tests" OFF)
+#option(BUILD_DOCS "Build documentation" OFF)
+#option(BUILD_BENCH "Build benchmark" OFF)
 
 # Include guard
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
