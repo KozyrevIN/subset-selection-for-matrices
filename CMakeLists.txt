@@ -5,18 +5,32 @@ project(
     VERSION 0.0.0
     LANGUAGES CXX)
 
+# Include guard
+if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
+message(
+    FATAL_ERROR
+    "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there."
+)
+endif()
+
+# Creating header only library target
 add_library(${PROJECT_NAME} INTERFACE)
 
+# Being a cross-platform target, we enforce standards conformance on MSVC
+target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
+
+# Resolving dependencies
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
+# Configuring project directories
 include(GNUInstallDirs)
 
 target_include_directories(
     ${PROJECT_NAME}
-    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+              "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
 # Install targets and export them to Targets.cmake
 install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets)
@@ -54,8 +68,7 @@ install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/${PROJECT_NAME}/"
 
 # Add uninstall target
 add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Uninstall.cmake
-)
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Uninstall.cmake")
 
         
 
