@@ -31,16 +31,16 @@ int main() {
 
     MatSubset::SpectralSelectionSelector<double> selector;
 
-    const int m = 2;
-    const int n = 5;
-    const int k = 3;
+    const Eigen::Index m = 2;
+    const Eigen::Index n = 5;
+    const Eigen::Index k = 3;
 
     Eigen::MatrixX<scalar> matrix(m, n);
     matrix << 1, 2, 3, 4, 5,
               6, 7, 8, 9, 10;
     std::cout << "matrix =\n" << matrix << "\n\n";
 
-    std::vector<uint> indices = selector.selectSubset(matrix, k);
+    std::vector<Eigen::Index> indices = selector.selectSubset(matrix, k);
     Eigen::MatrixX<scalar> submatrix = matrix(Eigen::all, indices);
     std::cout << "selected submatrix =\n" << submatrix << "\n\n";
 
@@ -79,10 +79,10 @@ int main() {
                   << xi_norm_pinv_matrix / xi_norm_bound << "\n\n";
 
         if (xi_norm_pinv_submatrix <= xi_norm_pinv_matrix / xi_norm_bound) {
-            std::cout << "theoretical bound is satisfied\n";
+            std::cout << "theoretical bound is satisfied\n\n";
         } else {
             std::cout << "theoretical bound is NOT satisfied, consider "
-                         "submitting an issue\n";
+                         "submitting an issue\n\n";
         }
     }
 

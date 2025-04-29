@@ -12,13 +12,13 @@ class VolumeRemovalSelector : public SelectorBase<scalar> {
 
     std::string getAlgorithmName() const override { return "volume removal"; }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                   uint k) override {
-        uint m = X.rows();
-        uint n = X.cols();
+    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                           Eigen::Index k) override {
+        Eigen::Index m = X.rows();
+        Eigen::Index n = X.cols();
 
-        std::vector<uint> cols(n);
-        for (uint j = 0; j < n; ++j) {
+        std::vector<Eigen::Index> cols(n);
+        for (Eigen::Index j = 0; j < n; ++j) {
             cols[j] = j;
         }
 
@@ -30,7 +30,7 @@ class VolumeRemovalSelector : public SelectorBase<scalar> {
             1 - (V.transpose() * V_dag).diagonal().array();
 
         while (cols.size() > k) {
-            uint j_max;
+            Eigen::Index j_max;
             scalar d_max = d.maxCoeff(&j_max);
 
             Eigen::VectorX<scalar> w = V.col(j_max);
@@ -48,11 +48,11 @@ class VolumeRemovalSelector : public SelectorBase<scalar> {
   private:
     scalar eps;
 
-    void removeByIdx(std::vector<uint> &cols, Eigen::ArrayX<scalar> &d,
+    void removeByIdx(std::vector<Eigen::Index> &cols, Eigen::ArrayX<scalar> &d,
                      Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag,
-                     uint j) const {
+                     Eigen::Index j) const {
 
-        uint new_size = cols.size() - 1;
+        Eigen::Index new_size = cols.size() - 1;
 
         cols[j] = cols[new_size];
         cols.resize(new_size);

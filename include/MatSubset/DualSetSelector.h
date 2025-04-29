@@ -11,11 +11,11 @@ template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
 
     std::string getAlgorithmName() const override { return "dual set"; }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                   uint k) override {
+    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                           Eigen::Index k) override {
 
-        uint m = X.rows();
-        uint n = X.cols();
+        Eigen::Index m = X.rows();
+        Eigen::Index n = X.cols();
 
         Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
         Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
@@ -29,14 +29,14 @@ template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
             (std::sqrt(n) + std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
         scalar u = delta_u * std::sqrt(k * n);
 
-        for (uint i = 0; i < k; ++i) {
+        for (Eigen::Index i = 0; i < k; ++i) {
             Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);
             Eigen::VectorX<scalar> U = calculateU(delta_u, s, u);
 
             l += delta_l;
             u += delta_u;
 
-            uint max_idx;
+            Eigen::Index max_idx;
             (L - U).maxCoeff(&max_idx);
             scalar t = 2 / (L(max_idx) + U(max_idx));
 
@@ -44,14 +44,14 @@ template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
             A += t * V.col(max_idx) * V.col(max_idx).transpose();
         }
 
-        std::vector<uint> indices;
-        for (uint i = 0; i < s.size(); i++) {
+        std::vector<Eigen::Index> indices;
+        for (Eigen::Index i = 0; i < s.size(); i++) {
             if (s(i) > 0) {
                 indices.push_back(i);
             }
         }
 
-        uint i = 0;
+        Eigen::Index i = 0;
         while (indices.size() < k) {
             if (s(i) <= 0) {
                 indices.push_back(i);
@@ -63,7 +63,8 @@ template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
     }
 
   private:
-    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override {
+    scalar boundInternal(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                         Norm norm) const override {
 
         return std::pow((std::sqrt(k + 1) - std::sqrt(m)) /
                             (std::sqrt(n) + std::sqrt(k + 1)),

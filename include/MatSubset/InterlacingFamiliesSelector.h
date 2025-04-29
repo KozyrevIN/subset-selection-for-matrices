@@ -10,18 +10,18 @@ namespace MatSubset {
 template <typename scalar>
 class InterlacingFamiliesSelector : public SelectorBase<scalar> {
   public:
-    InterlacingFamiliesSelector(scalar eps = 1e-2) : eps(eps) {}
+    InterlacingFamiliesSelector(scalar eps = 1e-6) : eps(eps) {}
 
     std::string getAlgorithmName() const override {
 
         return "interlacing families";
     }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &x,
-                                   uint k) override {
+    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &x,
+                                           Eigen::Index k) override {
 
-        uint m = X.rows();
-        uint n = X.cols();
+        Eigen::Index m = X.rows();
+        Eigen::Index n = X.cols();
 
         Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
         Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
@@ -30,25 +30,25 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
         Eigen::PolynomialSolver<scalar, Eigen::Dynamic> poly_solver;
 
-        std::vector<uint> cols_remaining(n);
-        for (uint j = 0; j < X.cols(); ++j) {
+        std::vector<Eigen::Index> cols_remaining(n);
+        for (Eigen::Index j = 0; j < X.cols(); ++j) {
             cols_remaining[j] = j;
         }
 
-        std::vector<uint> cols_selected;
+        std::vector<Eigen::Index> cols_selected;
         cols_selected.reserve(k);
 
         scalar lambda_max_prev = 0;
 
-        for (uint i = 1; i <= k; ++i) {
+        for (Eigen::Index i = 1; i <= k; ++i) {
             Eigen::VectorX<scalar> lambdas(cols_remaining.size());
 
             Eigen::ArrayX<scalar> PtoF = PtoFArray(m, n, k, i);
-            uint f_len = PtoF.size();
+            Eigen::Index f_len = PtoF.size();
             Eigen::MatrixX<scalar> YtoZ =
                 YtoZMatrix(f_len, 1 - lambda_max_prev);
 
-            for (uint j = 0; j < cols_remaining.size(); ++j) {
+            for (Eigen::Index j = 0; j < cols_remaining.size(); ++j) {
                 decomposition.compute(Y + V.col(j) * V.col(j).transpose(),
                                       Eigen::EigenvaluesOnly);
                 Eigen::ArrayX<scalar> p_roots_x = decomposition.eigenvalues();
@@ -66,7 +66,7 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
                 lambdas(j) = poly_solver.smallestRealRoot(has_root, 0.01);
             }
 
-            uint j_max;
+            Eigen::Index j_max;
             lambdas.maxCoeff(&j_max);
             Y += V.col(j_max) * V.col(j_max).transpose();
             lambda_max_prev += lambdas(j_max);
@@ -89,7 +89,7 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
     Eigen::VectorX<scalar>
     polyFromRoots(const Eigen::VectorX<scalar> &roots) const {
 
-        uint l = roots.size();
+        Eigen::Index l = roots.size();
         Eigen::VectorX<scalar> poly = Eigen::VectorX<scalar>::Zero(l + 1);
         poly(l) = 1;
 
@@ -100,18 +100,19 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
         return poly;
     }
 
-    Eigen::ArrayX<scalar> PtoFArray(uint m, uint n, uint k, uint i) const {
-        
+    Eigen::ArrayX<scalar> PtoFArray(Eigen::Index m, Eigen::Index n,
+                                    Eigen::Index k, Eigen::Index i) const {
+
         Eigen::ArrayX<scalar> arr;
 
         if (k <= n - m) {
             arr = Eigen::ArrayX<scalar>::Constant(m + 1, 1);
-            for (uint j = 1; j < m + 1; ++j) {
+            for (Eigen::Index j = 1; j < m + 1; ++j) {
                 arr(j) = arr(j - 1) * (j + n - m - i) / (j + n - m - k);
             }
         } else {
             arr = Eigen::ArrayX<scalar>::Constant(n - k + 1, 1);
-            for (uint j = 1; j < n - k + 1; ++j) {
+            for (Eigen::Index j = 1; j < n - k + 1; ++j) {
                 arr(j) = arr(j - 1) * (j + k - i) / j;
             }
         }
@@ -119,12 +120,12 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
         return arr;
     }
 
-    Eigen::MatrixX<scalar> YtoZMatrix(uint m, scalar shift) const {
+    Eigen::MatrixX<scalar> YtoZMatrix(Eigen::Index m, scalar shift) const {
 
         Eigen::MatrixX<scalar> M = Eigen::MatrixX<scalar>::Zero(m, m);
 
         M(0, 0) = 1;
-        for (uint i = 1; i < m; ++i) {
+        for (Eigen::Index i = 1; i < m; ++i) {
             M.col(i).tail(m - 1) = M.col(i - 1).head(m - 1);
             M.col(i) -= shift * M.col(i - 1);
         }
@@ -132,7 +133,8 @@ class InterlacingFamiliesSelector : public SelectorBase<scalar> {
         return M;
     }
 
-    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override {
+    scalar boundInternal(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                         Norm norm) const override {
 
         return std::pow(
             (std::sqrt((k + 1) * (n - m)) - std::sqrt(m * (n - k - 1))) / n, 2);

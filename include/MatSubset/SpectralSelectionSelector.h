@@ -20,21 +20,21 @@ class SpectralSelectionSelector : public SelectorBase<scalar> {
         return "spectral selection";
     }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                   uint k) override {
-        uint m = X.rows();
-        uint n = X.cols();
+    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                           Eigen::Index k) override {
+        Eigen::Index m = X.rows();
+        Eigen::Index n = X.cols();
 
         Eigen::ColPivHouseholderQR<Eigen::MatrixX<scalar>> qr(X.transpose());
         Eigen::MatrixX<scalar> Q_full = qr.matrixQ();
         Eigen::MatrixX<scalar> V = Q_full.leftCols(m).transpose();
 
-        std::vector<uint> cols_remaining(n);
-        for (uint j = 0; j < V.cols(); ++j) {
+        std::vector<Eigen::Index> cols_remaining(n);
+        for (Eigen::Index j = 0; j < V.cols(); ++j) {
             cols_remaining[j] = j;
         }
 
-        std::vector<uint> cols_selected;
+        std::vector<Eigen::Index> cols_selected;
         cols_selected.reserve(k);
 
         Eigen::MatrixX<scalar> Y = Eigen::MatrixX<scalar>::Zero(m, m);
@@ -58,7 +58,7 @@ class SpectralSelectionSelector : public SelectorBase<scalar> {
                 M.colwise().squaredNorm().transpose().array() /
                     (1 + (V.transpose() * M).diagonal().array());
 
-            uint j_min;
+            Eigen::Index j_min;
             Phi.minCoeff(&j_min);
             Y += V.col(j_min) * V.col(j_min).transpose();
 
@@ -84,7 +84,8 @@ class SpectralSelectionSelector : public SelectorBase<scalar> {
   private:
     scalar eps;
 
-    scalar calculateEpsilon(uint m, uint n, uint k) const {
+    scalar calculateEpsilon(Eigen::Index m, Eigen::Index n,
+                            Eigen::Index k) const {
         scalar epsilon;
         if (m == 1) {
             epsilon = 0.5;
@@ -98,8 +99,9 @@ class SpectralSelectionSelector : public SelectorBase<scalar> {
         return epsilon;
     }
 
-    scalar calculateDelta(uint m, uint n, uint k, scalar epsilon, scalar l,
-                          uint cols_remaining_size) const {
+    scalar calculateDelta(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                          scalar epsilon, scalar l,
+                          Eigen::Index cols_remaining_size) const {
 
         scalar a = epsilon / m;
         scalar b = -1 - epsilon * (1 - l - m / epsilon) / cols_remaining_size;
@@ -132,11 +134,12 @@ class SpectralSelectionSelector : public SelectorBase<scalar> {
         return (r + l) / 2;
     }
 
-    scalar boundInternal(uint m, uint n, uint k, Norm norm) const override {
+    scalar boundInternal(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                         Norm norm) const override {
         scalar epsilon = calculateEpsilon(m, n, k);
         scalar l = -(m / epsilon);
 
-        for (uint i = 0; i < k; ++i) {
+        for (Eigen::Index i = 0; i < k; ++i) {
             l += calculateDelta(m, n, k, epsilon, l, n - i);
         }
 

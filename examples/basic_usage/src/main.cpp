@@ -23,28 +23,29 @@ int main() {
     MatSubset::SpectralSelectionSelector<scalar> selector;
 
     // Every algorithm has a name, let us output it.
-    std::cout << "Basic usage example of " << selector.getAlgorithmName()
+    std::cout << "\nBasic usage example of " << selector.getAlgorithmName()
               << " algorithm\n\n";
 
     // Now let us define a double valued matrix of size m times n. The matrix
     // must have more columns then rows (m <= n) and have full rank for
-    // algorithms to work correctly.
-    const int m = 2;
-    const int n = 5;
+    // algorithms to work correctly. We use Eigen::Index for any integer related
+    // to matrix sizes and indices for consistency with Eigen API.
+    const Eigen::Index m = 2;
+    const Eigen::Index n = 5;
     Eigen::MatrixX<scalar> matrix(m, n);
     matrix << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
     std::cout << "matrix =\n" << matrix << "\n\n";
 
     // Number of columns to select must be from m to n.
-    const int k = 3;
+    const Eigen::Index k = 3;
 
     // Now we can apply the algorithm to select k columns from matrix.
-    std::vector<uint> indices = selector.selectSubset(matrix, k);
+    std::vector<Eigen::Index> indices = selector.selectSubset(matrix, k);
 
     // Algorithm returns vector of indices of selected columns (0-based). The
     // order of indices it not specified.
     std::cout << "indices of selected columns = ";
-    for (uint index : indices) {
+    for (Eigen::Index index : indices) {
         std::cout << index << ' ';
     }
     std::cout << "\n\n";

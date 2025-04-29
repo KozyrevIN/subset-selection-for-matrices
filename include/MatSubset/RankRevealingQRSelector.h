@@ -15,23 +15,23 @@ class RankRevealingQRSelector : public SelectorBase<scalar> {
         return "rank-revealing QR";
     }
 
-    std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                   uint k) override {
+    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
+                                           Eigen::Index k) override {
 
         Eigen::ColPivHouseholderQR<Eigen::MatrixX<scalar>> qr(x);
         Eigen::MatrixX<scalar> P = qr.colsPermutation();
 
-        std::vector<uint> vect(k);
+        std::vector<Eigen::Index> indices(k);
 
         for (int j = 0; j < k; ++j) {
             int i = 0;
             for (; std::abs(P(i, j)) == 0; ++i)
-            vect[j] = i;
+            indices[j] = i;
         }
 
-        std::sort(vect.begin(), vect.end());
+        std::sort(indices.begin(), indices.end());
 
-        return vect;
+        return indices;
     }
 };
 
