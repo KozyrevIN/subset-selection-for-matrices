@@ -13,7 +13,7 @@ scalar pinv_norm(const Eigen::MatrixX<scalar>& X) {
     if constexpr (norm == MatSubset::Norm::Frobenius) {
         return X.completeOrthogonalDecomposition().pseudoInverse().norm();
 
-    } else if constexpr (norm == MatSubset::Norm::L2) {
+    } else if constexpr (norm == MatSubset::Norm::Spectral) {
         auto pinv = X.completeOrthogonalDecomposition().pseudoInverse();
         Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(pinv);
         return svd.singularValues()(0);
@@ -52,7 +52,7 @@ int main() {
     // (Inverse to what is used in most artices on subset selection! This is
     // done to support algorithms that do not provide guarantees. For them, the
     // bound is simply 0). In this example we choose spectral norm.
-    const MatSubset::Norm xi = MatSubset::Norm::L2;
+    const MatSubset::Norm xi = MatSubset::Norm::Spectral;
 
     // You can acquire the bounds in the following way:
     scalar xi_norm_bound_1 = selector.bound<xi>(m, n, k);

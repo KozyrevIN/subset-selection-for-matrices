@@ -3,7 +3,7 @@
 
 namespace MatSubset {
 
-enum class Norm { Frobenius, L2 };
+enum class Norm { Frobenius, Spectral };
 
 }
 

@@ -94,7 +94,7 @@ class FrobeniusRemovalSelector : public SelectorBase<scalar> {
     scalar boundInternal(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                          Norm norm) const override {
         scalar bound = (scalar)(k - m + 1) / (scalar)(n - m + 1);
-        if (norm == Norm::L2) {
+        if (norm == Norm::Spectral) {
             bound /= m;
         }
 

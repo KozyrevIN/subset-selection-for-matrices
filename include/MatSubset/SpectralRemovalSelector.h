@@ -26,7 +26,7 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<scalar> {
                          Norm norm) const override {
 
         scalar bound;
-        if (norm == Norm::L2) {
+        if (norm == Norm::Spectral) {
             bound = 1 / (1 + (scalar)(m * (n - k)) / (k - m + 1));
         } else if (norm == Norm::Frobenius) {
             bound = (scalar)(k - m + 1) / (n - m + 1) / m;
