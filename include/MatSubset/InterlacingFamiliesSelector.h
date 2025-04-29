@@ -3,6 +3,9 @@
 
 #include <functional>
 
+#include <Eigen/SVD>
+#include <unsupported/Eigen/Polynomials>
+
 #include "SelectorBase.h"
 
 namespace MatSubset {

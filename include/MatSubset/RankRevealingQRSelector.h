@@ -1,6 +1,8 @@
 #ifndef MAT_SUBSET_RANK_REVEALING_QR_SELECTOR_H
 #define MAT_SUBSET_RANK_REVEALING_QR_SELECTOR_H
 
+#include <Eigen/QR>
+
 #include "SelectorBase.h"
 
 namespace MatSubset {

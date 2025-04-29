@@ -1,6 +1,8 @@
 #ifndef MAT_SUBSET_DUAL_SET_SELECTOR_H
 #define MAT_SUBSET_DUAL_SET_SELECTOR_H
 
+#include <Eigen/SVD>
+
 #include "SelectorBase.h"
 
 namespace MatSubset {
