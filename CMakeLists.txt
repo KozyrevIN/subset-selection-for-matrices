@@ -4,8 +4,14 @@ cmake_minimum_required(VERSION 3.5)
 
 project(
     MatSubset
-    VERSION 0.0
+    VERSION 0.0.0
     LANGUAGES CXX)
+
+option(MatSubset_INSTALL "Generate install target." ON)
+option(BUILD_EXAMPLES "Build examples" OFF)
+#option(BUILD_TESTS "Build tests" OFF)
+#option(BUILD_DOCUMENTATION "Build documentation" OFF)
+#option(BUILD_BENCHMARK "Build benchmark" OFF)
 
 # Include guard
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
@@ -15,66 +21,73 @@ message(
 )
 endif()
 
-# Creating header only library target
-add_library(${PROJECT_NAME} INTERFACE)
+# Guard against bad build-type strings
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
 
-# Being a cross-platform target, we enforce standards conformance on MSVC
-target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
+if (MatSubset_INSTALL)
+    # Creating header only library target
+    add_library(${PROJECT_NAME} INTERFACE)
 
-# Managing dependencies
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+    # Being a cross-platform target, we enforce standards conformance on MSVC
+    target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
 
-target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
+    # Managing dependencies
+    find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
-# Configuring project directories
-include(GNUInstallDirs)
+    target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
 
-target_include_directories(
-    ${PROJECT_NAME}
-    INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-              "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+    # Configuring project directories
+    include(GNUInstallDirs)
 
-# Installing targets and exporting them to Targets.cmake
-install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets)
+    target_include_directories(
+        ${PROJECT_NAME}
+        INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
-# Configuring and installing the Config.cmake and ConfigVersion.cmake files
-include(CMakePackageConfigHelpers)
+    # Installing targets and exporting them to Targets.cmake
+    install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets)
 
-# Generateing the ConfigVersion.cmake file
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion)
+    # Configuring and installing the Config.cmake and ConfigVersion.cmake files
+    include(CMakePackageConfigHelpers)
 
-# Configuring the Config.cmake file from the .in template
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
-
-# Installing the generated Config.cmake, ConfigVersion.cmake, and Targets.cmake
-install(
-    FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+    # Generateing the ConfigVersion.cmake file
+    write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
 
-install(
-    EXPORT ${PROJECT_NAME}Targets
-    NAMESPACE ${PROJECT_NAME}::
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+    # Configuring the Config.cmake file from the .in template
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 
-# Installing headers
-install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/${PROJECT_NAME}/"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}")
+    # Installing the generated Config.cmake, ConfigVersion.cmake, and Targets.cmake
+    install(
+        FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+
+    install(
+        EXPORT ${PROJECT_NAME}Targets
+        NAMESPACE ${PROJECT_NAME}::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+
+    # Installing headers
+    install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/${PROJECT_NAME}/"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}")
+endif()
 
 # Adding uninstall target
 add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Uninstall.cmake")
 
-
-
-
-
-        
+# Building examples (OFF by default)
+if(BUILD_EXAMPLES)
+    add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+    add_subdirectory(examples)
+endif()
 
