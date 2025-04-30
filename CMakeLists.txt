@@ -8,9 +8,9 @@ project(
     LANGUAGES CXX)
 
 option(MatSubset_INSTALL "Generate install target." ON)
-option(BUILD_EXAMPLES "Build examples" OFF)
+option(BUILD_DEMOS "Build demos" OFF)
 #option(BUILD_TEST "Build tests" OFF)
-#option(BUILD_DOCS "Build documentation" OFF)
+#option(BUILD_DOC "Build documentation" OFF)
 #option(BUILD_BENCH "Build benchmark" OFF)
 
 # Include guard
@@ -86,8 +86,8 @@ add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Uninstall.cmake")
 
 # Building examples (OFF by default)
-if(BUILD_EXAMPLES)
+if(BUILD_DEMOS)
     add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-    add_subdirectory(examples)
+    add_subdirectory(demos)
 endif()
 
