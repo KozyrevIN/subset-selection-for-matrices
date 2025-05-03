@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.28)
 
 project(MatSubsetTheoreticalBoundsDemo LANGUAGES CXX)
 
@@ -15,11 +15,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # Managing dependencies
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-# You can remove if clause when using MatSubset in your project. 
-# It is here to allow simoltaneous installation of library and building examples.
-if(NOT TARGET MatSubset::MatSubset)
-    find_package(MatSubset 0.0.0 REQUIRED)
-endif()
+find_package(MatSubset 0.0.0 REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Eigen3::Eigen

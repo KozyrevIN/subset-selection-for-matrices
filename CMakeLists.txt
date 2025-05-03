@@ -1,93 +1,90 @@
-# This script installs/uninstalls MatSubset library
+# This is a master script that can install MatSubset library and build demos, tests, documentation and benchmarking code
+# Each component is a separate, self-sustained project with unique dependencies
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.28)
 
-project(
-    MatSubset
-    VERSION 0.0.0
-    LANGUAGES CXX)
+project(SuperBuild)
+include(ExternalProject)
 
-option(MatSubset_INSTALL "Generate install target." ON)
-option(BUILD_DEMOS "Build demos" OFF)
-#option(BUILD_TEST "Build tests" OFF)
-#option(BUILD_DOC "Build documentation" OFF)
-#option(BUILD_BENCH "Build benchmark" OFF)
+# Options
+option(BUILD_LIB "Build the MatSubset library" ON)
+option(INSTALL_LIB "Install the MatSubset library" ON)
+option(LINK_AGAINST_BUILD_TREE "Link components against build tree" OFF)
+option(BUILD_DEMOS "Build MatSubset demo executables" OFF)
+option(BUILD_TESTS "Build MatSubset test executables" OFF)
+option(BUILD_DOCS "Build MatSubset documentation" OFF)
+option(BUILD_BENCH "Build MatSubset benchmarks" OFF)
 
-# Include guard
-if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
-message(
-    FATAL_ERROR
-    "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there."
-)
+# Dependency checks
+if(INSTALL_LIB AND NOT BUILD_LIB)
+    message(FATAL_ERROR "INSTALL_LIB requires BUILD_LIB=ON")
+endif()
+if(LINK_AGAINST_BUILD_TREE AND NOT BUILD_LIB)
+    message(FATAL_ERROR "LINK_AGAINST_BUILD_TREE requires BUILD_LIB=ON")
 endif()
 
-# Guard against bad build-type strings
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release")
+# Build/install the MatSubset library
+if (BUILD_LIB)
+    # Set install_command conditionally
+    if (INSTALL_LIB)
+        set(install_command cmake --install .)
+    else()
+        set(install_command cmake -E echo "INSTALL_LIB option is disabled, skipping install step")
+    endif()
+
+    ExternalProject_Add(
+        MatSubset
+        SOURCE_DIR       "${CMAKE_CURRENT_SOURCE_DIR}/lib"
+        BINARY_DIR       "${CMAKE_CURRENT_BINARY_DIR}/lib"
+        CMAKE_ARGS       ${CMAKE_ARGS}
+        BUILD_COMMAND    cmake --build .
+        INSTALL_COMMAND  ${install_command}
+    )
+    set(components_dependencies MatSubset)
+else()
+    set(components_dependencies "")
 endif()
 
-if (MatSubset_INSTALL)
-    # Creating header only library target
-    add_library(${PROJECT_NAME} INTERFACE)
+# Helper function to add components (demos, tests, etc.)
+function(add_component name source_dir build_dir)
+    string(TOUPPER "${name}" name_upper)
+    if (${BUILD_${name_upper}})
+        # Extract user's CMAKE_PREFIX_PATH (if any)
+        set(user_cmake_prefix_path "")
+        foreach(arg IN LISTS CMAKE_ARGS)
+            if (arg MATCHES "-DCMAKE_PREFIX_PATH=(.*)")
+                set(user_cmake_prefix_path "${CMAKE_MATCH_1}")
+            endif()
+        endforeach()
 
-    # Being a cross-platform target, we enforce standards conformance on MSVC
-    target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
+        # If linking against build tree, prepend library's build dir
+        set(cmake_prefix_path_args "")
+        if (LINK_AGAINST_BUILD_TREE)
+            set(lib_build_dir "${CMAKE_CURRENT_BINARY_DIR}/lib")
+            if (user_cmake_prefix_path)
+                set(cmake_prefix_path "${lib_build_dir};${user_cmake_prefix_path}")
+            else()
+                set(cmake_prefix_path "${lib_build_dir}")
+            endif()
+            list(APPEND cmake_prefix_path_args -DCMAKE_PREFIX_PATH=${cmake_prefix_path})
+        endif()
 
-    # Managing dependencies
-    find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+        ExternalProject_Add(
+        MatSubset${name}
+        SOURCE_DIR      "${CMAKE_CURRENT_SOURCE_DIR}/${source_dir}"
+        BINARY_DIR      "${CMAKE_CURRENT_BINARY_DIR}/${build_dir}"
+        CMAKE_ARGS
+            ${CMAKE_ARGS}
+            ${cmake_prefix_path_args}  # Includes build dir + user paths
+        BUILD_COMMAND   cmake --build .
+        INSTALL_COMMAND ""
+        DEPENDS         ${components_dependencies}
+        )
+    endif()
+endfunction()
 
-    target_link_libraries(${PROJECT_NAME} INTERFACE Eigen3::Eigen)
-
-    # Configuring project directories
-    include(GNUInstallDirs)
-
-    target_include_directories(
-        ${PROJECT_NAME}
-        INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-                "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-
-    # Installing targets and exporting them to Targets.cmake
-    install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Targets)
-
-    # Configuring and installing the Config.cmake and ConfigVersion.cmake files
-    include(CMakePackageConfigHelpers)
-
-    # Generateing the ConfigVersion.cmake file
-    write_basic_package_version_file(
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion)
-
-    # Configuring the Config.cmake file from the .in template
-    configure_package_config_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
-
-    # Installing the generated Config.cmake, ConfigVersion.cmake, and Targets.cmake
-    install(
-        FILES
-            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-            "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
-
-    install(
-        EXPORT ${PROJECT_NAME}Targets
-        NAMESPACE ${PROJECT_NAME}::
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
-
-    # Installing headers
-    install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/${PROJECT_NAME}/"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}")
-endif()
-
-# Adding uninstall target
-add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Uninstall.cmake")
-
-# Building examples (OFF by default)
-if(BUILD_DEMOS)
-    add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-    add_subdirectory(demos)
-endif()
-
+# Add components (demos, tests, etc.)
+add_component(Demos demos demos)
+#add_component(Tests tests tests)
+#add_component(Docs docs docs)
+#add_component(Bench bench bench)
