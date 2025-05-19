@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION VERSION 3.28)
 
 project(
     MatSubset
-    VERSION 0.0.0
+    VERSION 0.0
     LANGUAGES CXX)
 
 # In-source build guard

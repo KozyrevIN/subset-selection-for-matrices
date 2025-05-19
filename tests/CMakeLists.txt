@@ -16,7 +16,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(doctest)
 
 # Create binaries
-file(GLOB sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+file(GLOB sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 add_executable(${PROJECT_NAME} ${sources})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_link_libraries(${PROJECT_NAME} doctest::doctest 
@@ -36,5 +36,5 @@ endif()
 # Enable tests
 enable_testing()
 
-include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
-doctest_discover_tests(${PROJECT_NAME})
+include("${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
+doctest_discover_tests("${PROJECT_NAME}")
