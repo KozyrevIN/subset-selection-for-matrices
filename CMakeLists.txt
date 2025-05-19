@@ -85,6 +85,6 @@ endfunction()
 
 # Add components (demos, tests, etc.)
 add_component(Demos demos demos)
-#add_component(Tests tests tests)
+add_component(Tests tests tests)
 #add_component(Docs docs docs)
 #add_component(Bench bench bench)

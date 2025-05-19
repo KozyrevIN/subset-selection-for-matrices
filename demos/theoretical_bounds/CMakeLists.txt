@@ -15,7 +15,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # Managing dependencies
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(MatSubset 0.0.0 REQUIRED)
+find_package(MatSubset 0.0 REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Eigen3::Eigen
