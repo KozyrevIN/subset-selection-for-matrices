@@ -1,4 +1,4 @@
-# This is a master script that can install MatSubset library and build demos, tests, documentation and benchmarking code
+# This is a master script that can install MatSubset library and build examples, tests, documentation and benchmarking code
 # Each component is a separate, self-sustained project with unique dependencies
 
 cmake_minimum_required(VERSION 3.28)
@@ -10,7 +10,7 @@ include(ExternalProject)
 option(BUILD_LIB "Build the MatSubset library" ON)
 option(INSTALL_LIB "Install the MatSubset library" ON)
 option(LINK_AGAINST_BUILD_TREE "Link components against build tree" OFF)
-option(BUILD_DEMOS "Build MatSubset demo executables" OFF)
+option(BUILD_EXAMPLES "Build MatSubset demo executables" OFF)
 option(BUILD_TESTS "Build MatSubset test executables" OFF)
 option(BUILD_DOCS "Build MatSubset documentation" OFF)
 option(BUILD_BENCH "Build MatSubset benchmarking code" OFF)
@@ -45,7 +45,7 @@ else()
     set(components_dependencies "")
 endif()
 
-# Helper function to add components (demos, tests, etc.)
+# Helper function to add components (examples, tests, etc.)
 function(add_component name source_dir build_dir)
     string(TOUPPER "${name}" name_upper)
     if (${BUILD_${name_upper}})
@@ -83,8 +83,8 @@ function(add_component name source_dir build_dir)
     endif()
 endfunction()
 
-# Add components (demos, tests, etc.)
-add_component(Demos demos demos)
+# Add components (examples, tests, etc.)
+add_component(Examples examples examples)
 add_component(Tests tests tests)
 add_component(Docs docs docs)
 #add_component(Bench bench bench)

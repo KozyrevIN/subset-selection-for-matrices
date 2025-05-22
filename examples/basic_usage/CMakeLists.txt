@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(MatSubsetBasicUsageDemo LANGUAGES CXX)
+project(MatSubsetBasicUsageExample LANGUAGES CXX)
 
 # Creating executable target
 add_executable(${PROJECT_NAME} src/main.cpp) 

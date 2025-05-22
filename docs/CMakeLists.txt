@@ -1,3 +1,4 @@
+# This file creates html documentation for the project
 cmake_minimum_required(VERSION 3.28)
 
 project(MatSubsetDocs)
