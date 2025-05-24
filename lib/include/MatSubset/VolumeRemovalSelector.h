@@ -1,73 +1,119 @@
 #ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 #define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 
-#include "SelectorBase.h"
+#include <Eigen/SVD> // For Eigen::BDCSVD
+
+#include "SelectorBase.h" // Base class
 
 namespace MatSubset {
 
-template <typename scalar>
-class VolumeRemovalSelector : public SelectorBase<scalar> {
+/*!
+ * @brief Class for approximating subset selection problem for matrices using
+ * Volume-based greedy removal strategy.
+ * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
+ *
+ * This class implements a simplified version of algorithm used in
+ * `FrobeniusRemovalSelector`. Removing numerator from formulas used in
+ * mentioned algorithm produces a new one, where the removed column guarantees
+ * the maximum possible volume (product of singular values) of the remaining
+ * submatrix.
+ *
+ */
+template <typename Scalar>
+class VolumeRemovalSelector : public SelectorBase<Scalar> {
   public:
-    VolumeRemovalSelector(scalar eps = 1e-6) : eps(eps) {}
+    /*!
+     * @brief Default constructor for `VolumeRemovalSelector`.
+     */
+    VolumeRemovalSelector() = default;
 
+    /*!
+     * @brief Gets the human-readable name of the algorithm.
+     * @return The string "volume removal".
+     */
     std::string getAlgorithmName() const override { return "volume removal"; }
 
-    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                           Eigen::Index k) override {
-        Eigen::Index m = X.rows();
-        Eigen::Index n = X.cols();
+  protected:
+    /*!
+     * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
+     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @param k The number of columns to select.
+     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     */
+    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
+                                               Eigen::Index k) override {
+        const Eigen::Index n_initial_cols = X.cols();
+        const Eigen::Index num_cols_to_remove = n_initial_cols - k;
 
-        std::vector<Eigen::Index> cols(n);
-        for (Eigen::Index j = 0; j < n; ++j) {
-            cols[j] = j;
+        std::vector<Eigen::Index> current_col_indices(n_initial_cols);
+        for (Eigen::Index j = 0; j < n_initial_cols; ++j) {
+            current_col_indices[static_cast<size_t>(j)] = j;
         }
 
-        Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
+        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
+        Eigen::MatrixX<Scalar> V_matrix = svd.matrixV().transpose();
 
-        Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
-        Eigen::ArrayX<scalar> d =
-            1 - (V.transpose() * V_dag).diagonal().array();
+        Eigen::MatrixX<Scalar> V_dag =
+            (V_matrix * V_matrix.transpose()).inverse() * V_matrix;
+        Eigen::ArrayX<Scalar> d_scores =
+            static_cast<Scalar>(1.0) -
+            (V_matrix.transpose() * V_dag).diagonal().array();
 
-        while (cols.size() > k) {
-            Eigen::Index j_max;
-            scalar d_max = d.maxCoeff(&j_max);
+        for (Eigen::Index iter = 0; iter < num_cols_to_remove; ++iter) {
 
-            Eigen::VectorX<scalar> w = V.col(j_max);
-            Eigen::VectorX<scalar> w_dag = V_dag.col(j_max);
+            Eigen::Index j_max_idx;
+            d_scores.maxCoeff(&j_max_idx);
 
-            removeByIdx(cols, d, V, V_dag, j_max);
+            Eigen::VectorX<Scalar> w_V = V_matrix.col(j_max_idx);
+            Eigen::VectorX<Scalar> w_V_dag = V_dag.col(j_max_idx);
+            Scalar d_max_val_removed = d_scores(j_max_idx);
 
-            d -= (w.transpose() * V_dag).array().square() / d_max;
-            V_dag += w_dag * (w_dag.transpose() * V) / d_max;
+            removeColumn(current_col_indices, d_scores, V_matrix, V_dag,
+                         j_max_idx);
+
+            d_scores -=
+                (w_V.transpose() * V_dag).array().square() / d_max_val_removed;
+            V_dag +=
+                w_V_dag * (w_V_dag.transpose() * V_matrix) / d_max_val_removed;
         }
 
-        return cols;
+        return current_col_indices;
     }
 
   private:
-    scalar eps;
+    /*!
+     * @brief Helper to remove column `idx_to_remove` from active data
+     * structures.
+     * @param col_indices Vector of original column indices.
+     * @param d_scores Array of d-scores.
+     * @param V Matrix of active V columns.
+     * @param V_dag Matrix of active V_dag columns.
+     * @param idx_to_remove The 0-based index *within the current active set* to
+     * remove.
+     */
+    void removeColumn(std::vector<Eigen::Index> &col_indices,
+                      Eigen::ArrayX<Scalar> d_scores, Eigen::MatrixX<Scalar> V,
+                      Eigen::MatrixX<Scalar> V_dag,
+                      Eigen::Index idx_to_remove) {
 
-    void removeByIdx(std::vector<Eigen::Index> &cols, Eigen::ArrayX<scalar> &d,
-                     Eigen::MatrixX<scalar> &V, Eigen::MatrixX<scalar> &V_dag,
-                     Eigen::Index j) const {
+        Eigen::Index new_size =
+            static_cast<Eigen::Index>(col_indices.size()) - 1;
 
-        Eigen::Index new_size = cols.size() - 1;
+        if (idx_to_remove < new_size) {
+            col_indices[static_cast<size_t>(idx_to_remove)] =
+                col_indices[static_cast<size_t>(new_size)];
+            d_scores(idx_to_remove) = d_scores(new_size);
+            V.col(idx_to_remove) = V.col(new_size);
+            V_dag.col(idx_to_remove) = V_dag.col(new_size);
+        }
 
-        cols[j] = cols[new_size];
-        cols.resize(new_size);
-
-        d(j) = d(new_size);
-        d.conservativeResize(new_size);
-
-        V.col(j) = V.col(new_size);
+        col_indices.resize(static_cast<size_t>(new_size));
+        d_scores.conservativeResize(new_size);
         V.conservativeResize(Eigen::NoChange, new_size);
-
-        V_dag.col(j) = V_dag.col(new_size);
         V_dag.conservativeResize(Eigen::NoChange, new_size);
     }
 };
 
 } // namespace MatSubset
 
-#endif
+#endif // MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
