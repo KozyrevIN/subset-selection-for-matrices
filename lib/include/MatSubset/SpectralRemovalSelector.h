@@ -8,7 +8,7 @@
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using a
+ * @brief Approximates subset selection problem for matrices using a
  * spectral norm-based greedy removal strategy.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
@@ -41,13 +41,12 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<Scalar> {
   protected:
     /*!
      * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
      * @param k The number of columns to select.
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
-     *
-     * This method computes the right singular vectors \f$ V \f$ of \f$ X \f$,
-     * and then applies the Frobenius removal strategy (from the base class)
-     * to \f$ V^T \f$.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
@@ -60,18 +59,19 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<Scalar> {
     /*!
      * @brief Calculates theoretical lower bounds for the spectral removal
      * strategy.
-     * @param m Number of rows (\f$ m \f$).
-     * @param n Number of columns (\f$ n \f$).
-     * @param k Number of selected columns (\f$ k \f$).
-     * @param norm The norm type (`Norm::Frobenius` or `Norm::Spectral`).
+     * @param m The number of rows in the matrix.
+     * @param n The number of columns in the matrix.
+     * @param k The number of columns that would be selected.
+     * @param norm The type of matrix norm (`Norm::Frobenius` or
+     * `Norm::Spectral`).
      * @return A `Scalar` value representing the calculated lower bound on the
      * ratio \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
      * \rVert^{2} \f$.
      *
-     * @note The bound for Frobenius norm from Avron and Boutsidis (2012) is not
-     * standard (it mixes different norms), we use inequality \f$ \lVert X
-     * \rVert_2 \le \lVert X \rVert_F \f$ to produce a looser bound, wich fits
-     * into our framework.
+     * @note The bound for Frobenius norm from Avron and Boutsidis (2012),
+     * Corollary 3.3, is not standard (it mixes different norms), we use
+     * inequality \f$ \lVert X \rVert_2 \le \lVert X \rVert_F \f$ to produce a
+     * looser bound, wich fits into our framework.
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                      Norm norm) const override {

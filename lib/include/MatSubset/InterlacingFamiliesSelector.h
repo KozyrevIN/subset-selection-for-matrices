@@ -12,14 +12,14 @@
 namespace MatSubset {
 
 /*!
- * @brief Selects a column subset using an algorithm based on interlacing
- * families of polynomials.
+ * @brief Approximates subset selection problem for matrices using an algorithm
+ * based on interlacing families of polynomials.
  * @tparam Scalar The underlying Scalar type (e.g., `float`, `double`).
  *
- * This class implements a deterministic greedy selection algorithm inspired by
- * the techniques presented in Xie and Xu (2021), "Subset Selection for Matrices
- * with Fixed Blocks" (Algorithm 1), which itself builds upon the work of
- * Marcus, Spielman, and Srivastava on interlacing families of polynomials.
+ * This class implements a deterministic greedy selection algorithm developed by
+ * Xie and Xu (2021), "Subset Selection for Matrices with Fixed Blocks"
+ * (Algorithm 1), which itself builds upon the work of Marcus, Spielman, and
+ * Srivastava on interlacing families of polynomials.
  *
  * @warning This algorithm is numerically unstable due to its reliance on
  * polynomial root finding and transformations from roots to
@@ -31,7 +31,7 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
     /*!
      * @brief Constructor for `InterlacingFamiliesSelector`.
      * @param eps Tolerance value for polynomial root finding.
-     *            Defaults to \f$ 1e-4 \f$.
+     *            Defaults to `1e-4`.
      */
     InterlacingFamiliesSelector(Scalar eps = 1e-4) : eps_(eps) {}
 
@@ -45,10 +45,13 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
 
   protected:
     /*!
-     * @brief Core implementation for selecting \f$ k \f$ columns.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
      * @param k The number of columns to select.
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
@@ -119,11 +122,16 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
     /*!
      * @brief Calculates the theoretical bound for Interlacing families
      * algorithm.
-     * @param m Number of rows in the original matrix (\f$ m \f$).
-     * @param n Number of columns in the original matrix (\f$ n \f$).
-     * @param k Number of selected columns (\f$ k \f$).
-     * @param norm The norm type (`Norm::Frobenius` or `Norm::Spectral`).
-     * @return The calculated bound based on Theorem 4.1 of Xie and Xu (2021).
+     * @param m The number of rows in the matrix.
+     * @param n The number of columns in the matrix.
+     * @param k The number of columns that would be selected.
+     * @param norm The type of matrix norm (`Norm::Frobenius` or
+     * `Norm::Spectral`).
+     * @return A `Scalar` value representing the calculated lower bound on the
+     * ratio \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
+     * \rVert^{2} \f$.
+     *
+     * The bound is calculated based on the theorem 4.1 in Xie and Xu (2021).
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                      Norm norm) const override {

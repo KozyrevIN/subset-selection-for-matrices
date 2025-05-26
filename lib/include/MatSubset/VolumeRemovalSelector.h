@@ -8,8 +8,8 @@
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using
- * Volume-based greedy removal strategy.
+ * @brief Approximates subset selection problem for matrices using
+ * volume-based greedy removal strategy.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
  * This class implements a simplified version of algorithm used in
@@ -17,7 +17,6 @@ namespace MatSubset {
  * mentioned algorithm produces a new one, where the removed column guarantees
  * the maximum possible volume (product of singular values) of the remaining
  * submatrix.
- *
  */
 template <typename Scalar>
 class VolumeRemovalSelector : public SelectorBase<Scalar> {
@@ -36,9 +35,12 @@ class VolumeRemovalSelector : public SelectorBase<Scalar> {
   protected:
     /*!
      * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
      * @param k The number of columns to select.
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {

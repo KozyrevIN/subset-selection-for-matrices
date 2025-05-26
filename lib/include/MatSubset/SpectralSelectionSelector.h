@@ -11,7 +11,7 @@
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using a
+ * @brief Approximates subset selection problem for matrices using a
  * novel spectral selection algorithm.
  * @tparam Scalar The underlying Scalar type (e.g., `float`, `double`).
  *
@@ -29,10 +29,10 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for `SpectralSelectionSelector`.
-     * @param eps_ Tolerance for the binary search used in updating parameter
-     * \f$ l \f$. Defaults to \f$ 1e-6 \f$.
+     * @param eps Tolerance for the binary search used in updating parameter
+     * \f$ l \f$. Defaults to `1e-6`.
      */
-    SpectralSelectionSelector(Scalar eps = 1e-4) : eps_(eps) {}
+    SpectralSelectionSelector(Scalar eps = 1e-6) : eps_(eps) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
@@ -44,9 +44,18 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
     }
 
   protected:
+    /*!
+     * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
+     * @param k The number of columns to select.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
+     */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
-                                                
+
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
@@ -117,12 +126,13 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
     }
 
     /*!
-     * @brief Calculates theoretical lower bounds for the DUALSET selection
+     * @brief Calculates theoretical lower bounds for the spectral selection
      * strategy.
-     * @param m Number of rows (\f$ m \f$).
-     * @param n Number of columns (\f$ n \f$).
-     * @param k Number of selected columns (\f$ k \f$).
-     * @param norm_type The norm type (`Norm::Frobenius` or `Norm::Spectral`).
+     * @param m The number of rows in the matrix.
+     * @param n The number of columns in the matrix.
+     * @param k The number of columns that would be selected.
+     * @param norm The type of matrix norm (`Norm::Frobenius` or
+     * `Norm::Spectral`).
      * @return A `Scalar` value representing the calculated lower bound on the
      * ratio \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
      * \rVert^{2} \f$.
@@ -143,7 +153,8 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
   private:
     Scalar eps_; // Tolerance for binary search
 
-    /*! @brief Calculates the algorithm-specific parameter \f$ \epsilon \f$.
+    /*!
+     * @brief Calculates the algorithm-specific parameter \f$ \epsilon \f$.
      * @param m Number of rows.
      * @param n Number of columns.
      * @param k Number of columns to select.

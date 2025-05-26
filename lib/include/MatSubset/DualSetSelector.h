@@ -1,113 +1,6 @@
 #ifndef MAT_SUBSET_DUAL_SET_SELECTOR_H
 #define MAT_SUBSET_DUAL_SET_SELECTOR_H
 
-#include <Eigen/SVD>
-
-#include "SelectorBase.h"
-
-namespace MatSubset {
-
-template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
-  public:
-    DualSetSelector();
-
-    std::string getAlgorithmName() const override { return "dual set"; }
-
-    std::vector<Eigen::Index> selectSubset(const Eigen::MatrixX<scalar> &X,
-                                           Eigen::Index k) override {
-
-        Eigen::Index m = X.rows();
-        Eigen::Index n = X.cols();
-
-        Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
-        Eigen::MatrixX<scalar> A = Eigen::MatrixX<scalar>::Zero(m, m);
-        Eigen::VectorX<scalar> s = Eigen::VectorX<scalar>::Zero(n);
-
-        scalar delta_l = 1;
-        scalar l = -std::sqrt(k * m);
-
-        scalar delta_u =
-            (std::sqrt(n) + std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
-        scalar u = delta_u * std::sqrt(k * n);
-
-        for (Eigen::Index i = 0; i < k; ++i) {
-            Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);
-            Eigen::VectorX<scalar> U = calculateU(delta_u, s, u);
-
-            l += delta_l;
-            u += delta_u;
-
-            Eigen::Index max_idx;
-            (L - U).maxCoeff(&max_idx);
-            scalar t = 2 / (L(max_idx) + U(max_idx));
-
-            s(max_idx) += t;
-            A += t * V.col(max_idx) * V.col(max_idx).transpose();
-        }
-
-        std::vector<Eigen::Index> indices;
-        for (Eigen::Index i = 0; i < s.size(); i++) {
-            if (s(i) > 0) {
-                indices.push_back(i);
-            }
-        }
-
-        Eigen::Index i = 0;
-        while (indices.size() < k) {
-            if (s(i) <= 0) {
-                indices.push_back(i);
-            }
-            ++i;
-        }
-
-        return indices;
-    }
-
-  private:
-    scalar boundInternal(Eigen::Index m, Eigen::Index n, Eigen::Index k,
-                         Norm norm) const override {
-
-        return std::pow((std::sqrt(k + 1) - std::sqrt(m)) /
-                            (std::sqrt(n) + std::sqrt(k + 1)),
-                        2);
-    }
-
-    Eigen::ArrayX<scalar> calculateL(const Eigen::MatrixX<scalar> &V,
-                                     scalar delta_l,
-                                     const Eigen::MatrixX<scalar> &A,
-                                     scalar l) const {
-
-        Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(A);
-        Eigen::MatrixX<scalar> U = decomposition.eigenvectors();
-        Eigen::ArrayX<scalar> S = decomposition.eigenvalues().array();
-
-        Eigen::ArrayX<scalar> D = (S - (l + delta_l)).inverse();
-        Eigen::MatrixX<scalar> M_1 = D.matrix().asDiagonal();
-        Eigen::MatrixX<scalar> M_2 =
-            (D.square() / (D.sum() - (S - l).inverse().sum()))
-                .matrix()
-                .asDiagonal();
-        return (V.transpose() * U * (M_2 - M_1) * U.transpose() * V).diagonal();
-    }
-
-    Eigen::ArrayX<scalar>
-    calculateU(scalar delta_u, const Eigen::ArrayX<scalar> &B, scalar u) const {
-
-        return ((u + delta_u) - B).inverse() +
-               ((u + delta_u) - B).inverse().square() /
-                   ((u - B).inverse().sum() -
-                    ((u + delta_u) - B).inverse().sum());
-    }
-};
-
-} // namespace MatSubset
-
-#endif
-
-#ifndef MAT_SUBSET_DUAL_SET_SELECTOR_H
-#define MAT_SUBSET_DUAL_SET_SELECTOR_H
-
 #include <cmath> // For std::sqrt, std::pow
 
 #include <Eigen/Eigenvalues> // For Eigen::SelfAdjointEigenSolver
@@ -118,23 +11,21 @@ template <typename scalar> class DualSetSelector : public SelectorBase<scalar> {
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using
- * the DUALSET algorithm (Algorithm 3 from Avron and Boutsidis, 2012).
+ * @brief Approximates subset selection problem for matrices using
+ * the dual set algorithm (Algorithm 3 from Avron and Boutsidis, 2012).
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
- * This class implements Algorithm 3 (" A deterministic greedy selection
+ * This class implements Algorithm 3 ("A deterministic greedy selection
  * algorithm for subset selection (Theorem 3.5.)") from Avron and Boutsidis
  * (2012), "Faster Subset Selection for Matrices and Applications". This
  * algorithm is based on the dual set spectral sparsification framework by
  * Batson, Spielman, and Srivastava.
  *
  * The algorithm selects columns that receive non-zero weights after \f$ k \f$
- * iterations. It is designed to produce a subset \f$ X_S \f$ whose
+ * iterations. It is designed to produce a column-submatrix \f$ X_S \f$ whose
  * pseudoinverse norm is controlled.
  *
- * @note This algorithm requires \f$ k > m \f$ (number of selected columns >
- * number of rows) for its standard theoretical setup and internal parameter
- * initializations.
+ * @note This algorithm requires \f$ k > m \f$.
  */
 template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
   public:
@@ -152,9 +43,12 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
   protected:
     /*!
      * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
      * @param k The number of columns to select.
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
@@ -236,19 +130,23 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
     }
 
   protected:
-    /*!
-     * @brief Calculates theoretical lower bounds for the DUALSET selection
+     /*!
+     * @brief Calculates the theoretical bound for the dual set selection
      * strategy.
-     * @param m Number of rows (\f$ m \f$).
-     * @param n Number of columns (\f$ n \f$).
-     * @param k Number of selected columns (\f$ k \f$).
-     * @param norm_type The norm type (`Norm::Frobenius` or `Norm::Spectral`).
+     * @param m The number of rows in the matrix.
+     * @param n The number of columns in the matrix.
+     * @param k The number of columns that would be selected.
+     * @param norm The type of matrix norm (`Norm::Frobenius` or
+     * `Norm::Spectral`).
      * @return A `Scalar` value representing the calculated lower bound on the
      * ratio \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
      * \rVert^{2} \f$.
+     *
+     * The bound is calculated based on the Theorem 3.5 in Avron and Boutsidis
+     * (2012).
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
-                     Norm norm_type) const override {
+                     Norm norm) const override {
 
         assert(k > m && "dual set algorithm requires k > m (rows).");
 
@@ -258,15 +156,9 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
 
         Scalar numerator = sqrt_k_plus_1 - sqrt_m_val;
         Scalar denominator = sqrt_n_val + sqrt_k_plus_1;
-        // Denominator is always positive.
-
-        if (numerator_b <
-            static_cast<Scalar>(0)) { // Defensive: if somehow k+1 < m
-            return static_cast<Scalar>(0);
-        }
 
         Scalar ratio = numerator_b / denominator_b;
-        return std::pow(ratio, 2); // std::pow(ratio, 2)
+        return std::pow(ratio, 2);
     }
 
   private:

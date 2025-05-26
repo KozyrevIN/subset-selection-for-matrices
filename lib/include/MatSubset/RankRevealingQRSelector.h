@@ -8,7 +8,7 @@
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using
+ * @brief Approximates subset selection problem for matrices using
  * Rank-Revealing QR (RRQR) factorization with column pivoting.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
@@ -18,8 +18,8 @@ namespace MatSubset {
  * original matrix \f$ A \f$ (here, \f$ X \f$) are chosen to form a
  * well-conditioned basis.
  *
- * @note This selector **only supports selecting \f$ k = m \f$
- * columns**, where \f$ m \f$ is the number of rows (and thus the rank, assuming
+ * @note This selector only supports selecting \f$ k = m \f$
+ * columns, where \f$ m \f$ is the number of rows (and thus the rank, assuming
  * \f$ X \f$ is full row rank). The first \f$ k \f$ columns chosen by the
  * pivoting are returned.
  */
@@ -41,12 +41,14 @@ class RankRevealingQRSelector : public SelectorBase<Scalar> {
 
   protected:
     /*!
-     * @brief Core implementation for selecting a subset of \f$ k \f$ columns
-     * using RRQR.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
-     * @param k The number of columns to select. **Must be equal to \f$ X.rows()
-     * \f$ for this selector.**
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
+     * @param k The number of columns to select. Must be equal to \f$ m \f$ for
+     * this method.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {

@@ -8,7 +8,7 @@
 namespace MatSubset {
 
 /*!
- * @brief Class for approximating subset selection problem for matrices using
+ * @brief Approximates subset selection problem for matrices using
  * Frobenius norm-based greedy removal strategy.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
@@ -21,7 +21,7 @@ namespace MatSubset {
  * from the original algorithm from the article is that our modification does
  * not require recalculation of SVD on each step.
  *
- * The \f$ \epsilon \f$ parameter is used as a threshold for values in
+ * The `eps` parameter is used as a threshold for values in
  * denominator, to ensure numerical stability.
  */
 template <typename Scalar>
@@ -29,7 +29,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for `FrobeniusRemovalSelector`.
-     * @param eps Small positive tolerance value. Defaults to \f$ 1e-6 \f$.
+     * @param eps Small positive tolerance value. Defaults to `1e-6`.
      */
     explicit FrobeniusRemovalSelector(Scalar eps = static_cast<Scalar>(1e-6))
         : eps_(eps) {}
@@ -45,9 +45,12 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
   protected:
     /*!
      * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
-     * @param X The \f$ m \times n \f$ input matrix \f$ X \f$.
+     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
+     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
+     * for theoretical guarantees.
      * @param k The number of columns to select.
-     * @return A `std::vector` of `Eigen::Index` of selected column indices.
+     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
+     * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
@@ -79,7 +82,8 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
 
         // main loop in which removal of columns happens.
         // `n` here refers to the `n` from the base class context (X.cols())
-        for (Eigen::Index active_size = X.cols(); active_size > k; --active_size) {
+        for (Eigen::Index active_size = X.cols(); active_size > k;
+             --active_size) {
 
             Eigen::Index j_min_idx = 0; // Index within the *active* set
             // Find first valid candidate for j_min_idx
@@ -91,8 +95,9 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
                     break;
                 }
             }
-            assert(found_initial_j_min && "No suitable column found for removal; all d_scores <= eps_.");
-
+            assert(
+                found_initial_j_min &&
+                "No suitable column found for removal; all d_scores <= eps_.");
 
             for (Eigen::Index j = 0; j < active_size; ++j) {
                 if (d_scores(j) > eps_ && (l_scores(j) * d_scores(j_min_idx) <
@@ -137,11 +142,16 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
 
     /*!
      * @brief Calculates the theoretical bound for Frobenius removal algorithm.
-     * @param m Number of rows in the original matrix (\f$ m \f$).
-     * @param n Number of columns in the original matrix (\f$ n \f$).
-     * @param k Number of selected columns (\f$ k \f$).
-     * @param norm The norm type (`Norm::Frobenius` or `Norm::Spectral`).
-     * @return The calculated bound based on Theorem 3.1 of Avron & Boutsidis
+     * @param m The number of rows in the matrix.
+     * @param n The number of columns in the matrix.
+     * @param k The number of columns that would be selected.
+     * @param norm The type of matrix norm (`Norm::Frobenius` or
+     * `Norm::Spectral`).
+     * @return A `Scalar` value representing the calculated lower bound on the
+     * ratio \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
+     * \rVert^{2} \f$.
+     *
+     * The bound is calculated based on the theorem 3.1 in Avron and Boutsidis
      * (2012).
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
@@ -165,9 +175,11 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
      * element to `idx_to_remove` and then resizing.
      * @param col_indices Vector of original column indices.
      * @param l_scores Array of l-scores (numerators for the removal criterion).
-     * @param d_scores Array of d-scores (denominators for the removal criterion).
+     * @param d_scores Array of d-scores (denominators for the removal
+     * criterion).
      * @param V Matrix of active \f$ V \f$ columns (from SVD).
-     * @param V_dag Matrix of active \f$ V^{\dag} \f$ (pseudoinverse related) columns.
+     * @param V_dag Matrix of active \f$ V^{\dag} \f$ (pseudoinverse related)
+     * columns.
      * @param idx_to_remove The 0-based index *within the current active set* to
      * remove.
      */
@@ -177,8 +189,10 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
                       Eigen::MatrixX<Scalar> &V, Eigen::MatrixX<Scalar> &V_dag,
                       Eigen::Index idx_to_remove) {
 
-        // `col_indices` is the vector of original indices, its size is the current active_size.
-        Eigen::Index new_size = static_cast<Eigen::Index>(col_indices.size()) - 1;
+        // `col_indices` is the vector of original indices, its size is the
+        // current active_size.
+        Eigen::Index new_size =
+            static_cast<Eigen::Index>(col_indices.size()) - 1;
         // new_size will be >= k (target selection size) >= m (rows) >= 1.
 
         if (idx_to_remove < new_size) {
