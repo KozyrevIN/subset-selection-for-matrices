@@ -9,7 +9,7 @@ TEST_CASE_TEMPLATE("selector base", scalar, float, double) {
     MatSubset::SelectorBase<scalar> selector;
 
     // Algorithm name
-    CHECK(selector.getAlgorithmName() == "random columns");
+    CHECK(selector.getAlgorithmName() == "first k columns");
 
     // Algorithm itself
     Eigen::Index m = 3;

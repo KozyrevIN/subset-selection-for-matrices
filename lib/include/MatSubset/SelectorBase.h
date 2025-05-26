@@ -97,7 +97,7 @@ template <typename Scalar> class SelectorBase {
     [[nodiscard]] Scalar bound(const Eigen::MatrixX<Scalar> &X,
                                Eigen::Index k) const {
 
-        return bound(X.rows(), X.cols(), k, norm);
+        return bound<norm>(X.rows(), X.cols(), k);
     }
 
     /*!
