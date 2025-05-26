@@ -96,18 +96,8 @@ template <typename Scalar> class SelectorBase {
     template <Norm norm>
     [[nodiscard]] Scalar bound(const Eigen::MatrixX<Scalar> &X,
                                Eigen::Index k) const {
-        static_assert(norm == Norm::Frobenius || norm == Norm::Spectral,
-                      "SelectorBase::bound: This norm is unsupported for the "
-                      "bound calculation!");
 
-        assert(X.rows() >= 1 && X.cols() >= 1 && k >= 1 &&
-               "Matrix dimensions (m, n) and k must be strictly positive (>= "
-               "1) for bound calculation.");
-        assert(X.rows() <= k && k <= X.cols() &&
-               "Subset selection constraint violated: m <= k <= n must hold "
-               "for bound calculation.");
-
-        return boundImpl(X.rows(), X.cols(), k, norm);
+        return bound(X.rows(), X.cols(), k, norm);
     }
 
     /*!
@@ -120,9 +110,12 @@ template <typename Scalar> class SelectorBase {
      * @param k The number of columns that would be selected.
      * @return A Scalar value representing the calculated bound.
      *
-     * This method performs common precondition checks and then calls
-     * `boundImpl`. Preconditions: \f$ m, k, n \ge 1
-     * \f$, and \f$ m \le k \le n \f$.
+     * The bound is a lower limit on a ratio
+     * \f$ \lVert X^{\dag} \rVert^{2}/\lVert X_{\mathcal{S}}^{\dag}
+     * \rVert^{2} \f$, where \f$ X^{\dag} \f$ is the Moore-Penrose pseudoinverse
+     * of \f$ X \f$ and \f$ X_{\mathcal{S}}^{\dag} \f$ is the pseudoinverse of
+     * the submatrix formed by selected columns \f$ \mathcal{S} \f$.
+     * Preconditions: \f$ m, k, n \ge 1 \f$ and \f$ m \le k \le n \f$.
      */
     template <Norm norm>
     [[nodiscard]] Scalar bound(Eigen::Index m, Eigen::Index n,
