@@ -20,7 +20,7 @@ namespace MatSubset {
  * This base class defines the common interface for various algorithms that
  * perform subset selection for matrices. Derived classes are expected to
  * implement specific strategies for selecting \f$ k \f$ columns from an \f$ m
- * \times n \f$ input matrix~\f$ X \f$.
+ * \times n \f$ input matrix \f$ X \f$.
  *
  * The problem typically assumes the input matrix \f$ X \f$ is of full rank
  * (i.e., rank \f$ m \f$). While algorithms might function on rank-deficient

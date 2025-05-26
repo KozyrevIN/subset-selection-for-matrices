@@ -47,9 +47,15 @@ endif()
 
 # Helper function to add components (examples, tests, etc.)
 function(add_component name source_dir build_dir)
+    # --- Parse optional arguments ---
+    set(options "")
+    set(oneValueArgs COMPONENT_TARGET) # Changed from SUB_TARGET_NAME
+    set(multiValueArgs "")
+    cmake_parse_arguments(AC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    # AC_COMPONENT_TARGET will be set if COMPONENT_TARGET was passed
+
     string(TOUPPER "${name}" name_upper)
     if (${BUILD_${name_upper}})
-        # Extract user's CMAKE_PREFIX_PATH (if any)
         set(user_cmake_prefix_path "")
         foreach(arg IN LISTS CMAKE_ARGS)
             if (arg MATCHES "-DCMAKE_PREFIX_PATH=(.*)")
@@ -57,28 +63,35 @@ function(add_component name source_dir build_dir)
             endif()
         endforeach()
 
-        # If linking against build tree, prepend library's build dir
-        set(cmake_prefix_path_args "")
+        set(component_specific_cmake_args "")
         if (LINK_AGAINST_BUILD_TREE)
             set(lib_build_dir "${CMAKE_CURRENT_BINARY_DIR}/lib")
+            set(effective_prefix_path "")
             if (user_cmake_prefix_path)
-                set(cmake_prefix_path "${lib_build_dir};${user_cmake_prefix_path}")
+                set(effective_prefix_path "${lib_build_dir};${user_cmake_prefix_path}")
             else()
-                set(cmake_prefix_path "${lib_build_dir}")
+                set(effective_prefix_path "${lib_build_dir}")
             endif()
-            list(APPEND cmake_prefix_path_args -DCMAKE_PREFIX_PATH=${cmake_prefix_path})
+            list(APPEND component_specific_cmake_args "-DCMAKE_PREFIX_PATH=${effective_prefix_path}")
+        elseif(user_cmake_prefix_path)
+            list(APPEND component_specific_cmake_args "-DCMAKE_PREFIX_PATH=${user_cmake_prefix_path}")
         endif()
 
+        set(ep_build_command "${CMAKE_COMMAND}" --build .)
+        if (AC_COMPONENT_TARGET AND NOT AC_COMPONENT_TARGET STREQUAL "" AND NOT AC_COMPONENT_TARGET STREQUAL "all")
+            list(APPEND ep_build_command --target "${AC_COMPONENT_TARGET}")
+        endif()
+        
+        set(final_cmake_args ${CMAKE_ARGS} ${component_specific_cmake_args})
+
         ExternalProject_Add(
-        MatSubset${name}
-        SOURCE_DIR      "${CMAKE_CURRENT_SOURCE_DIR}/${source_dir}"
-        BINARY_DIR      "${CMAKE_CURRENT_BINARY_DIR}/${build_dir}"
-        CMAKE_ARGS
-            ${CMAKE_ARGS}
-            ${cmake_prefix_path_args}  # Includes build dir + user paths
-        BUILD_COMMAND   cmake --build .
-        INSTALL_COMMAND ""
-        DEPENDS         ${components_dependencies}
+            MatSubset${name}
+            SOURCE_DIR      "${CMAKE_CURRENT_SOURCE_DIR}/${source_dir}"
+            BINARY_DIR      "${CMAKE_CURRENT_BINARY_DIR}/${build_dir}"
+            CMAKE_ARGS      ${final_cmake_args}
+            BUILD_COMMAND   ${ep_build_command}
+            INSTALL_COMMAND ""
+            DEPENDS         ${components_dependencies}
         )
     endif()
 endfunction()
@@ -86,5 +99,5 @@ endfunction()
 # Add components (examples, tests, etc.)
 add_component(Examples examples examples)
 add_component(Tests tests tests)
-add_component(Docs docs docs)
+add_component(Docs docs docs COMPONENT_TARGET GenerateDocs)
 #add_component(Bench bench bench)
