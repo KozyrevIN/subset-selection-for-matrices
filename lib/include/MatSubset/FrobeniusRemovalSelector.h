@@ -136,7 +136,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
     }
 
     /*!
-     * @brief Calculates the theoretical bound.
+     * @brief Calculates the theoretical bound for Frobenius removal algorithm.
      * @param m Number of rows in the original matrix (\f$ m \f$).
      * @param n Number of columns in the original matrix (\f$ n \f$).
      * @param k Number of selected columns (\f$ k \f$).
