@@ -144,7 +144,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
         Scalar l = -(static_cast<Scalar>(m) / epsilon);
 
         for (Eigen::Index i = 0; i < k; ++i) {
-            l += calculateDelta(m, n, k, epsilon, l_bound, n - i);
+            l += calculateDelta(m, n, k, epsilon, l, n - i);
         }
 
         return l + static_cast<Scalar>(1.0) / epsilon;
@@ -233,7 +233,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
                         const std::function<Scalar(Scalar)> &f,
                         Scalar tol) const {
 
-        assert(l > r && "in binyry search right bound must be >= left bound");
+        assert(r >= l && "in binyry search right bound must be >= left bound");
         Scalar f_l = f(l); // Store f(l)
         Scalar f_r = f(r); // Store f(r)
 

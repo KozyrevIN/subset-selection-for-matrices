@@ -10,7 +10,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
-    OUTPUT_NAME "basic_usage"
+    OUTPUT_NAME "BasicUsage"
 )
 
 # Managing dependencies

@@ -2,7 +2,48 @@
  * @page examples MatSubset Examples
  * @brief Illustrative examples of how to use the MatSubset library.
  *
- * Here are some examples demonstrating common use cases:
+ * This page provides several examples demonstrating common use cases of the MatSubset library.
+ * Each example is a self-contained program that you can compile and run.
  *
- * More explanation about the example can go here...
+ * @section ex_basic_usage Basic Usage
+ *
+ * This example demonstrates the fundamental steps for using a selector from the MatSubset library:
+ * 1. Include necessary headers.
+ * 2. Define the scalar type.
+ * 3. Instantiate a selector object.
+ * 4. Prepare an Eigen matrix.
+ * 5. Call the `selectSubset` method.
+ * 6. Interpret the returned indices.
+ *
+ * @example BasicUsage/src/main.cpp
+ *
+ * @section ex_theoretical_bounds Theoretical Bounds
+ *
+ * This example builds upon the basic usage and shows how to:
+ * 1. Retrieve theoretical bounds using the `bound` method.
+ * 2. Use utility functions like `pinv_norm` for verification (if applicable).
+ * 3. Check if the theoretical bounds hold for a given selection.
+ *
+ * @example TheoreticalBounds/src/main.cpp
+ *
+ * @section ex_compilation Compiling the Examples
+ *
+ * To compile these examples, you will typically need a C++ compiler (e.g., g++ or clang++)
+ * that supports the C++ standard used by your library (e.g., C++17), the Eigen library,
+ * and the MatSubset library itself.
+ *
+ * If you have built MatSubset using CMake and included the examples as targets (e.g.,
+ * using `add_executable` for each example and linking against MatSubset), you can
+ * usually build them with your standard CMake build command (e.g., `cmake --build .`).
+ *
+ * For manual compilation, a command might look like this (adjust paths and library names):
+ * ```bash
+ * # For BasicUsage example
+ * g++ -std=c++17 -I/path/to/eigen/headers -I/path/to/matsubset/include examples/BasicUsage/src/main.cpp -o basic_usage_example -L/path/to/matsubset/lib -lmatsubset
+ *
+ * # For TheoreticalBounds example
+ * g++ -std=c++17 -I/path/to/eigen/headers -I/path/to/matsubset/include examples/TheoreticalBounds/src/main.cpp -o theoretical_bounds_example -L/path/to/matsubset/lib -lmatsubset
+ * ```
+ * Replace `/path/to/eigen/headers`, `/path/to/matsubset/include`, and `/path/to/matsubset/lib`
+ * with the actual paths on your system. The `-lmatsubset` assumes your library is named `libmatsubset.a` or `libmatsubset.so`.
  */

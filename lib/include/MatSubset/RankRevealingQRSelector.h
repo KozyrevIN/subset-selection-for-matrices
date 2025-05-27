@@ -55,21 +55,22 @@ class RankRevealingQRSelector : public SelectorBase<Scalar> {
         // This selector expects k to be equal to the number of rows (the rank
         // for a full row rank matrix)
         assert(k == X.rows() &&
-               "RankRevealingQRSelector only supports k == X.rows().");
+               "RankRevealingQRSelector only supports k == m.");
 
         Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(X);
+        Eigen::MatrixX<Scalar> P = qr.colsPermutation();
 
-        // qr.permutationMatrix().indices()(j) gives the original index of the
-        // column that was permuted into the j-th position.
-        // We select the first k (== X.rows()) such columns.
-        auto perm_indices = qr.permutationMatrix().indices();
+        std::vector<Eigen::Index> indices(k);
 
-        std::vector<Eigen::Index> selected_indices(k);
-        for (Eigen::Index j = 0; j < k; ++j) {
-            selected_indices[static_cast<size_t>(j)] = perm_indices(j);
+        for (int j = 0; j < k; ++j) {
+            int i = 0;
+            for (; std::abs(P(i, j)) == 0; ++i)
+                indices[j] = i;
         }
 
-        return selected_indices;
+        std::sort(indices.begin(), indices.end());
+
+        return indices;
     }
 };
 

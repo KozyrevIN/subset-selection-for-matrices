@@ -19,9 +19,9 @@ set(DOXYGEN_PROJECT_VERSION ${MatSubset_VERSION})
 set(DOXYGEN_PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../lib")
 set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/doxygen")
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/Doxyfile" "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile")
+configure_file("${CMAKE_CURRENT_LIST_DIR}/Doxyfile.in" "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile")
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/conf.py" "${CMAKE_CURRENT_BINARY_DIR}/conf.py")
+configure_file("${CMAKE_CURRENT_LIST_DIR}/conf.py.in" "${CMAKE_CURRENT_BINARY_DIR}/conf.py")
 
 add_custom_target(
     GenerateDocs

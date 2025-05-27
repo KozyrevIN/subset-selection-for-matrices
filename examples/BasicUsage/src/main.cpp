@@ -33,7 +33,10 @@ int main() {
     const Eigen::Index m = 2;
     const Eigen::Index n = 5;
     Eigen::MatrixX<scalar> matrix(m, n);
-    matrix << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
+    // clang-format off
+    matrix << 1, 2, 3, 4, 5,
+              6, 7, 8, 9, 10;
+    // clang-format on
     std::cout << "matrix =\n" << matrix << "\n\n";
 
     // Number of columns to select must be from m to n.

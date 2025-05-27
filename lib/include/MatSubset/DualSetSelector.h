@@ -120,9 +120,8 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
                 }
             }
         }
-        // Ensure exactly k (if theory guarantees <=k, and padding happened)
+        // Ensure exactly k 
         if (indices.size() > static_cast<size_t>(k)) {
-            // This should not happen if BSS theory holds (at most k non-zeros).
             indices.resize(static_cast<size_t>(k));
         }
 
@@ -157,7 +156,7 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
         Scalar numerator = sqrt_k_plus_1 - sqrt_m_val;
         Scalar denominator = sqrt_n_val + sqrt_k_plus_1;
 
-        Scalar ratio = numerator_b / denominator_b;
+        Scalar ratio = numerator / denominator;
         return std::pow(ratio, 2);
     }
 

@@ -4,24 +4,8 @@
 
 #include <Eigen/Core>
 #include <MatSubset/SpectralSelectionSelector.h>
-
-// Function that calculates norm of Moore-Penrose pseudoinverse for given
-// matrix. We will need it in example.
-template <typename scalar, MatSubset::Norm norm>
-scalar pinv_norm(const Eigen::MatrixX<scalar>& X) {
-
-    if constexpr (norm == MatSubset::Norm::Frobenius) {
-        return X.completeOrthogonalDecomposition().pseudoInverse().norm();
-
-    } else if constexpr (norm == MatSubset::Norm::Spectral) {
-        auto pinv = X.completeOrthogonalDecomposition().pseudoInverse();
-        Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(pinv);
-        return svd.singularValues()(0);
-
-    } else {
-        static_assert(false, "This norm is unsupported!");
-    }
-}
+// For pinv_norm function which allows to compute pseudoinverse norm.
+#include <MatSubset/Utils>
 
 int main() {
     std::cout << "Theoretical bounds example\n\n";
@@ -36,8 +20,10 @@ int main() {
     const Eigen::Index k = 3;
 
     Eigen::MatrixX<scalar> matrix(m, n);
+    // clang-format off
     matrix << 1, 2, 3, 4, 5,
               6, 7, 8, 9, 10;
+    // clang-format on
     std::cout << "matrix =\n" << matrix << "\n\n";
 
     std::vector<Eigen::Index> indices = selector.selectSubset(matrix, k);
@@ -64,11 +50,14 @@ int main() {
            "Bound depends only on m, n, and k.");
     scalar xi_norm_bound = xi_norm_bound_1;
 
-    // Let us calculate pseudoinverse of original matrix and selected submatrix
-    scalar xi_norm_pinv_matrix = pinv_norm<scalar, xi>(matrix);
-    scalar xi_norm_pinv_submatrix = pinv_norm<scalar, xi>(submatrix);
+    // Let us calculate norm of pseudoinverse of original matrix and selected
+    // submatrix
+    scalar xi_norm_pinv_matrix =
+        MatSubset::Utils::pinv_norm<scalar, xi>(matrix);
+    scalar xi_norm_pinv_submatrix =
+        MatSubset::Utils::pinv_norm<scalar, xi>(submatrix);
 
-    // And check that theoretical bounds are stisfied
+    // And check that theoretical bounds are satisfied
     if (xi_norm_bound == 0) {
         std::cout << "there are no guarantees on xi norm of pseudoinverse of "
                      "selected submatrix.\n\n";

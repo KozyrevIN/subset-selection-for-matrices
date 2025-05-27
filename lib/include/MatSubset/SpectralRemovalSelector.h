@@ -51,9 +51,9 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<Scalar> {
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<Scalar> V_matrix = svd.matrixV().transpose();
+        Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
 
-        return FrobeniusRemovalSelector<Scalar>::selectSubsetImpl(V_matrix, k);
+        return FrobeniusRemovalSelector<Scalar>::selectSubsetImpl(V, k);
     }
 
     /*!

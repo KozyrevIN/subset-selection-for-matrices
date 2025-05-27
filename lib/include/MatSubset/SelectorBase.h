@@ -31,8 +31,7 @@ namespace MatSubset {
  * The selection logic is implemented by overriding the `selectSubsetImpl`
  * method. The bound calculation logic is implemented by overriding `boundImpl`.
  * Common precondition checks are handled in the public-facing methods,
- * enforcing \f$ m, k, n \ge 1 \f$ and \f$ m \le k
- * \le n \f$.
+ * enforcing \f$ m, k, n \ge 1 \f$ and \f$ m \le k\le n \f$.
  */
 template <typename Scalar> class SelectorBase {
   public:
@@ -97,7 +96,21 @@ template <typename Scalar> class SelectorBase {
     [[nodiscard]] Scalar bound(const Eigen::MatrixX<Scalar> &X,
                                Eigen::Index k) const {
 
-        return bound<norm>(X.rows(), X.cols(), k);
+        const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
+
+        static_assert(norm == Norm::Frobenius || norm == Norm::Spectral,
+                      "SelectorBase::bound: This norm is unsupported for the "
+                      "bound calculation!");
+
+        assert(m >= 1 && n >= 1 && k >= 1 &&
+               "Matrix dimensions (m, n) and k must be strictly positive (>= "
+               "1) for bound calculation.");
+        assert(m <= k && k <= n &&
+               "Subset selection constraint violated: m <= k <= n must hold "
+               "for bound calculation.");
+
+        return boundImpl(m, n, k, norm);
     }
 
     /*!
@@ -141,7 +154,7 @@ template <typename Scalar> class SelectorBase {
      * validated by public `selectSubset`.
      * @param k The number of columns to select. Assumed to be validated by
      * public `selectSubset`.
-     * @return A std::vector of `Eigen::Index` of selected column indices.
+     * @return A `std::vector` of `Eigen::Index` of selected column indices.
      *
      * Derived classes MUST override this method to implement their specific
      * selection logic. The default base class implementation selects the first
