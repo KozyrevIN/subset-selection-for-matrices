@@ -18,6 +18,8 @@ template <typename scalar> class SubsetSelector {
   public:
     SubsetSelector();
 
+    virtual ~SelectorBase() = default;
+
     virtual std::string getAlgorithmName() const;
 
     virtual std::vector<uint> selectSubset(const Eigen::MatrixX<scalar> &X,
