@@ -26,11 +26,25 @@ template <typename scalar> class MatrixGenerator {
 };
 
 /*
+Generator of a random random gaussian matrix
+*/
+template <typename scalar>
+class GaussianMatrixGenerator : public MatrixGenerator<scalar> {
+  public:
+    GaussianMatrixGenerator(uint m, uint n);
+    GaussianMatrixGenerator(uint m, uint n, int seed);
+
+    std::string getMatrixType() const override;
+
+    Eigen::MatrixX<scalar> generateMatrix() override;
+};
+
+/*
 Generator of a random matrix with orthonormal columns/rows
 (depending on which of m and n is larger)
 */
 template <typename scalar>
-class OrthonormalVectorsMatrixGenerator : public MatrixGenerator<scalar> {
+class OrthonormalVectorsMatrixGenerator : public GaussianMatrixGenerator<scalar> {
   public:
     OrthonormalVectorsMatrixGenerator(uint m, uint n);
     OrthonormalVectorsMatrixGenerator(uint m, uint n, int seed);

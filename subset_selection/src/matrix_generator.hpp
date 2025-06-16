@@ -40,21 +40,52 @@ Eigen::MatrixX<scalar> MatrixGenerator<scalar>::generateMatrix() {
     return Eigen::MatrixX<scalar>(m, n);
 }
 
+// GaussianMatrixGenerator class
+
+template <typename scalar>
+GaussianMatrixGenerator<scalar>::GaussianMatrixGenerator(uint m, uint n)
+    : MatrixGenerator<scalar>(m, n) {}
+
+template <typename scalar>
+GaussianMatrixGenerator<scalar>::GaussianMatrixGenerator(uint m, uint n,
+                                                         int seed)
+    : MatrixGenerator<scalar>(m, n, seed) {}
+
+template <typename scalar>
+std::string GaussianMatrixGenerator<scalar>::getMatrixType() const {
+    return "random matrix with i.i.d. gaussian entries";
+}
+
+template <typename scalar>
+Eigen::MatrixX<scalar> GaussianMatrixGenerator<scalar>::generateMatrix() {
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
+
+    std::normal_distribution<scalar> dis(0.0, 1.0);
+    Eigen::MatrixX<scalar> X(m, n);
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            X(i, j) = dis(MatrixGenerator<scalar>::gen);
+        }
+    }
+
+    return X;
+}
+
 // OrthonormalVectorsMatrixGenerator class
 
 template <typename scalar>
 OrthonormalVectorsMatrixGenerator<scalar>::OrthonormalVectorsMatrixGenerator(
     uint m, uint n)
-    : MatrixGenerator<scalar>(m, n) {}
+    : GaussianMatrixGenerator<scalar>(m, n) {}
 
 template <typename scalar>
 OrthonormalVectorsMatrixGenerator<scalar>::OrthonormalVectorsMatrixGenerator(
     uint m, uint n, int seed)
-    : MatrixGenerator<scalar>(m, n, seed) {}
+    : GaussianMatrixGenerator<scalar>(m, n, seed) {}
 
 template <typename scalar>
-std::string
-OrthonormalVectorsMatrixGenerator<scalar>::getMatrixType() const {
+std::string OrthonormalVectorsMatrixGenerator<scalar>::getMatrixType() const {
     return "matrix with orthonormal rows/columns";
 }
 
@@ -70,8 +101,8 @@ OrthonormalVectorsMatrixGenerator<scalar>::generateMatrix() {
         std::swap(m, n);
     }
 
-    std::normal_distribution<scalar> dis(0.0, 1.0);
     Eigen::MatrixX<scalar> tmp(m, n);
+    std::normal_distribution<scalar> dis(0.0, 1.0);
     for (int i = 0; i < m; ++i) {
         for (int j = 0; j < n; ++j) {
             tmp(i, j) = dis(MatrixGenerator<scalar>::gen);
@@ -172,7 +203,8 @@ std::string NearRankOneMatrixGenerator<scalar>::getMatrixType() const {
 
 template <typename scalar>
 Eigen::VectorX<scalar>
-NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n, scalar eps) const {
+NearSingularMatrixGenerator<scalar>::getSigma(uint m, uint n,
+                                              scalar eps) const {
 
     Eigen::VectorX<scalar> sigma =
         Eigen::VectorX<scalar>::Constant(std::min(m, n), 1);
@@ -348,7 +380,8 @@ WeightedGraphIncidenceMatrixGenerator<
     : GraphIncidenceMatrixGenerator<scalar>(m, n, seed) {}
 
 template <typename scalar>
-std::string WeightedGraphIncidenceMatrixGenerator<scalar>::getMatrixType() const {
+std::string
+WeightedGraphIncidenceMatrixGenerator<scalar>::getMatrixType() const {
     return "weighted graph incidence matrix";
 }
 

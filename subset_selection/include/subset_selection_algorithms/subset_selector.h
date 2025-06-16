@@ -18,7 +18,7 @@ template <typename scalar> class SubsetSelector {
   public:
     SubsetSelector();
 
-    virtual ~SelectorBase() = default;
+    virtual ~SubsetSelector() = default;
 
     virtual std::string getAlgorithmName() const;
 
