@@ -27,13 +27,13 @@ int main()
     //alg_list.push_back(&selector_5);
 
     Tester<double> t;
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/10, mpp);
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/100, mpp);
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, 2*m, 1, mpp);
 
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(orthonormal, alg_list, m, n, (n - m)/10, mpp);
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(orthonormal, alg_list, m, n, (n - m)/100, mpp);
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(orthonormal, alg_list, m, 2*m, 1, mpp);
 
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/10, mpp);
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/100, mpp);
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, 2*m, 1, mpp);
 
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, m + 1, 1, 1);
