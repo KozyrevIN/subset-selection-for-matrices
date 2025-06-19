@@ -11,7 +11,7 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<scalar> {
     scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
   public:
-    SpectralRemovalSelector(scalar eps = 1e-6);
+    SpectralRemovalSelector(scalar eps = 1e-8);
 
     std::string getAlgorithmName() const override;
 

@@ -48,7 +48,7 @@ VolumeRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     Eigen::JacobiSVD<Eigen::MatrixX<scalar>> svd(X, Eigen::ComputeThinV);
     Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
 
-    Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
+    Eigen::MatrixX<scalar> V_dag = V;
     Eigen::ArrayX<scalar> d = 1 - (V.transpose() * V_dag).diagonal().array();
 
     while (cols.size() > k) {

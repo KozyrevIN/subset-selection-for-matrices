@@ -24,7 +24,7 @@ class SpectralSelectionSelector : public SubsetSelector<scalar> {
     scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
   public:
-    SpectralSelectionSelector(scalar eps = 1e-4);
+    SpectralSelectionSelector(scalar eps = 1e-8);
 
     std::string getAlgorithmName() const override;
 

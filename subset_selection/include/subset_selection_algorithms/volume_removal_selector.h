@@ -11,7 +11,7 @@ class VolumeRemovalSelector : public SubsetSelector<scalar> {
     scalar eps;
 
   public:
-    VolumeRemovalSelector(scalar eps = 1e-6);
+    VolumeRemovalSelector(scalar eps = 1e-8);
 
     std::string getAlgorithmName() const override;
 
