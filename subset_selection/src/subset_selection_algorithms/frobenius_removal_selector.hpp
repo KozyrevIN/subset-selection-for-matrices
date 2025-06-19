@@ -52,23 +52,23 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     Eigen::VectorX<scalar> S_inv2 =
         svd.singularValues().array().inverse().square();
 
-    Eigen::MatrixX<scalar> V_dag = (V * V.transpose()).inverse() * V;
+    Eigen::MatrixX<scalar> V_dag = V;
     Eigen::ArrayX<scalar> l =
         (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
-    Eigen::ArrayX<scalar> d = 1 - (V.transpose() * V_dag).diagonal().array();
+    Eigen::ArrayX<scalar> d = (V.transpose() * V_dag).diagonal().array();
 
     while (cols.size() > k) {
 
         uint j_min = 0;
         for (uint j = 0; j < cols.size(); ++j) {
-            if (d(j) > eps and l(j) * d(j_min) < l(j_min) * d(j)) {
+            if (l(j) + l(j_min) * d(j) < l(j_min) + l(j) * d(j_min)) {
                 j_min = j;
             }
         }
 
         Eigen::VectorX<scalar> w = V.col(j_min);
         Eigen::VectorX<scalar> w_dag = V_dag.col(j_min);
-        scalar d_min = d(j_min);
+        scalar denom = std::static_cast<scalar>(1) - d(j_min);
 
         removeByIdx(cols, l, d, V, V_dag, j_min);
 
@@ -76,11 +76,11 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         Eigen::ArrayX<scalar> mul_2 =
             w_dag.transpose() * S_inv2.asDiagonal() * V_dag;
 
-        l += 2 * mul_1 * mul_2 / d_min +
-             mul_1.square() * mul_2(cols.size() - 1) / (d_min * d_min);
-        d -= (w.transpose() * V_dag).array().square() / d_min;
+        l += 2 * mul_1 * mul_2 / denom +
+             mul_1.square() * mul_2(cols.size() - 1) / (denom * denom);
+        d -= (w.transpose() * V_dag).array().square() / denom;
 
-        V_dag += w_dag * (w_dag.transpose() * V) / d_min;
+        V_dag += w_dag * (w_dag.transpose() * V) / denom;
     }
 
     return cols;
