@@ -51,7 +51,7 @@ int main()
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, n, (n - m)/m, mpp);
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, 2*m, 1, mpp);
 
-    t.scatterPoints<SubsetSelection::Norm::Spectral>(random_graph, alg_list, m, m + 1, 1, 1);
+    t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, m + 1, 1, 1);
 
     delete gaussian;
     delete orthonormal;
