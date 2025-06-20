@@ -61,11 +61,11 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     while (cols.size() > k) {
 
         uint j_min = 0;
-        while (j_min < d.size() && d(j_min) >= 1 - eps) {
+        while (j_min < cols.size() && d(j_min) >= 1 - eps) {
             ++j_min;
         }
 
-        assert(j_min < d.size() &&
+        assert(j_min < cols.size() &&
                "Have not found a column with d_j < 1 - eps.");
 
         for (uint j = j_min + 1; j < cols.size(); ++j) {
