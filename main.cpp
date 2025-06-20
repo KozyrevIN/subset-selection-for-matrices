@@ -6,44 +6,52 @@ using namespace SubsetSelection;
 
 int main()
 {
-    const int m = 100;
-    const int n = 5000;
+    const int m = 50;
+    const int n = 1000;
     const int mpp = 32;
     auto gaussian = new GaussianMatrixGenerator<double>(m, n);
     auto orthonormal = new OrthonormalVectorsMatrixGenerator<double>(m, n);
     auto random_graph = new WeightedGraphIncidenceMatrixGenerator<double>(m, n);
     
-    //SpectralSelectionSelector<double> selector_1;
-    //VolumeRemovalSelector<double> selector_2;
+    SpectralSelectionSelector<double> selector_2;
     FrobeniusRemovalSelector<double> selector_3;
-    //SubsetSelector<double> selector_4;
+    SpectralRemovalSelector<double> selector_4;
+    DualSetSelector<double> selector_5;
+    SubsetSelector<double> selector_1;
     //InterlacingFamiliesSelector<double> selector_5;
-    SpectralRemovalSelector<double> selector_6;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
-    //alg_list.push_back(&selector_1);
-    //alg_list.push_back(&selector_2);
+    alg_list.push_back(&selector_1);
+    alg_list.push_back(&selector_2);
     alg_list.push_back(&selector_3);
-    //alg_list.push_back(&selector_4);
-    //alg_list.push_back(&selector_5);
+    alg_list.push_back(&selector_4);
+    alg_list.push_back(&selector_5);
 
     Tester<double> t;
 
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/100, mpp);
+    //gaussian matrices
+
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/m, mpp);
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, 2*m, 1, mpp);
+
+    std::cout << "25%" << std::endl;
+
+    t.scatterPoints<SubsetSelection::Norm::L2>(gaussian, alg_list, m, n, (n - m)/m, mpp);
+    t.scatterPoints<SubsetSelection::Norm::L2>(gaussian, alg_list, m, 2*m, 1, mpp);
+
+    std::cout << "50%" << std::endl;
+
+    //weighted graph matrices
+
+    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/m, mpp);
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, 2*m, 1, mpp);
 
-    alg_list.pop_back();
-    alg_list.push_back(&selector_6);
+    std::cout << "75%" << std::endl;
 
-    t.scatterPoints<SubsetSelection::Norm::Spectral>(orthonormal, alg_list, m, n, (n - m)/100, mpp);
-    t.scatterPoints<SubsetSelection::Norm::Spectral>(orthonormal, alg_list, m, 2*m, 1, mpp);
-
-    t.scatterPoints<SubsetSelection::Norm::Spectral>(random_graph, alg_list, m, n, (n - m)/100, mpp);
-    t.scatterPoints<SubsetSelection::Norm::Spectral>(random_graph, alg_list, m, 2*m, 1, mpp);
+    t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, n, (n - m)/m, mpp);
+    t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, 2*m, 1, mpp);
 
     t.scatterPoints<SubsetSelection::Norm::Spectral>(random_graph, alg_list, m, m + 1, 1, 1);
-
-    //std::cout << t.testAlgorithmsOnMatrix(gaussian, alg_list, 100, 1);
 
     delete gaussian;
     delete orthonormal;

@@ -354,7 +354,7 @@ GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix() {
     for (uint j = 0; j < n; ++j) {
         auto [v_1, v_2] = edge_list[j];
         M(v_1, j) = 1;
-        M(v_2, j) = 1;
+        M(v_2, j) = -1;
     }
 
     return M;
@@ -362,9 +362,12 @@ GraphIncidenceMatrixGenerator<scalar>::incidenceMatrix() {
 
 template <typename scalar>
 Eigen::MatrixX<scalar> GraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
+
+    auto [m, n] = MatrixGenerator<scalar>::matrixSize;
+    
     Eigen::MatrixX<scalar> M = incidenceMatrix();
     Eigen::BDCSVD svd(M, Eigen::ComputeThinV);
-    return svd.matrixV().transpose();
+    return svd.matrixV().transpose().topRows(m);
 }
 
 // WeightedGraphIncidenceMatrixGenerator class
@@ -403,7 +406,7 @@ WeightedGraphIncidenceMatrixGenerator<scalar>::generateMatrix() {
         weights.cwiseSqrt().asDiagonal();
 
     Eigen::BDCSVD svd(M, Eigen::ComputeThinV);
-    return svd.matrixV().transpose();
+    return svd.matrixV().transpose().topRows(m);
 }
 
 // SmoluchowskiMatrixGenerator class

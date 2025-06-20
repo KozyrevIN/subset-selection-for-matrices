@@ -58,19 +58,20 @@ FrobeniusRemovalSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
     Eigen::ArrayX<scalar> d = (V.transpose() * V_dag).diagonal().array();
 
-    scalar mult = 1;
-
     while (cols.size() > k) {
 
         uint j_min = 0;
-        for (uint j = 1; j < cols.size(); ++j) {
+        for (; (j_min < cols.size()) && (d(j_min) >= 1 - eps); ++j_min);
+        --j_min;
+        assert(d(j_min) < 1 - eps &&
+               "Have not found a column with d_j < 1 - eps.");
+
+        for (uint j = j_min + 1; j < cols.size(); ++j) {
             if (d(j) < 1 - eps and
                 l(j) + l(j_min) * d(j) < l(j_min) + l(j) * d(j_min)) {
                 j_min = j;
             }
         }
-        assert(d(j_min) < 1 - eps &&
-               "Have not found a column with d_j < 1 - eps.");
 
         Eigen::VectorX<scalar> w = V.col(j_min);
         Eigen::VectorX<scalar> w_dag = V_dag.col(j_min);
