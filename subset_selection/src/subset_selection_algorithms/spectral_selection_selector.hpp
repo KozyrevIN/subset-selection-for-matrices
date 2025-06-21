@@ -103,9 +103,8 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
             U * (S - (l + delta)).inverse().matrix().asDiagonal() *
             U.transpose() * V;
         Eigen::ArrayX<scalar> Phi =
-            (S - (l + delta)).inverse().sum() -
-            M.colwise().squaredNorm().transpose().array() /
-                (1 + (V.transpose() * M).diagonal().array());
+            -M.colwise().squaredNorm().transpose().array() /
+            (1 + (V.transpose() * M).diagonal().array());
 
         uint j_min;
         Phi.minCoeff(&j_min);
@@ -124,7 +123,8 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         auto f = [&S, &epsilon](scalar l) {
             return (S - l).inverse().sum() - epsilon;
         };
-        l = binarySearch(l, S(0), f, delta * eps);
+        //l = binarySearch(l, S(0), f, delta * eps);
+        l += delta;
     }
 
     return cols_selected;
