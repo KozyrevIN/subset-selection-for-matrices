@@ -21,12 +21,14 @@ int main()
     //InterlacingFamiliesSelector<double> selector_5;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
-    alg_list.push_back(&selector_5);
+    //alg_list.push_back(&selector_5);
     alg_list.push_back(&selector_2);
+    //alg_list.push_back(&selector_1);
+    //alg_list.push_back(&selector_3);
+    //alg_list.push_back(&selector_4);
 
     Tester<double> t;
     //gaussian matrices
-    /*
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/m, mpp);
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, 2*m, 1, mpp);
 
@@ -43,17 +45,11 @@ int main()
     t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, 2*m, 1, mpp);
 
     std::cout << "75%" << std::endl;
-    alg_list.push_back(&selector_1);
-    alg_list.push_back(&selector_3);
-    alg_list.push_back(&selector_4);
-    */
 
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, n, (n - m)/m, mpp);
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, 2*m, 1, mpp);
 
-    t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, m + 1, 1, 1);
-
-    //std::cout << t.testAlgorithmsOnMatrix(random_graph, alg_list, 50, mpp);
+    //std::cout << t.testAlgorithmsOnMatrix(random_graph, alg_list, 85, mpp);
 
     delete gaussian;
     delete orthonormal;
