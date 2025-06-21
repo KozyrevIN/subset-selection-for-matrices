@@ -96,15 +96,18 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     scalar l = l_0;
 
     while (cols_selected.size() < k) {
-        scalar delta =
-            calculateDelta(m, n, k, epsilon, l, cols_remaining.size());
+        scalar phi_l_Y = (S - l).inverse().sum();
 
-        Eigen::MatrixX<scalar> M =
-            U * (S - (l + delta)).inverse().matrix().asDiagonal() *
-            U.transpose() * V;
+        scalar delta =
+            calculateDelta(m, n, k, phi_l_Y, l, cols_remaining.size());
+
+        Eigen::ArrayX<scalar> D = (S - (l + delta)).inverse();
+        Eigen::MatrixX<scalar> M_1 = D.matrix().asDiagonal();
+        Eigen::MatrixX<scalar> M_2 = D.square().matrix().asDiagonal();
         Eigen::ArrayX<scalar> Phi =
-            -M.colwise().squaredNorm().transpose().array() /
-            (1 + (V.transpose() * M).diagonal().array());
+            -(V.transpose() * U * M_2 * U.transpose() * V).diagonal().array() /
+            (1 +
+             (V.transpose() * U * M_1 * U.transpose() * V).diagonal().array());
 
         uint j_min;
         Phi.minCoeff(&j_min);
@@ -120,11 +123,16 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
 
-        auto f = [&S, &epsilon](scalar l) {
-            return (S - l).inverse().sum() - epsilon;
-        };
-        //l = binarySearch(l, S(0), f, delta * eps);
-        l += delta;
+        if (cols_selected.size() == k - 1) {
+
+            auto f = [&S, &epsilon](scalar l) {
+                return (S - l).inverse().sum() - epsilon;
+            };
+
+            l = binarySearch(l, S(0), f, delta * eps);
+        } else {
+            l += delta;
+        }
     }
 
     return cols_selected;
