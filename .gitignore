@@ -39,3 +39,6 @@ out
 
 #vscode files
 .vscode
+
+#clangd cache
+.cache
