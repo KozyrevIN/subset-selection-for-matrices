@@ -46,14 +46,14 @@ int main()
     alg_list.push_back(&selector_1);
     alg_list.push_back(&selector_3);
     alg_list.push_back(&selector_4);
+    */
 
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, n, (n - m)/m, mpp);
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, 2*m, 1, mpp);
 
     t.scatterPoints<SubsetSelection::Norm::L2>(random_graph, alg_list, m, m + 1, 1, 1);
-    */
 
-    std::cout << t.testAlgorithmsOnMatrix(random_graph, alg_list, 50, mpp);
+    //std::cout << t.testAlgorithmsOnMatrix(random_graph, alg_list, 50, mpp);
 
     delete gaussian;
     delete orthonormal;
