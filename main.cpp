@@ -14,15 +14,15 @@ int main()
     auto random_graph = new WeightedGraphIncidenceMatrixGenerator<double>(m, n);
     
     SubsetSelector<double> selector_1;
-    SpectralSelectionSelector<double> selector_2;
-    FrobeniusRemovalSelector<double> selector_3;
-    SpectralRemovalSelector<double> selector_4;
-    DualSetSelector<double> selector_5;
+    //SpectralSelectionSelector<double> selector_2;
+    //FrobeniusRemovalSelector<double> selector_3;
+    //SpectralRemovalSelector<double> selector_4;
+    //DualSetSelector<double> selector_5;
     //InterlacingFamiliesSelector<double> selector_5;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
     //alg_list.push_back(&selector_5);
-    alg_list.push_back(&selector_2);
+    alg_list.push_back(&selector_1);
     //alg_list.push_back(&selector_1);
     //alg_list.push_back(&selector_3);
     //alg_list.push_back(&selector_4);
