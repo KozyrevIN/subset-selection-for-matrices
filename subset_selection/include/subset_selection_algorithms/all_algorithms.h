@@ -6,6 +6,7 @@
 #include "spectral_removal_selector.h"
 #include "rank_revealing_QR_selector.h"
 #include "spectral_selection_selector.h"
+#include "spectral_selection_2_selector.h"
 #include "volume_removal_selector.h"
 #include "interlacing_families_selector.h"
 
