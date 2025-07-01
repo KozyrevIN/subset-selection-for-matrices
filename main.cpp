@@ -29,8 +29,8 @@ int main()
 
     Tester<double> t;
     //gaussian matrices
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/m, mpp);
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, 2*m, 1, mpp);
+    //t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, n, (n - m)/m, mpp);
+    //t.scatterPoints<SubsetSelection::Norm::Frobenius>(gaussian, alg_list, m, 2*m, 1, mpp);
 
     std::cout << "25%" << std::endl;
 
@@ -41,8 +41,8 @@ int main()
 
     //weighted graph matrices
 
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/m, mpp);
-    t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, 2*m, 1, mpp);
+    //t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, n, (n - m)/m, mpp);
+    //t.scatterPoints<SubsetSelection::Norm::Frobenius>(random_graph, alg_list, m, 2*m, 1, mpp);
 
     std::cout << "75%" << std::endl;
 
