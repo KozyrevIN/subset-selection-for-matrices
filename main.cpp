@@ -6,31 +6,26 @@ using namespace SubsetSelection;
 
 int main()
 {
-    const int m = 50;
-    const int n = 1000;
+    const int m = 100;
+    const int n = 5000;
     const int mpp = 64;
     auto gaussian = new GaussianMatrixGenerator<double>(m, n);
     auto orthonormal = new OrthonormalVectorsMatrixGenerator<double>(m, n);
     auto random_graph = new WeightedGraphIncidenceMatrixGenerator<double>(m, n);
     
-    //SubsetSelector<double> selector_1;
+    SubsetSelector<double> selector_1;
     SpectralSelectionSelector<double> selector_2;
-    SpectralSelection2Selector<double> selector_3;
+    //SpectralSelection2Selector<double> selector_3;
     //FrobeniusRemovalSelector<double> selector_4;
-    //SpectralRemovalSelector<double> selector_5;
+    SpectralRemovalSelector<double> selector_5;
     DualSetSelector<double> selector_6;
     //InterlacingFamiliesSelector<double> selector_7;
 
     auto alg_list = std::vector<SubsetSelector<double>*>();
-    //alg_list.push_back(&selector_5);
-    //alg_list.push_back(&selector_1);
-    //alg_list.push_back(&selector_1);
-    //alg_list.push_back(&selector_3);
-    //alg_list.push_back(&selector_4);
-
     alg_list.push_back(&selector_2);
-    alg_list.push_back(&selector_3);
+    alg_list.push_back(&selector_5);
     alg_list.push_back(&selector_6);
+    alg_list.push_back(&selector_1);
 
     Tester<double> t;
     //gaussian matrices
