@@ -51,7 +51,7 @@ scalar SpectralSelection2Selector<scalar>::computeBound(
         l += computeDelta(m, j, n, l, epsilon);
     }
 
-    return l + 1 / epsilon;
+    return l + 1 / (epsilon - (m - 1) / (1 - l));
 }
 
 template <typename scalar>
@@ -74,12 +74,35 @@ scalar SpectralSelection2Selector<scalar>::optimizeBound(
             // select left section
             lim_b = d;
         } else {
-            // selct right section
+            // select right section
             lim_a = c;
         }
     } while (std::abs(lim_a - lim_b) > eps);
 
     return (lim_a + lim_b) / 2;
+}
+
+template <typename scalar>
+scalar SpectralSelection2Selector<scalar>::minimizeL(
+    uint m, uint i, uint k, uint n, scalar l_opt, scalar bound,
+    const Eigen::ArrayX<scalar> &eigenvalues) const {
+
+    scalar left = -std::sqrt((k - i + 1) * m);
+    scalar right = l_opt;
+
+    do {
+        scalar mid = (left + right) / 2;
+
+        if (computeBound(m, i, k, n, mid, eigenvalues) > bound) {
+            // select left section
+            right = mid;
+        } else {
+            // select right section
+            left = mid;
+        }
+    } while (std::abs(left - right) > eps);
+
+    return (left + right) / 2;
 }
 
 template <typename scalar>
@@ -105,10 +128,22 @@ std::vector<uint> SpectralSelection2Selector<scalar>::selectSubset(
     Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
 
+    scalar bound = this->template bound<Norm::L2>(m, n, k);
+
     for (uint i = 0; i < k; ++i) {
-        scalar l = optimizeBound(m, i, k, n, S);
+        scalar l_opt = optimizeBound(m, i, k, n, S);
+        scalar l;
+        if (i < k - m) {
+            l = minimizeL(m, i, k, n, l_opt, bound, S);
+        } else {
+            scalar l_min = minimizeL(m, i, k, n, l_opt, bound, S);
+            l = l_min * (k - 1 - i) / m + l_opt * (i + m - k + 1) / m;
+        }
+        //l += (l_opt - l) * i / (k - 1);
         scalar epsilon = computeEpsilon(l, S);
         scalar delta = computeDelta(m, i, n, l, epsilon);
+
+        //std::cout << epsilon << ' ';
 
         Eigen::ArrayX<scalar> D = (S - (l + delta)).inverse();
         Eigen::MatrixX<scalar> M_1 = D.matrix().asDiagonal();
@@ -132,6 +167,8 @@ std::vector<uint> SpectralSelection2Selector<scalar>::selectSubset(
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
     }
+
+    //std::cout << std::endl;
 
     return cols_selected;
 }

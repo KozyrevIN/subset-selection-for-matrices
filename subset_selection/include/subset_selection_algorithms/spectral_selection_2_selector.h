@@ -24,6 +24,9 @@ class SpectralSelection2Selector : public SubsetSelector<scalar> {
     scalar optimizeBound(uint m, uint i, uint k, uint n,
                          const Eigen::ArrayX<scalar> &eigenvalues) const;
 
+    scalar minimizeL(uint m, uint i, uint k, uint n, scalar l_opt, scalar bound,
+                     const Eigen::ArrayX<scalar> &eigenvalues) const;
+
     scalar boundInternal(uint m, uint n, uint k, Norm norm) const override;
 
   public:
