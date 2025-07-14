@@ -1,6 +1,8 @@
 #ifndef DUAL_SET_SELECTOR_H
 #define DUAL_SET_SELECTOR_H
 
+#include <cassert>
+
 #include "subset_selector.h"
 
 namespace SubsetSelection {

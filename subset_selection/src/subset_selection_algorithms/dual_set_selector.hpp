@@ -42,17 +42,19 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
     uint m = X.rows();
     uint n = X.cols();
 
+    assert(k > m && "Dual set algorithm requires k > m.");
+
     Eigen::BDCSVD svd(X, Eigen::ComputeThinV);
     Eigen::MatrixX<scalar> V = svd.matrixV().transpose();
     Eigen::MatrixX<scalar> A = Eigen::MatrixX<scalar>::Zero(m, m);
     Eigen::VectorX<scalar> s = Eigen::VectorX<scalar>::Zero(n);
 
     scalar delta_l = 1;
-    scalar l = -std::sqrt((k + 1) * m);
+    scalar l = -std::sqrt(k * m);
 
     scalar delta_u =
-        (std::sqrt(n) + std::sqrt(k + 1)) / (std::sqrt(k + 1) - std::sqrt(m));
-    scalar u = delta_u * std::sqrt((k + 1) * n);
+        (std::sqrt(n) + std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
+    scalar u = delta_u * std::sqrt((k)*n);
 
     for (uint i = 0; i < k; ++i) {
         Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);
@@ -91,7 +93,9 @@ template <typename scalar>
 scalar DualSetSelector<scalar>::boundInternal(uint m, uint n, uint k,
                                               Norm norm) const {
 
-    return std::pow((std::sqrt(k + 1) - std::sqrt(m)) / (std::sqrt(n) + std::sqrt(k + 1)), 2);
+    assert(k > m && "Dual set algorithm requires k > m.");
+    return std::pow(
+        (std::sqrt(k) - std::sqrt(m)) / (std::sqrt(n) + std::sqrt(k)), 2);
 }
 
 } // namespace SubsetSelection

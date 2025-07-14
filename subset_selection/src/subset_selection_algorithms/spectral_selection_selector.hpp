@@ -98,7 +98,7 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     while (cols_selected.size() < k) {
         scalar phi_l_Y = (S - l).inverse().sum();
 
-        //std::cout << phi_l_Y << ' ';
+        // std::cout << phi_l_Y << ' ';
 
         scalar delta =
             calculateDelta(m, n, k, phi_l_Y, l, cols_remaining.size());
@@ -125,19 +125,14 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
 
-        if (cols_selected.size() == k - 1) {
+        auto f = [&S, &epsilon](scalar l) {
+            return (S - l).inverse().sum() - epsilon;
+        };
 
-            auto f = [&S, &epsilon](scalar l) {
-                return (S - l).inverse().sum() - epsilon;
-            };
-
-            l = binarySearch(l, S(0), f, delta * eps);
-        } else {
-            l += delta;
-        }
+        l = binarySearch(l, S(0), f, delta * eps);
     }
 
-    //std::cout << std::endl;
+    // std::cout << std::endl;
 
     return cols_selected;
 }
