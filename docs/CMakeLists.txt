@@ -11,8 +11,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(m.css)
 
-find_package(MatSubset 0.0 REQUIRED)
-
 # Doxygen variables
 set(DOXYGEN_PROJECT_NAME MatSubset)
 set(DOXYGEN_PROJECT_VERSION ${MatSubset_VERSION})
