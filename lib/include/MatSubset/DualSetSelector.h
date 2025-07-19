@@ -26,6 +26,9 @@ namespace MatSubset {
  * pseudoinverse norm is controlled.
  *
  * @note This algorithm requires \f$ k > m \f$.
+ *
+ * @note The original algorithm by Avron and Boutsidis may return less then k
+ * columns. In this implimentation main algorithm is followed by selecting additional columns (starting from previously unselected ones with small indices) to ensure exactly k.
  */
 template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
   public:
@@ -52,10 +55,9 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
-        // Parameters from SelectorBase: X (m_rows x n_cols matrix), k (columns
-        // to select)
-        const Eigen::Index m = X.rows(); // m_rows
-        const Eigen::Index n = X.cols(); // n_cols
+
+        const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
 
         // dual set algorithm (Lemma 3.4 in Avron & Boutsidis, from BSS)
         // requires k > m (rows) for delta_u initialization.
@@ -120,16 +122,12 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
                 }
             }
         }
-        // Ensure exactly k 
-        if (indices.size() > static_cast<size_t>(k)) {
-            indices.resize(static_cast<size_t>(k));
-        }
 
         return indices;
     }
 
   protected:
-     /*!
+    /*!
      * @brief Calculates the theoretical bound for the dual set selection
      * strategy.
      * @param m The number of rows in the matrix.
