@@ -28,7 +28,9 @@ namespace MatSubset {
  * @note This algorithm requires \f$ k > m \f$.
  *
  * @note The original algorithm by Avron and Boutsidis may return less then k
- * columns. In this implimentation main algorithm is followed by selecting additional columns (starting from previously unselected ones with small indices) to ensure exactly k.
+ * columns. In this implimentation main algorithm is followed by selecting
+ * additional columns (starting from previously unselected ones with small
+ * indices) to ensure exactly k.
  */
 template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
   public:

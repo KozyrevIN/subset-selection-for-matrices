@@ -73,35 +73,43 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
             V.completeOrthogonalDecomposition().pseudoInverse().transpose();
         Eigen::ArrayX<Scalar> l =
             (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
-        Eigen::ArrayX<Scalar> d =
-            static_cast<Scalar>(1) - (V.transpose() * V_dag).diagonal().array();
+        Eigen::ArrayX<Scalar> d = (V.transpose() * V_dag).diagonal().array();
 
         while (cols.size() > k) {
 
             Eigen::Index j_min = 0;
-            for (Eigen::Index j = 0; j < cols.size(); ++j) {
-                if (d(j) > eps_ and l(j) * d(j_min) < l(j_min) * d(j)) {
+            while (j_min < cols.size() &&
+                   d(j_min) >= static_cast<Scalar>(1) - eps_) {
+                ++j_min;
+            }
+
+            assert(j_min < cols.size() &&
+                   "Have not found a column with d_j < 1 - eps.");
+
+            for (Eigen::Index j = j_min + 1; j < cols.size(); ++j) {
+                if (d(j) < static_cast<Scalar>(1) - eps_ &&
+                    l(j) + l(j_min) * d(j) < l(j_min) + l(j) * d(j_min)) {
                     j_min = j;
                 }
             }
 
             Eigen::VectorX<Scalar> w = V.col(j_min);
             Eigen::VectorX<Scalar> w_dag = V_dag.col(j_min);
-            Scalar d_min = d(j_min);
+            Scalar denom = static_cast<Scalar>(1) - d(j_min);
 
             removeColumn(cols, l, d, V, V_dag, j_min);
 
             Eigen::ArrayX<Scalar> mul_1 = w.transpose() * V_dag;
             Eigen::ArrayX<Scalar> mul_2 =
                 w_dag.transpose() * S_inv2.asDiagonal() * V_dag;
+            Scalar mul_3 =
+                (w_dag.transpose() * S_inv2.asDiagonal() * w_dag).value();
 
-            l += 2 * mul_1 * mul_2 / d_min +
-                 mul_1.square() *
-                     mul_2(static_cast<Eigen::Index>(cols.size()) - 1) /
-                     (d_min * d_min);
-            d -= (w.transpose() * V_dag).array().square() / d_min;
+            d += mul_1.square() / denom;
+            mul_1 /= denom;
+            l += mul_1 * (2 * mul_2 + mul_1 * mul_3);
 
-            V_dag += w_dag * (w_dag.transpose() * V) / d_min;
+            V_dag += w_dag * (w_dag.transpose() * V) / denom;
         }
 
         return cols;
