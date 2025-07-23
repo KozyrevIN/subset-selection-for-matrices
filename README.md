@@ -4,17 +4,19 @@
 
 A lightweight header-only C++ library implementing efficient approximation algorithms for subset selection for matrices, built on top of the Eigen linear algebra library.
 
-## Features
-
-- Eigen-native API: Seamless integration with Eigen matrices
-- Header-only design: Zero-compilation integration
-- Modern algorithms: Implementation of state-of-the-art polynomial-time methods
-- Extensible architecture: Easy to add custom selection strategies
-
 ## Installation
 
-### Prerequisites
-- Eigen 3.3+ (install via your system package manager or [from source](https://eigen.tuxfamily.org))
+### Dependencies
+For using library:
+- [Eigen 3.3+](https://eigen.tuxfamily.org)
+
+For running benchmarking code:
+- [JsonCpp](https://github.com/open-source-parsers/jsoncpp)
+- python 3 with numpy and matplotlib
+  
+For generating documentation:
+- Doxygen
+- Latex ()
 
 ### Using CMake Superbuild
 ```bash
@@ -22,7 +24,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and, in future, benchmarks) are independent projects also reachable through superbuild.
+This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and, in future, benchmarks) are independent projects also reachable through superbuild by defining CMake variables (e. g. to additionally build documentation, pass ```-DBUILD_DOCS=ON```)
 
 ## Quick Start
 
@@ -42,15 +44,15 @@ Explore complete examples in the [examples/](examples/) directory:
 1. BasicUsage - Core API demonstration
 2. TheoreticalBounds - Obtaining theoretical guarantees for algorithms
 
-## API Design Philosophy
+## Features
 
-Our implementation follows Eigen's coding conventions:
-- Template-based generic programming
-- Minimal runtime overhead through compile-time optimizations
+- Eigen-native API: Seamless integration with Eigen matrices
+- Header-only design: Zero-compilation integration
+- Modern algorithms: Implementation of state-of-the-art polynomial-time methods
+- Extensible architecture: Easy to add custom selection strategies
 
 ## References
 
-### Core Algorithms
 1. Avron & Boutsidis (2013) - [Faster subset selection for matrices](https://arxiv.org/abs/1307.0405)
 2. Xie & Xu (2021) - [Fixed-block selection methods](https://doi.org/10.1137/1.9781611976472.15)
 3. *Upcoming articles from our team* (2025)
