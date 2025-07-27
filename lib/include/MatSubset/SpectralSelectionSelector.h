@@ -62,9 +62,9 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
         const Eigen::Index n = X.cols();
 
         Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
-        Eigen::MatrixX<Scalar> Q =
-            qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m);
-        Eigen::MatrixX<Scalar> V = Q.transpose();
+        Eigen::MatrixX<Scalar> V =
+            (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
+                .transpose();
 
         std::vector<Eigen::Index> cols_remaining(n);
         for (Eigen::Index j = 0; j < n; ++j) {
