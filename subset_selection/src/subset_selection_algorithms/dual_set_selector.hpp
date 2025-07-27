@@ -54,7 +54,7 @@ DualSetSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X, uint k) {
 
     scalar delta_u =
         (std::sqrt(n) + std::sqrt(k)) / (std::sqrt(k) - std::sqrt(m));
-    scalar u = delta_u * std::sqrt((k)*n);
+    scalar u = delta_u * std::sqrt(k * n);
 
     for (uint i = 0; i < k; ++i) {
         Eigen::VectorX<scalar> L = calculateL(V, delta_l, A, l);

@@ -47,11 +47,16 @@ scalar SpectralSelection2Selector<scalar>::computeBound(
                      "already selected columns");
 
     scalar epsilon = computeEpsilon(l, eigenvalues);
+    /*
     for (uint j = i; j < k; ++j) {
         l += computeDelta(m, j, n, l, epsilon);
     }
+    */
+    scalar delta = computeDelta(m, i, n, l, epsilon);
 
-    return l + 1 / (epsilon - (m - 1) / (1 - l));
+    // return l + 1 / (epsilon - (m - 1) / (1 - l));
+
+    return l + (k - i) * delta + 1 / epsilon;
 }
 
 template <typename scalar>

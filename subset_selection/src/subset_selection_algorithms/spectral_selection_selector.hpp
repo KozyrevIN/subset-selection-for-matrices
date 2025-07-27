@@ -91,18 +91,18 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
     Eigen::ArrayX<scalar> S = Eigen::ArrayX<scalar>::Zero(m);
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<scalar>> decomposition(m);
 
-    scalar epsilon = calculateEpsilon(m, n, k);
-    scalar l_0 = -(m / epsilon);
-    scalar l = l_0;
+    const scalar epsilon_0 = calculateEpsilon(m, n, k);
+    scalar epsilon = epsilon_0;
+    scalar l = -(m / epsilon);
+    scalar delta = calculateDelta(m, n, k, epsilon, l, n);
+    scalar bound = l + k * delta + 1 / epsilon;
+
+    scalar epsilon_trial;
+    scalar l_trial;
+    scalar delta_trial;
+    scalar bound_trial;
 
     while (cols_selected.size() < k) {
-        scalar phi_l_Y = (S - l).inverse().sum();
-
-        // std::cout << phi_l_Y << ' ';
-
-        scalar delta =
-            calculateDelta(m, n, k, phi_l_Y, l, cols_remaining.size());
-
         Eigen::ArrayX<scalar> D = (S - (l + delta)).inverse();
         Eigen::MatrixX<scalar> M_1 = D.matrix().asDiagonal();
         Eigen::MatrixX<scalar> M_2 = D.square().matrix().asDiagonal();
@@ -125,11 +125,33 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
         U = decomposition.eigenvectors();
         S = decomposition.eigenvalues().array();
 
-        auto f = [&S, &epsilon](scalar l) {
-            return (S - l).inverse().sum() - epsilon;
-        };
+        if (cols_selected.size() == k - 1) {
+            epsilon_trial = epsilon_0;
+            auto f = [&S, &epsilon_trial](scalar l) {
+                return (S - l).inverse().sum() - epsilon_trial;
+            };
+            l_trial = binarySearch(l, S(0), f, eps / epsilon_trial);
+        } else {
+            l_trial = l + delta;
+            epsilon_trial = (S - l_trial).inverse().sum();
+        }
 
-        l = binarySearch(l, S(0), f, delta * eps);
+        delta_trial = calculateDelta(m, n, k, epsilon_trial, l_trial, cols_remaining.size());
+        bound_trial = l_trial + (k - cols_selected.size()) * delta_trial + 1/epsilon_trial;
+
+        if (bound_trial >= bound) {
+            l = l_trial;
+            epsilon = epsilon_trial;
+            delta = delta_trial;
+        } else {
+            auto f = [&S, &epsilon](scalar l) {
+                return (S - l).inverse().sum() - epsilon;
+            };
+            l = binarySearch(l, S(0), f, eps / epsilon);
+            delta = calculateDelta(m, n, k, epsilon, l, cols_remaining.size());
+        }
+
+        // std::cout << epsilon << ' ';
     }
 
     // std::cout << std::endl;
@@ -140,14 +162,15 @@ SpectralSelectionSelector<scalar>::selectSubset(const Eigen::MatrixX<scalar> &X,
 template <typename scalar>
 scalar SpectralSelectionSelector<scalar>::boundInternal(uint m, uint n, uint k,
                                                         Norm norm) const {
-    scalar epsilon = calculateEpsilon(m, n, k);
-    scalar l = -(m / epsilon);
-
-    for (uint i = 0; i < k; ++i) {
-        l += calculateDelta(m, n, k, epsilon, l, n - i);
+    if (m == 1) {
+        return std::pow(std::sqrt(k) - std::sqrt(m - 1), 2) / n;
+    } else {
+        scalar alpha = std::sqrt((k - 1) * m + 1);
+        return static_cast<scalar>(m) / static_cast<scalar>(n) *
+               std::pow((static_cast<scalar>(k) - alpha) /
+                            (alpha - static_cast<scalar>(1)),
+                        2);
     }
-
-    return l + 1 / epsilon;
 }
 
 } // namespace SubsetSelection
