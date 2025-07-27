@@ -7,16 +7,20 @@ A lightweight header-only C++ library implementing efficient approximation algor
 ## Installation
 
 ### Dependencies
-For using library:
+For using library and running examples:
 - [Eigen 3.3+](https://eigen.tuxfamily.org)
+
+For running tests:
+- [doctest](https://github.com/doctest/doctest) (fetched automatically)
+
+For generating documentation:
+- [Doxygen](https://doxygen.nl/)
+- [m.css](https://mcss.mosra.cz/) (fetched automatically)
+- Latex compiler along with required fonts
 
 For running benchmarking code:
 - [JsonCpp](https://github.com/open-source-parsers/jsoncpp)
-- python 3 with numpy and matplotlib
-  
-For generating documentation:
-- Doxygen
-- Latex ()
+- python 3 with notebook support, numpy, matplotlib
 
 ### Using CMake Superbuild
 ```bash
