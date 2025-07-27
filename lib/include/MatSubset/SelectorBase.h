@@ -133,6 +133,7 @@ template <typename Scalar> class SelectorBase {
     template <Norm norm>
     [[nodiscard]] Scalar bound(Eigen::Index m, Eigen::Index n,
                                Eigen::Index k) const {
+                                
         static_assert(norm == Norm::Frobenius || norm == Norm::Spectral,
                       "SelectorBase::bound: This norm is unsupported for the "
                       "bound calculation!");

@@ -4,9 +4,11 @@
 #include <cmath> // For std::sqrt
 
 #include <Eigen/Eigenvalues> // For Eigen::SelfAdjoitEigenSolver
-#include <Eigen/QR>          // For Eigen::ColPivHouseholderQR
+#include <Eigen/QR>          // For Eigen::HouseholderQR
 
 #include "SelectorBase.h" // Base class
+
+#include <iostream>
 
 namespace MatSubset {
 
@@ -59,9 +61,10 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
-        Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
-        Eigen::MatrixX<Scalar> Q_full = qr.matrixQ(); // Q_full is n x n
-        Eigen::MatrixX<Scalar> V = Q_full.leftCols(m).transpose(); // V is m x n
+        Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
+        Eigen::MatrixX<Scalar> Q =
+            qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m);
+        Eigen::MatrixX<Scalar> V = Q.transpose();
 
         std::vector<Eigen::Index> cols_remaining(n);
         for (Eigen::Index j = 0; j < n; ++j) {
@@ -80,23 +83,47 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
         // Initializes for m x m matrices
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> decomposition(m);
 
-        Scalar epsilon = calculateEpsilon(m, n, k);
+        Scalar epsilon = computeEpsilon0(m, n, k);
         Scalar l_0 = -(static_cast<Scalar>(m) / epsilon);
         Scalar l = l_0;
+        const Scalar B0 = computeB(m, n, k, l, 0, S);
 
         while (cols_selected.size() < k) {
+
+            Scalar l_trial;
+            if (m > 1) {
+
+                Scalar l_opt = optimizeB(m, n, k, cols_selected.size(), S);
+                Scalar l_min =
+                    minimizeL(m, n, k, cols_selected.size(), l_opt, S);
+
+                if (cols_selected.size() < k - m) {
+                    l_trial = l_min;
+                } else {
+                    Scalar lambda =
+                        (k - cols_selected.size() - 1) / static_cast<Scalar>(m);
+                    l_trial = lambda * l_min + (1 - lambda) * l_opt;
+                }
+            }
+
+            if ((m == 1) ||
+                (computeB(m, n, k, l_trial, cols_selected.size(), S) < B0)) {
+                l = computeL(epsilon, l, S);
+            } else {
+                l = l_trial;
+                epsilon = computeEpsilon(l, S);
+            }
+
             Scalar delta =
-                calculateDelta(m, n, k, epsilon, l, cols_remaining.size());
+                computeDelta(m, n, k, l, epsilon, cols_remaining.size());
 
-            Eigen::MatrixX<Scalar> M =
-                U * (S - (l + delta)).inverse().matrix().asDiagonal() *
-                U.transpose() * V;
-
+            Eigen::ArrayX<Scalar> D = (S - (l + delta)).inverse();
+            Eigen::MatrixX<Scalar> M_1 = D.matrix().asDiagonal();
+            Eigen::MatrixX<Scalar> M_2 = D.square().matrix().asDiagonal();
+            Eigen::MatrixX<Scalar> M_3 = U.transpose() * V;
             Eigen::ArrayX<Scalar> Phi =
-                (S - (l + delta)).inverse().sum() -
-                M.colwise().squaredNorm().transpose().array() /
-                    (static_cast<Scalar>(1.0) +
-                     (V.transpose() * M).diagonal().array());
+                -(M_3.transpose() * M_2 * M_3).diagonal().array() /
+                (1 + (M_3.transpose() * M_1 * M_3).diagonal().array());
 
             // Index relative to current V and cols_remaining
             Eigen::Index j_min;
@@ -115,12 +142,6 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
             decomposition.compute(Y);
             U = decomposition.eigenvectors();
             S = decomposition.eigenvalues().array();
-
-            auto f = [&S, &epsilon](Scalar lambda_val) {
-                return (S - lambda_val).inverse().sum() - epsilon;
-            };
-
-            l = binarySearch(l, S(0), f, delta * eps_);
         }
         return cols_selected;
     }
@@ -140,28 +161,27 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                      Norm norm) const override {
 
-        Scalar epsilon = calculateEpsilon(m, n, k);
-        Scalar l = -(static_cast<Scalar>(m) / epsilon);
-
-        for (Eigen::Index i = 0; i < k; ++i) {
-            l += calculateDelta(m, n, k, epsilon, l, n - i);
+        if (m == 1) {
+            return static_cast<Scalar>(k) / static_cast<Scalar>(n);
+        } else {
+            const Scalar alpha = std::sqrt(static_cast<Scalar>(k - 1) * m + 1);
+            const Scalar base = (k - alpha) / (alpha - 1);
+            return (static_cast<Scalar>(m) / n) * base * base;
         }
-
-        return l + static_cast<Scalar>(1.0) / epsilon;
     }
 
   private:
-    Scalar eps_; // Tolerance for binary search
+    Scalar eps_; // Relative tolerance for binary and golden-section search
 
     /*!
-     * @brief Calculates the algorithm-specific parameter \f$ \epsilon \f$.
+     * @brief Calculates the initial value of parameter \f$ \epsilon \f$.
      * @param m Number of rows.
      * @param n Number of columns.
      * @param k Number of columns to select.
      * @return The calculated \f$ \epsilon \f$ value.
      */
-    Scalar calculateEpsilon(Eigen::Index m, Eigen::Index n,
-                            Eigen::Index k) const {
+    Scalar computeEpsilon0(Eigen::Index m, Eigen::Index n,
+                           Eigen::Index k) const {
 
         Scalar epsilon;
         if (m == 1) {
@@ -171,86 +191,218 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
             Scalar S_m = static_cast<Scalar>(m);
             Scalar S_k = static_cast<Scalar>(k);
 
-            Scalar S_1 = static_cast<Scalar>(1);
-            Scalar S_2 = static_cast<Scalar>(2);
-            Scalar S_3 = static_cast<Scalar>(3);
-
-            Scalar alpha = std::sqrt((S_k - S_1) * S_m + S_1);
+            Scalar alpha = std::sqrt((S_k - 1) * S_m + 1);
             epsilon = n *
-                      (S_2 * (alpha - S_1) + S_m * (S_k * (alpha + S_m - S_2) -
-                                                    S_2 * alpha - S_m + S_3)) /
-                      ((S_k - S_1) * S_m * (S_k - S_m + S_1));
+                      (2 * (alpha - 1) +
+                       S_m * (S_k * (alpha + S_m - 2) - 2 * alpha - S_m + 3)) /
+                      ((S_k - 1) * S_m * (S_k - S_m + 1));
         }
         return epsilon;
     }
 
-    /*! @brief Calculates the algorithm-specific parameter \f$ \delta \f$.
+    /*!
+     * @brief Calculates the value of the parameter \f$ \epsilon \f$ depending
+     * on barrier level \f$ l \f$.
+     * @param l The value of parameter \f$ l \f$.
+     * @param eigenvalues Eiganvalues of matrix \f$ Y \f$.
+     * @return The calculated value of \f$ \epsilon \f$.
+     */
+    Scalar computeEpsilon(Scalar l,
+                          const Eigen::ArrayX<Scalar> &eigenvalues) const {
+
+        assert(l < eigenvalues(0) &&
+               "l must be smaller then the smallest eigenvalue");
+        return (eigenvalues - l).inverse().sum();
+    }
+
+    /*! @brief Calculates the parameter \f$ \delta \f$.
      * @param m Number of rows.
      * @param n Number of columns.
      * @param k Number of columns to select.
-     * @param epsilon Current value of \f$ \epsilon \f$.
      * @param l Current value of parameter \f$ l \f$.
+     * @param epsilon Current value of \f$ \epsilon \f$.
      * @param cols_remaining_size Number of columns currently remaining.
      * @return The calculated \f$ \delta \f$ value.
      * @note Solves a quadratic equation. Assumes discriminant \f$ D \ge 0 \f$,
-     * assumes `cols_remaining_size > 0`. Both those conditions are proved
-     * to hold.
+     * assumes `cols_remaining_size > 0`. Both those conditions provably hold.
      */
-    Scalar calculateDelta(Eigen::Index m, Eigen::Index n, Eigen::Index k,
-                          Scalar epsilon, Scalar l,
-                          Eigen::Index cols_remaining_size) const {
+    Scalar computeDelta(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                        Scalar l, Scalar epsilon,
+                        Eigen::Index cols_remaining_size) const {
 
         Scalar S_n = static_cast<Scalar>(n);
         Scalar S_m = static_cast<Scalar>(m);
         Scalar S_k = static_cast<Scalar>(k);
         Scalar S_cols_remaining_size = static_cast<Scalar>(cols_remaining_size);
 
-        Scalar S_1 = static_cast<Scalar>(1);
-        Scalar S_2 = static_cast<Scalar>(2);
-        Scalar S_3 = static_cast<Scalar>(3);
-
         Scalar a = epsilon / S_m;
-        Scalar b =
-            -S_1 - epsilon * (1 - l - S_m / epsilon) / S_cols_remaining_size;
-        Scalar c = (S_1 - l - S_m / epsilon) / S_cols_remaining_size;
+        Scalar b = -static_cast<Scalar>(1) -
+                   epsilon * (1 - l - S_m / epsilon) / S_cols_remaining_size;
+        Scalar c = (1 - l - S_m / epsilon) / S_cols_remaining_size;
 
         Scalar D = b * b - 4 * a * c;
         return (-b - std::sqrt(D)) / (2 * a);
     }
 
-    /*! @brief Performs binary search to find a root of \f$ f(\lambda) = 0 \f$
-     * within `[l, r]`.
-     * @param l Lower bound of the search interval.
-     * @param r Upper bound of the search interval.
+    /*! @brief Performs binary search to find a root of \f$ f(l) = 0
+     * \f$ within `[left, right]`.
+     * @param left Lower bound of the search interval.
+     * @param right Upper bound of the search interval.
      * @param f The function \f$ f(\lambda) \f$ whose root is sought.
-     * @param tol Tolerance for convergence.
      * @return The approximate root.
-     * @note Assumes \f$ f(l) \f$ and \f$ f(r) \f$ have opposite signs, or \f$ f
-     * \f$ is monotonic and a root exists in the interval. Assumes \f$ l \le r
-     * \f$.
+     * @note Assumes \f$ f(l) \f$ and \f$ f(r) \f$ have opposite signs. Assumes
+     * \f$ l \le r \f$.
      */
-    Scalar binarySearch(Scalar l, Scalar r,
-                        const std::function<Scalar(Scalar)> &f,
-                        Scalar tol) const {
+    Scalar bisectionMethod(Scalar left, Scalar right,
+                           const std::function<Scalar(Scalar)> &f) const {
 
-        assert(r >= l && "in binyry search right bound must be >= left bound");
-        Scalar f_l = f(l); // Store f(l)
-        Scalar f_r = f(r); // Store f(r)
+        assert(left <= right && "The search interval must be non-empty.");
+        Scalar f_left = f(left);
+        Scalar f_right = f(right);
 
-        Scalar current_l = l;
-        Scalar current_r = r;
+        const int MAX_ITERATIONS = 100;
+        int iter = 0;
+        while ((right - left) > eps_ && iter < MAX_ITERATIONS) {
+            Scalar mid = (left + right) / static_cast<Scalar>(2);
+            Scalar f_mid = f(mid);
 
-        while (current_r - current_l > tol) {
-            Scalar m = (current_r + current_l) / 2.0;
-            Scalar f_m = f(m);
-
-            if (f_m > 0) {
-                current_r = m;
+            if (f_mid > 0) {
+                right = mid;
             } else {
-                current_l = m;
+                left = mid;
             }
         }
-        return (current_r + current_l) / 2.0;
+
+        return (left + right) / static_cast<Scalar>(2);
+    }
+
+    /*!
+     * @brief Calculates the value of the parameter \f$ l \f$ that gives
+     * specified value of \f$ \epsilon \f$ using bisection method.
+     * @param epsilon The value of parameter \f$ \epsilon \f$.
+     * @param l_prev Previous value of \f$ l \f$, serving as a lower bound.
+     * @param eigenvalues Eiganvalues of matrix \f$ Y \f$.
+     * @return The calculated value of \f$ l \f$.
+     */
+    Scalar computeL(Scalar epsilon, Scalar l_prev,
+                    const Eigen::ArrayX<Scalar> &eigenvalues) const {
+
+        auto f = [&eigenvalues, &epsilon](Scalar l) {
+            return (eigenvalues - l).inverse().sum() - epsilon;
+        };
+
+        return bisectionMethod(l_prev, eigenvalues(0), f);
+    }
+
+    /*! @brief Computes \f$ B_i(l) \f$, guaranteed lower bound for the final
+     * value of \f$ \lambda_m(Y) \f$ from the current intermediate state,
+     * defined by parameter \f$ l \f$ and eigenvalues of matrix \f$ Y \f$.
+     * @param m Number of rows.
+     * @param n Number of columns.
+     * @param k Number of columns to select.
+     * @param l Current value of parameter \f$ l \f$.
+     * @param cols_selected_size Number of columns currently selected.
+     * @param eigenvalues Eiganvalues of matrix \f$ Y \f$.
+     * @return The calculated \f$ B_i(l) \f$ value.
+     * @note Part of the heuristic update strategy for \f$ l \f$, meant to
+     * enhance practical performance. It is backed up by a principled approach.
+     */
+    Scalar computeB(Eigen::Index m, Eigen::Index n, Eigen::Index k, Scalar l,
+                    Eigen::Index cols_selected_size,
+                    const Eigen::ArrayX<Scalar> &eigenvalues) const {
+
+        Scalar epsilon = computeEpsilon(l, eigenvalues);
+        Scalar delta =
+            computeDelta(m, n, k, l, epsilon, n - cols_selected_size);
+        return l + (k - cols_selected_size) * delta + 1 / epsilon;
+    }
+
+    /*! @brief Identifies \f$ l_{opt} \f$, candidate maximizer of \f$ B_i(l) \f$
+     * using golden-section search.
+     * @param m Number of rows.
+     * @param n Number of columns.
+     * @param k Number of columns to select.
+     * @param cols_selected_size Number of columns currently selected.
+     * @param eigenvalues Eiganvalues of matrix \f$ Y \f$.
+     * @return The calculated \f$ \delta \f$ value.
+     * @note Part of the heuristic update strategy for \f$ l \f$, meant to
+     * enhance practical performance. It is backed up by a principled approach.
+     * @note We do not prove that \f$ B_i(l) \f$ is unimodal, although it was
+     * consistently well-behaved in experiments. There is no guarantee that the
+     * algorithtm will find the maximizer, and this is fine, since this is a
+     * part of the heuristic approach.
+     */
+    Scalar optimizeB(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                     Eigen::Index cols_selected_size,
+                     const Eigen::ArrayX<Scalar> &eigenvalues) const {
+
+        assert(m > 1 &&
+               "In the heuristic update strategy, m must be greater then 1.");
+        Scalar left = -static_cast<Scalar>(m - 1) / static_cast<Scalar>(m + 1);
+        Scalar right = eigenvalues(0);
+        const Scalar GOLDEN_RATIO = (1 + std::sqrt(5)) / static_cast<Scalar>(2);
+
+        Scalar l1 = right - (right - left) / GOLDEN_RATIO;
+        Scalar l2 = left + (right - left) / GOLDEN_RATIO;
+        Scalar b1 = computeB(m, n, k, l1, cols_selected_size, eigenvalues);
+        Scalar b2 = computeB(m, n, k, l2, cols_selected_size, eigenvalues);
+
+        const int MAX_ITERATIONS = 100;
+        int iter = 0;
+        while ((right - left) > eps_ && iter < MAX_ITERATIONS) {
+            if (b1 > b2) {
+                // The maximum is in the left interval [left, l2].
+                right = l2;
+                l2 = l1;
+                b2 = b1;
+                l1 = right - (right - left) / GOLDEN_RATIO;
+                b1 = computeB(m, n, k, l1, cols_selected_size, eigenvalues);
+            } else {
+                // The maximum is in the right interval [l1, right].
+                left = l1;
+                l1 = l2;
+                b1 = b2;
+                l2 = left + (right - left) / GOLDEN_RATIO;
+                b2 = computeB(m, n, k, l2, cols_selected_size, eigenvalues);
+            }
+            iter++;
+        }
+
+        return (left + right) / static_cast<Scalar>(2);
+    }
+
+    /*! @brief Identifies \f$ l_{min} \f$, candidate minimum \f$ l \f$ such that
+     * \f$ B_i(l) \ge B_0 \f$ using bisection method.
+     * @param m Number of rows.
+     * @param n Number of columns.
+     * @param k Number of columns to select.
+     * @param cols_selected_size Number of columns currently selected.
+     * @param l_opt \f$ l_{opt} \f$, which is a candidte maximizer of \f$
+     * B_i(l). It servse as a tight boundary.
+     * @param eigenvalues Eiganvalues of matrix \f$ Y \f$.
+     * @return The calculated \f$ \delta \f$ value.
+     * @note Part of the heuristic update strategy for \f$ l \f$, meant to
+     * enhance practical performance. It is backed up by a principled approach.
+     * @note We do not prove that \f$ B_i(l) \f$ is unimodal, although it was
+     * consistently well-behaved in experiments. There is no guarantee that the
+     * algorithtm will find this minimal point, and this is fine, since this is
+     * a part of the heuristic approach.
+     */
+    Scalar minimizeL(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+                     Eigen::Index cols_selected_size, Scalar l_opt,
+                     const Eigen::ArrayX<Scalar> &eigenvalues) const {
+
+        assert(m > 1 &&
+               "In the heuristic update strategy, m must be greater then 1.");
+        auto f = [&m, &n, &k, &cols_selected_size, &eigenvalues,
+                  this](Scalar l) {
+            return this->computeB(m, n, k, l, cols_selected_size, eigenvalues);
+        };
+
+        Scalar left = -static_cast<Scalar>(m - 1) / static_cast<Scalar>(m + 1);
+        Scalar right = l_opt;
+
+        return bisectionMethod(left, right, f);
     }
 };
 
