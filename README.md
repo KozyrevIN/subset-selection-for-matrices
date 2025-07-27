@@ -24,7 +24,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and, in future, benchmarks) are independent projects also reachable through superbuild by defining CMake variables (e. g. to additionally build documentation, pass ```-DBUILD_DOCS=ON```)
+This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and, in future, benchmarks) are independent projects also reachable through superbuild by defining CMake variables (e.g., to additionally build documentation, pass ```-DBUILD_DOCS=ON```)
 
 ## Quick Start
 
