@@ -17,10 +17,10 @@ option(BUILD_BENCH "Build MatSubset benchmarking code" OFF)
 
 # Dependency checks
 if(INSTALL_LIB AND NOT BUILD_LIB)
-    message(FATAL_ERROR "INSTALL_LIB requires BUILD_LIB=ON")
+    message(FATAL_ERROR "INSTALL_LIB=ON requires BUILD_LIB=ON")
 endif()
 if(LINK_AGAINST_BUILD_TREE AND NOT BUILD_LIB)
-    message(FATAL_ERROR "LINK_AGAINST_BUILD_TREE requires BUILD_LIB=ON")
+    message(FATAL_ERROR "LINK_AGAINST_BUILD_TREE=ON requires BUILD_LIB=ON")
 endif()
 
 # Build/install the MatSubset library
@@ -47,9 +47,9 @@ endif()
 
 # Helper function to add components (examples, tests, etc.)
 function(add_component name source_dir build_dir)
-    # --- Parse optional arguments ---
+    # Parse optional arguments
     set(options "")
-    set(oneValueArgs COMPONENT_TARGET) # Changed from SUB_TARGET_NAME
+    set(oneValueArgs COMPONENT_TARGET)
     set(multiValueArgs "")
     cmake_parse_arguments(AC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     # AC_COMPONENT_TARGET will be set if COMPONENT_TARGET was passed
