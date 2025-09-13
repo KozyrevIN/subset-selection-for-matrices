@@ -43,9 +43,7 @@ template <typename Scalar> class MatrixGenerator {
      */
     MatrixGenerator(Eigen::Index m, Eigen::Index n,
                     std::mt19937::result_type seed)
-        : matrixSize{m, n} {
-        gen = std::mt19937(seed);
-    }
+        : matrixSize{m, n}, gen{seed} {}
 
     /*! @brief Virtual destructor to ensure proper cleanup of derived classes.
      */
