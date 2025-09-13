@@ -4,7 +4,7 @@
 #include <random> // For std::mt19937, std::random_device
 #include <string> // For std::string
 
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
 namespace MatSubset::Bench {
 
@@ -105,4 +105,4 @@ template <typename Scalar> class MatrixGenerator {
 
 } // namespace MatSubset::Bench
 
-#endif
+#endif // MAT_SUBSET_MATRIX_GENERATOR_H
