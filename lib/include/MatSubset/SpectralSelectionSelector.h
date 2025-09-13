@@ -8,8 +8,6 @@
 
 #include "SelectorBase.h" // Base class
 
-#include <iostream>
-
 namespace MatSubset {
 
 /*!
