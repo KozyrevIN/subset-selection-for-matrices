@@ -57,36 +57,38 @@ class OrthonormalVectorsMatrixGenerator
     }
 
     /*!
-     * @brief Generates the matrix with orthonormal vectors.
-     * @return An Eigen::MatrixX<Scalar> of size m x n.
-     *
-     * If m >= n, the returned matrix has orthonormal columns.
-     * If m < n, the returned matrix has orthonormal rows.
+     * @brief Generates the matrix with orthonormal vectors using
+     * constructor-defined dimensions.
      */
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
-        auto [initial_m, initial_n] = this->matrixSize;
+        auto [m, n] = this->matrixSize;
+        return generateOrthonormalMatrix(m, n);
+    }
 
-        // The QR decomposition method requires the number of rows to be
-        // greater than or equal to the number of columns to produce
-        // orthonormal columns.
-        bool needs_transpose = false;
-        if (initial_m < initial_n) {
-            needs_transpose = true;
-        }
+  protected:
+    /*!
+     * @brief Generates a random matrix of arbitrary size with orthonormal
+     * columns or rows.
+     * @param rows The number of rows for the new matrix.
+     * @param cols The number of columns for the new matrix.
+     * @return An Eigen::MatrixX<Scalar> of size rows x cols.
+     *
+     * This helper is exposed to derived classes that need to generate
+     * random orthonormal matrices as part of a larger algorithm.
+     */
+    [[nodiscard]] Eigen::MatrixX<Scalar>
+    generateOrthonormalMatrix(Eigen::Index rows, Eigen::Index cols) {
+        bool needs_transpose = (rows < cols);
 
-        // Generate the base Gaussian matrix to be orthogonalized.
-        // We always create a "tall" matrix (rows >= cols).
+        Eigen::Index tall_rows = needs_transpose ? cols : rows;
+        Eigen::Index tall_cols = needs_transpose ? rows : cols;
+
         Eigen::MatrixX<Scalar> gaussian_matrix =
-            (needs_transpose)
-                ? this->generateGaussianMatrix(initial_n, initial_m)
-                : this->generateGaussianMatrix(initial_m, initial_n);
+            this->generateGaussianMatrix(tall_rows, tall_cols);
 
-        // Perform thin QR decomposition
         Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(gaussian_matrix);
         Eigen::MatrixX<Scalar> Q = qr.householderQ();
 
-        // For a uniform (Haar) distribution, we must correct the signs of
-        // the columns of Q based on the signs of the diagonal elements of R.
         auto R_diag = qr.matrixQR().diagonal();
         for (Eigen::Index j = 0; j < R_diag.size(); ++j) {
             if (R_diag(j) < 0) {
@@ -94,13 +96,7 @@ class OrthonormalVectorsMatrixGenerator
             }
         }
 
-        // If the original request was for a "wide" matrix (m < n), we
-        // return the transpose, which will have orthonormal rows.
-        if (needs_transpose) {
-            return Q.transpose();
-        } else {
-            return Q;
-        }
+        return needs_transpose ? Q.transpose() : Q;
     }
 };
 
