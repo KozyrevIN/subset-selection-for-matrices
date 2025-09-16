@@ -87,9 +87,11 @@ class OrthonormalVectorsMatrixGenerator
             this->generateGaussianMatrix(tall_rows, tall_cols);
 
         Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(gaussian_matrix);
-        Eigen::MatrixX<Scalar> Q = qr.householderQ();
+        Eigen::MatrixX<Scalar> Q =
+            qr.householderQ() *
+            Eigen::MatrixX<Scalar>::Identity(tall_rows, tall_cols);
 
-        auto R_diag = qr.matrixQR().diagonal();
+        Eigen::VectorX<Scalar> R_diag = qr.matrixQR().diagonal();
         for (Eigen::Index j = 0; j < R_diag.size(); ++j) {
             if (R_diag(j) < 0) {
                 Q.col(j) *= static_cast<Scalar>(-1);
