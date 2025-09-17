@@ -1,8 +1,9 @@
 #ifndef MAT_SUBSET_MATRIX_GENERATOR_H
 #define MAT_SUBSET_MATRIX_GENERATOR_H
 
-#include <random> // For std::mt19937, std::random_device
-#include <string> // For std::string
+#include <random>  // For std::mt19937, std::random_device
+#include <string>  // For std::string
+#include <utility> // For std::pair
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 

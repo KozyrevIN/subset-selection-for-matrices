@@ -17,13 +17,6 @@ namespace MatSubset::Bench {
  * This class generates a matrix that is uniformly distributed over the Stiefel
  * manifold V_k(R^n), meaning its columns (if rows >= cols) or rows (if rows <
  * cols) form an orthonormal set.
- *
- * The generation process involves:
- * 1. Creating an intermediate matrix with i.i.d. Gaussian entries.
- * 2. Performing a QR decomposition on this matrix.
- * 3. Correcting signs in R toi ensure all diagonal elements are nonnegative.
- * This ensures uniform (Haar) distribution.
- * 4. The resulting Q factor is the desired matrix with orthonormal columns.
  */
 template <typename Scalar>
 class OrthonormalVectorsMatrixGenerator
@@ -72,6 +65,13 @@ class OrthonormalVectorsMatrixGenerator
      * @param rows The number of rows for the new matrix.
      * @param cols The number of columns for the new matrix.
      * @return An Eigen::MatrixX<Scalar> of size rows x cols.
+     *
+     * The generation process involves:
+     * 1. Creating an intermediate matrix with i.i.d. Gaussian entries.
+     * 2. Performing a QR decomposition on this matrix.
+     * 3. Correcting signs in R toi ensure all diagonal elements are
+     * nonnegative. This ensures uniform (Haar) distribution.
+     * 4. The resulting Q factor is the desired matrix with orthonormal columns.
      *
      * This helper is exposed to derived classes that need to generate
      * random orthonormal matrices as part of a larger algorithm.
