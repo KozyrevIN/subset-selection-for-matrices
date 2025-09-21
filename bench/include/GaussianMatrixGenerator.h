@@ -43,7 +43,7 @@ class GaussianMatrixGenerator : public MatrixGenerator<Scalar> {
      * entries.
      */
     [[nodiscard]] std::string getMatrixType() const override {
-        return "random matrix with i.i.d. gaussian entries";
+        return "gaussian matrix";
     }
 
     /*!
