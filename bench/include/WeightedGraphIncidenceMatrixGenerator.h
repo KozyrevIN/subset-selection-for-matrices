@@ -74,7 +74,9 @@ class WeightedGraphIncidenceMatrixGenerator
             this->incidenceMatrix() * weights.cwiseSqrt().asDiagonal();
 
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(M, Eigen::ComputeThinV);
-        return svd.matrixV().transpose();
+        Eigen::MatrixX<Scalar> V = svd.matrixV();
+        V.conservativeResize(Eigen::NoChange, this->matrixSize.first);
+        return V.transpose();
     }
 };
 

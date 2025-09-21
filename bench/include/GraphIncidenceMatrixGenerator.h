@@ -15,9 +15,9 @@
 namespace MatSubset::Bench {
 
 /*!
- * @brief Generator of a matrix of right singular vectors of an oriented edge-vertex
- * incidence matrix of a fully-connected graph with m + 1 verticies and n
- * edges from uniform distribution.
+ * @brief Generator of a matrix of right singular vectors of an oriented
+ * edge-vertex incidence matrix of a fully-connected graph with m + 1 verticies
+ * and n edges from uniform distribution.
  * @tparam Scalar The underlying scalar type of the matrix elements (e.g.,
  * float, double).
  */
@@ -75,7 +75,9 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<Scalar> {
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
         Eigen::MatrixX<Scalar> M = incidenceMatrix();
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(M, Eigen::ComputeThinV);
-        return svd.matrixV().transpose();
+        Eigen::MatrixX<Scalar> V = svd.matrixV();
+        V.conservativeResize(Eigen::NoChange, this->matrixSize.first);
+        return V.transpose();
     }
 
   protected:
@@ -94,8 +96,8 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<Scalar> {
                     Eigen::MatrixX<Scalar>::Zero(m + 1, n);
                 for (Eigen::Index j = 0; j < n; ++j) {
                     auto [v_1, v_2] = edge_list[j];
-                    M(v_1, j) = 1;
-                    M(v_2, j) = 1;
+                    M(v_1, j) = static_cast<Scalar>(1);
+                    M(v_2, j) = static_cast<Scalar>(-1);
                 }
                 return M;
             }
