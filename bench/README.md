@@ -5,6 +5,7 @@ Sample of config.json
 ```
 {
   "output_path": "results",
+  "scalar": "double",
   "experiments": [
 
     {
@@ -62,5 +63,4 @@ Sample of config.json
     }
   ]
 }
-
 ```

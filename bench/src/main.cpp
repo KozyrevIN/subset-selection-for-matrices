@@ -1,4 +1,4 @@
-#include <filesystem> // For std::filesystem
+#include <filesystem> // For std::filesystem::path
 #include <fstream>    // For reading from and writing to files
 #include <iostream>   // For reading from and writing to the console
 #include <string>     // For std::string
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
     std::filesystem::path full_output_path = base_path / relative_output_path;
 
     // Extraction of experiment info
-    nlohmann::json experiments_config = config["experiments"];
+    nlohmann::json experiments_config = config.at("experiments");
 
     // Main logic
     try {

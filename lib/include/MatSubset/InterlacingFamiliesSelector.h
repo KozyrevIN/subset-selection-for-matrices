@@ -4,7 +4,7 @@
 #include <cmath> // For std::sqrt, std::pow
 
 #include <Eigen/Eigenvalues>             // For SelfAdjointEigenSolver
-#include <Eigen/SVD>                     // For Eigen::
+#include <Eigen/SVD>                     // For Eigen::BDCSVD
 #include <unsupported/Eigen/Polynomials> // For Eigen::PolynomialSolver
 
 #include "SelectorBase.h" // Base class
@@ -150,93 +150,95 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
         Scalar ratio = numerator_b / denominator_b;
         return std::pow(ratio, 2);
     }
+
+  private:
+    Scalar eps_;
+
+    /*! @brief Constructs a polynomial from its roots.
+     *  Polynomial coefficients are returned in an order compatible with Eigen's
+     * `PolynomialSolver` (ascending powers: poly(0) is const, poly(l) is coeff
+     * of \f$ x^l \f$).
+     *  @param roots An `Eigen::VectorX<Scalar>` of the roots of the polynomial.
+     *  @return An `Eigen::VectorX<Scalar>` representing the polynomial
+     * coefficients.
+     */
+    Eigen::VectorX<Scalar>
+    polyFromRoots(const Eigen::VectorX<Scalar> &roots) const {
+
+        Eigen::Index l = roots.size();
+        Eigen::VectorX<Scalar> poly = Eigen::VectorX<Scalar>::Zero(l + 1);
+        poly(l) = 1;
+
+        for (Scalar root : roots) {
+            poly.head(l) -= root * poly.tail(l);
+        }
+
+        return poly;
+    }
+
+    /*! @brief Calculates coefficients for the \f$ P \to F \f$ polynomial
+     * transformation based on Xie and Xu (2021).
+     *  @param m Number of rows of original matrix \f$ X \f$.
+     *  @param n Number of columns of original matrix \f$ X \f$.
+     *  @param k Target number of columns to select.
+     *  @param iter Current iteration number (1-based, up to \f$ k \f$).
+     *  @return An `Eigen::ArrayX<Scalar>` of transformation coefficients.
+     */
+    Eigen::ArrayX<Scalar>
+    PtoFArray(Eigen::Index m, Eigen::Index n, Eigen::Index k,
+              Eigen::Index iter) const { // Renamed i to iter
+
+        Eigen::ArrayX<Scalar> arr;
+
+        if (k <= n - m) {
+            arr = Eigen::ArrayX<Scalar>::Constant(m + 1,
+                                                  static_cast<Scalar>(1.0));
+            for (Eigen::Index j = 1; j < m + 1; ++j) {
+                Scalar num = static_cast<Scalar>(j + n - m - iter);
+                Scalar den = static_cast<Scalar>(j + n - m - k);
+                arr(j) = arr(j - 1) * num / den;
+            }
+        } else { // k > n - m
+            Eigen::Index arr_size = n - k + 1;
+            arr = Eigen::ArrayX<Scalar>::Constant(arr_size,
+                                                  static_cast<Scalar>(1.0));
+            for (Eigen::Index j = 1; j < arr_size; ++j) {
+                Scalar num = static_cast<Scalar>(j + k - iter);
+                Scalar den = static_cast<Scalar>(j);
+                arr(j) = arr(j - 1) * num / den;
+            }
+        }
+        return arr;
+    }
+
+    /*! @brief Constructs the \f$ Y \to Z \f$ polynomial transformation matrix
+     * for \f$ p(y) \to p(y - \text{shift}) \f$. The resulting matrix `M`
+     * transforms coefficient vectors `c_y` of \f$ p(y) \f$ to `c_z` of \f$ p(z)
+     * \f$ via `c_z = M * c_y`, where \f$ z = y + \text{shift} \f$ (so \f$ y = z
+     * - \text{shift} \f$). Coefficients are assumed to be in ascending order of
+     * power.
+     *  @param poly_coeffs_len Length of the polynomial coefficient vector
+     * (degree + 1). In the algorithm it always equals
+     *  @param shift The amount by which the variable is shifted (\f$ z = y +
+     * \text{shift} \f$.
+     *  @return The transformation `Eigen::MatrixX<Scalar>` `M`.
+     */
+    Eigen::MatrixX<Scalar> YtoZMatrix(Eigen::Index poly_coeffs_len,
+                                      Scalar shift) const {
+
+        Eigen::MatrixX<Scalar> M =
+            Eigen::MatrixX<Scalar>::Zero(poly_coeffs_len, poly_coeffs_len);
+
+        M(0, 0) = 1;
+        for (Eigen::Index i = 1; i < poly_coeffs_len; ++i) {
+            M.col(i).tail(poly_coeffs_len - 1) =
+                M.col(i - 1).head(poly_coeffs_len - 1);
+            M.col(i) -= shift * M.col(i - 1);
+        }
+
+        return M;
+    }
 };
-
-private:
-Scalar eps_;
-
-/*! @brief Constructs a polynomial from its roots.
- *  Polynomial coefficients are returned in an order compatible with Eigen's
- * `PolynomialSolver` (ascending powers: poly(0) is const, poly(l) is coeff
- * of \f$ x^l \f$).
- *  @param roots An `Eigen::VectorX<Scalar>` of the roots of the polynomial.
- *  @return An `Eigen::VectorX<Scalar>` representing the polynomial
- * coefficients.
- */
-Eigen::VectorX<Scalar>
-polyFromRoots(const Eigen::VectorX<Scalar> &roots) const {
-
-    Eigen::Index l = roots.size();
-    Eigen::VectorX<Scalar> poly = Eigen::VectorX<Scalar>::Zero(l + 1);
-    poly(l) = 1;
-
-    for (Scalar root : roots) {
-        poly.head(l) -= root * poly.tail(l);
-    }
-
-    return poly;
-}
-
-/*! @brief Calculates coefficients for the \f$ P \to F \f$ polynomial
- * transformation based on Xie and Xu (2021).
- *  @param m Number of rows of original matrix \f$ X \f$.
- *  @param n Number of columns of original matrix \f$ X \f$.
- *  @param k Target number of columns to select.
- *  @param iter Current iteration number (1-based, up to \f$ k \f$).
- *  @return An `Eigen::ArrayX<Scalar>` of transformation coefficients.
- */
-Eigen::ArrayX<Scalar> PtoFArray(Eigen::Index m, Eigen::Index n, Eigen::Index k,
-                                Eigen::Index iter) const { // Renamed i to iter
-
-    Eigen::ArrayX<Scalar> arr;
-
-    if (k <= n - m) {
-        arr = Eigen::ArrayX<Scalar>::Constant(m + 1, static_cast<Scalar>(1.0));
-        for (Eigen::Index j = 1; j < m + 1; ++j) {
-            Scalar num = static_cast<Scalar>(j + n - m - iter);
-            Scalar den = static_cast<Scalar>(j + n - m - k);
-            arr(j) = arr(j - 1) * num / den;
-        }
-    } else { // k > n - m
-        Eigen::Index arr_size = n - k + 1;
-        arr =
-            Eigen::ArrayX<Scalar>::Constant(arr_size, static_cast<Scalar>(1.0));
-        for (Eigen::Index j = 1; j < arr_size; ++j) {
-            Scalar num = static_cast<Scalar>(j + k - iter);
-            Scalar den = static_cast<Scalar>(j);
-            arr(j) = arr(j - 1) * num / den;
-        }
-    }
-    return arr;
-}
-
-/*! @brief Constructs the \f$ Y \to Z \f$ polynomial transformation matrix
- * for \f$ p(y) \to p(y - \text{shift}) \f$. The resulting matrix `M`
- * transforms coefficient vectors `c_y` of \f$ p(y) \f$ to `c_z` of \f$ p(z)
- * \f$ via `c_z = M * c_y`, where \f$ z = y + \text{shift} \f$ (so \f$ y = z
- * - \text{shift} \f$). Coefficients are assumed to be in ascending order of
- * power.
- *  @param poly_coeffs_len Length of the polynomial coefficient vector
- * (degree + 1). In the algorithm it always equals
- *  @param shift The amount by which the variable is shifted (\f$ z = y +
- * \text{shift} \f$.
- *  @return The transformation `Eigen::MatrixX<Scalar>` `M`.
- */
-Eigen::MatrixX<Scalar> YtoZMatrix(Eigen::Index poly_coeffs_len,
-                                  Scalar shift) const {
-
-    Eigen::MatrixX<Scalar> M =
-        Eigen::MatrixX<Scalar>::Zero(poly_coeffs_len, poly_coeffs_len);
-
-    M(0, 0) = 1;
-    for (Eigen::Index i = 1; i < poly_coeffs_len; ++i) {
-        M.col(i).tail(poly_coeffs_len - 1) =
-            M.col(i - 1).head(poly_coeffs_len - 1);
-        M.col(i) -= shift * M.col(i - 1);
-    }
-
-    return M;
-}
 } // namespace MatSubset
 
 #endif // MAT_SUBSET_INTERLACING_FAMILIES_SELECTOR_H
