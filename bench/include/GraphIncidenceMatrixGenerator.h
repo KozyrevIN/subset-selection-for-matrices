@@ -10,7 +10,7 @@
 
 #include <Eigen/SVD> // For Eigen::BDCSVD
 
-#include "MatrixGenerator.h" // For the base class
+#include "MatrixGeneratorBase.h" // For the base class
 
 namespace MatSubset::Bench {
 
@@ -22,7 +22,7 @@ namespace MatSubset::Bench {
  * float, double).
  */
 template <typename Scalar>
-class GraphIncidenceMatrixGenerator : public MatrixGenerator<Scalar> {
+class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for GraphIncidenceMatrixGenerator with a random seed.
@@ -30,7 +30,7 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<Scalar> {
      * @param n Number of columns.
      */
     GraphIncidenceMatrixGenerator(Eigen::Index m, Eigen::Index n)
-        : MatrixGenerator<Scalar>(m, n) {
+        : MatrixGeneratorBase<Scalar>(m, n) {
         assert(
             m <= n &&
             "Number of edges (n) must be at least number of vertices - 1 (m)");
@@ -45,7 +45,7 @@ class GraphIncidenceMatrixGenerator : public MatrixGenerator<Scalar> {
      */
     GraphIncidenceMatrixGenerator(Eigen::Index m, Eigen::Index n,
                                   std::mt19937::result_type seed)
-        : MatrixGenerator<Scalar>(m, n, seed) {
+        : MatrixGeneratorBase<Scalar>(m, n, seed) {
         assert(
             m <= n &&
             "Number of edges (n) must be at least number of vertices - 1 (m)");

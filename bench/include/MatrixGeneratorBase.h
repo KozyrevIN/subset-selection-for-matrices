@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_MATRIX_GENERATOR_H
-#define MAT_SUBSET_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_MATRIX_GENERATOR_BASE_H
+#define MAT_SUBSET_MATRIX_GENERATOR_BASE_H
 
 #include <random>  // For std::mt19937, std::random_device
 #include <string>  // For std::string
@@ -18,7 +18,7 @@ namespace MatSubset::Bench {
  * including storing matrix dimensions and managing a random number generator.
  * Derived classes implement specific matrix generation algorithms.
  */
-template <typename Scalar> class MatrixGenerator {
+template <typename Scalar> class MatrixGeneratorBase {
   protected:
     std::mt19937 gen; ///< Mersenne Twister random number generator.
     const std::pair<Eigen::Index, Eigen::Index>
@@ -26,29 +26,29 @@ template <typename Scalar> class MatrixGenerator {
 
   public:
     /*!
-     * @brief Constructor for MatrixGenerator with a random seed.
+     * @brief Constructor for MatrixGeneratorBase with a random seed.
      * @param m Number of rows.
      * @param n Number of columns.
      *
      * This constructor uses a helper function to properly seed the generator
      * in the member initializer list, which is the most efficient method.
      */
-    MatrixGenerator(Eigen::Index m, Eigen::Index n)
+    MatrixGeneratorBase(Eigen::Index m, Eigen::Index n)
         : matrixSize{m, n}, gen{create_seeded_generator()} {}
 
     /*!
-     * @brief Constructor for MatrixGenerator with a specified seed.
+     * @brief Constructor for MatrixGeneratorBase with a specified seed.
      * @param m Number of rows.
      * @param n Number of columns.
      * @param seed Seed for the random number generator.
      */
-    MatrixGenerator(Eigen::Index m, Eigen::Index n,
+    MatrixGeneratorBase(Eigen::Index m, Eigen::Index n,
                     std::mt19937::result_type seed)
         : matrixSize{m, n}, gen{seed} {}
 
     /*! @brief Virtual destructor to ensure proper cleanup of derived classes.
      */
-    virtual ~MatrixGenerator() = default;
+    virtual ~MatrixGeneratorBase() = default;
 
     /*!
      * @brief Gets the dimensions of the matrix.
@@ -106,4 +106,4 @@ template <typename Scalar> class MatrixGenerator {
 
 } // namespace MatSubset::Bench
 
-#endif // MAT_SUBSET_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_MATRIX_GENERATOR_BASE_H
