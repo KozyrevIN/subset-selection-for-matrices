@@ -1,7 +1,7 @@
 #ifndef MAT_SUBSET_GAUSSIAN_MATRIX_GENERATOR_H
 #define MAT_SUBSET_GAUSSIAN_MATRIX_GENERATOR_H
 
-#include "MatrixGenerator.h" // For the base class
+#include "MatrixGeneratorBase.h" // For the base class
 
 namespace MatSubset::Bench {
 
@@ -10,12 +10,12 @@ namespace MatSubset::Bench {
  * @tparam Scalar The underlying scalar type of the matrix elements (e.g.,
  * float, double).
  *
- * This class derives from MatrixGenerator and specializes in creating matrices
+ * This class derives from MatrixGeneratorBase and specializes in creating matrices
  * where each element is drawn independently from a standard normal
  * distribution (mean 0, variance 1).
  */
 template <typename Scalar>
-class GaussianMatrixGenerator : public MatrixGenerator<Scalar> {
+class GaussianMatrixGenerator : public MatrixGeneratorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for GaussianMatrixGenerator with a random seed.
@@ -25,7 +25,7 @@ class GaussianMatrixGenerator : public MatrixGenerator<Scalar> {
      * Inherits the base class constructor that uses a high-quality random seed.
      */
     GaussianMatrixGenerator(Eigen::Index m, Eigen::Index n)
-        : MatrixGenerator<Scalar>(m, n) {}
+        : MatrixGeneratorBase<Scalar>(m, n) {}
 
     /*!
      * @brief Constructor for GaussianMatrixGenerator with a specified seed.
@@ -35,7 +35,7 @@ class GaussianMatrixGenerator : public MatrixGenerator<Scalar> {
      */
     GaussianMatrixGenerator(Eigen::Index m, Eigen::Index n,
                             std::mt19937::result_type seed)
-        : MatrixGenerator<Scalar>(m, n, seed) {}
+        : MatrixGeneratorBase<Scalar>(m, n, seed) {}
 
     /*!
      * @brief Gets a string description of the matrix type.
