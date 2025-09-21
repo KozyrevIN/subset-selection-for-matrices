@@ -46,7 +46,7 @@ class OrthonormalVectorsMatrixGenerator
      * rows/columns.
      */
     [[nodiscard]] std::string getMatrixType() const override {
-        return "random matrix with orthonormal rows or columns";
+        return "matrix with orthonormal rows or columns";
     }
 
     /*!
