@@ -128,7 +128,6 @@ template <typename Scalar> class DualSetSelector : public SelectorBase<Scalar> {
         return indices;
     }
 
-  protected:
     /*!
      * @brief Calculates the theoretical bound for the dual set selection
      * strategy.
