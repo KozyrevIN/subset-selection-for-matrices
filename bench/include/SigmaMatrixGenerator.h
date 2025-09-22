@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_SIGMA_MATRIX_GENERATOR_H
-#define MAT_SUBSET_SIGMA_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H
+#define MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H
 
 #include <algorithm> // For std::min
 #include <cassert>   // For assert
@@ -87,4 +87,4 @@ class SigmaMatrixGenerator : public OrthonormalVectorsMatrixGenerator<Scalar> {
 
 } // namespace MatSubset::Bench
 
-#endif // MAT_SUBSET_SIGMA_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H

@@ -1,21 +1,23 @@
-#ifndef MAT_SUBSET_TESTER_H
-#define MAT_SUBSET_TESTER_H
+#ifndef MAT_SUBSET_BENCH_TESTER_H
+#define MAT_SUBSET_BENCH_TESTER_H
 
-#include <MatSubset/InterlacingFamiliesSelector.h>
-#include <MatSubset/SelectorBase.h>
+#include <algorithm>  // For std::replace
 #include <filesystem> // For std::filesystem::path
 #include <functional> // For std::function
 #include <iostream>   // For reading from and writing to the console
 #include <map>        // For std::map
 #include <memory>     // For std::unique_ptr
+#include <ostream>    // For writing into files
 #include <string>     // For std::string
 #include <vector>     // For std::vector
 
 #include <Eigen/Core>            // For vectors and matrices
 #include <MatSubset/MatSubset.h> // For subset selection algorithms and utils
 #include <nlohmann/json.hpp>     // For parsing .json files
+#include <omp.h>                 // For parallelization
 
 #include "MatrixGenerators.h" // For random matrix generators
+#include "Utils.h"            // For add_underscores function
 
 namespace MatSubset::Bench {
 
@@ -38,14 +40,6 @@ template <typename Scalar> class Tester {
   private:
     const nlohmann::json experiments_config; //< Description of experiments
     const std::filesystem::path output_path; //< Path to the output directory
-
-    // Internal struct to hold results for a single value of k
-    struct Result {
-        Eigen::Index k;
-        Scalar spectral_pinv_norm;
-        Scalar frobenius_pinv_norm;
-        double average_time_ms;
-    };
 
     // Factory maps and population methods for subset selectors
     using SelectorFactory =
@@ -162,16 +156,80 @@ template <typename Scalar> class Tester {
             matrix_generator_factory.at(matrix_type);
         auto matrix_generator = generator_factory_function(matrix_config);
 
-        // Now we can use the selectors and matrix_generator
-        std::cout << "Running experiment: "
-                  << experiment_config.at("name").get<std::string>()
-                  << std::endl;
-        std::cout << "  - Matrix Generator: "
-                  << matrix_generator->getMatrixType() << std::endl;
-        std::cout << "  - Number of algorithms: " << selectors.size()
-                  << std::endl;
+        // Determine k values
+        std::vector<Eigen::Index> k_values;
+        if (experiment_config.contains("k_values")) {
+            k_values = experiment_config.at("k_values")
+                           .get<std::vector<Eigen::Index>>();
+        } else if (experiment_config.contains("k_values_range")) {
+            const auto &range = experiment_config.at("k_values_range");
+            Eigen::Index start = range.at("start").get<Eigen::Index>();
+            Eigen::Index stop = range.at("stop").get<Eigen::Index>();
+            Eigen::Index step = range.at("step").get<Eigen::Index>();
+            for (Eigen::Index k = start; k <= stop; k += step) {
+                k_values.push_back(k);
+            }
+        }
+
+        int trials_per_k = experiment_config.at("trials_per_k").get<int>();
+
+        // Create output files
+        std::filesystem::create_directories(output_path);
+        std::string experiment_name =
+            experiment_config.at("name").get<std::string>();
+        std::vector<std::ofstream> output_files;
+
         for (const auto &selector : selectors) {
-            std::cout << "    - " << selector->getAlgorithmName() << std::endl;
+            std::string algorithm_name = selector->getAlgorithmName();
+            std::filesystem::path file_path =
+                output_path / (Utils::add_underscores(experiment_name) + "_" +
+                               Utils::add_underscores(algorithm_name) + ".csv");
+            output_files.emplace_back(file_path);
+            output_files.back() << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
+                                   "norm_ratio,wall_time_ms"
+                                << std::endl;
+        }
+
+        // Main loop
+        for (Eigen::Index k : k_values) {
+#pragma omp parallel for schedule(static)
+            for (int trial = 0; trial < trials_per_k; ++trial) {
+
+                const Eigen::MatrixX<Scalar> X =
+                    matrix_generator->generateMatrix();
+                Scalar X_dag_spectral_norm =
+                    MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(X);
+                Scalar X_dag_frobenius_norm =
+                    MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(X);
+
+                for (int i = 0; i < selectors.size(); ++i) {
+                    auto start_time = omp_get_wtime();
+                    std::vector<Eigen::Index> selected_indices =
+                        selectors[i]->selectSubset(X, k);
+                    auto end_time = omp_get_wtime();
+
+                    double wall_time_ms = (end_time - start_time) * 1000.0;
+
+                    Eigen::MatrixX<Scalar> X_S =
+                        X(Eigen::all, selected_indices);
+                    Scalar X_S_dag_spectral_norm =
+                        MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(
+                            X_S);
+                    Scalar X_S_dag_frobenius_norm =
+                        MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(
+                            X_S);
+                    Scalar pinv_spectral_norm_ratio =
+                        X_dag_spectral_norm / X_S_dag_spectral_norm;
+                    Scalar pinv_frobenius_norm_ratio =
+                        X_dag_frobenius_norm / X_S_dag_frobenius_norm;
+#pragma omp critical
+                    {
+                        output_files[i] << k << "," << pinv_spectral_norm_ratio
+                                        << "," << pinv_frobenius_norm_ratio
+                                        << "," << wall_time_ms << std::endl;
+                    }
+                }
+            }
         }
     }
 };

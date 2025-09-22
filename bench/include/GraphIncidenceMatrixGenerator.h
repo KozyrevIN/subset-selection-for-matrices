@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
-#define MAT_SUBSET_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#define MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
 
 #include <algorithm> // For std::shuffle
 #include <cassert>   // For assert
@@ -189,4 +189,4 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
 
 } // namespace MatSubset::Bench
 
-#endif // MAT_SUBSET_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H

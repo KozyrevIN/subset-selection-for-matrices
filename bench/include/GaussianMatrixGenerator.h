@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_GAUSSIAN_MATRIX_GENERATOR_H
-#define MAT_SUBSET_GAUSSIAN_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
+#define MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
 
 #include "MatrixGeneratorBase.h" // For the base class
 
@@ -84,4 +84,4 @@ class GaussianMatrixGenerator : public MatrixGeneratorBase<Scalar> {
 
 } // namespace MatSubset::Bench
 
-#endif // MAT_SUBSET_GAUSSIAN_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
