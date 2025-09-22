@@ -3,12 +3,11 @@
 
 #include <Eigen/Core> // For vectors and matrices
 #include <Eigen/QR>   // For Eigen::CompleteOrthogonalDecomposition
-#include <Eigen/SVD> // For Eigen::JacobiSVD and methods like .pseudoInverse() often rely on SVD concepts
+#include <Eigen/SVD> // For Eigen::JacobiSVD and methods like .pseudoInverse()
 
 #include "Enums.h" // For MatSubset::Norm
 
-namespace MatSubset {
-namespace Utils {
+namespace MatSubset::Utils {
 
 /**
  * @brief Calculates the specified norm of the Moore-Penrose pseudoinverse of a
@@ -68,7 +67,6 @@ Scalar pinv_norm(const Eigen::MatrixX<Scalar> &X) {
     }
 }
 
-} // namespace Utils
-} // namespace MatSubset
+} // namespace MatSubset::Utils
 
 #endif // MAT_SUBSET_UTILS_H
