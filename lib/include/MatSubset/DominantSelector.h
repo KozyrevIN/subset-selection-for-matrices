@@ -1,12 +1,12 @@
 #ifndef MAT_SUBSET_DOMINANT_SELECTOR_H
 #define MAT_SUBSET_DOMINANT_SELECTOR_H
 
-#include <cassert>
-#include <cmath> // For std::log, std::ceil
+#include <cassert> // For assert
+#include <cmath>   // For std::log, std::ceil
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
-#include "Enums.h"
+#include "Enums.h"                   // For MatSubset::Norm
 #include "RankRevealingQRSelector.h" // For the base class
 
 namespace MatSubset {
@@ -62,8 +62,9 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
 
         // Preparing starting sets of indices
         std::vector<Eigen::Index> selected_indices =
-            RankRevealingQRSelector<Scalar>::selectSubset(X, m);
-        std::vector<Eigen::Index> remaining_indices(n - k);
+            RankRevealingQRSelector<Scalar>::selectSubsetImpl(X, m);
+        std::vector<Eigen::Index> remaining_indices;
+        remaining_indices.reserve(n - k);
 
         std::vector<bool> is_already_selected(n, false);
         for (Eigen::Index i : selected_indices) {
@@ -71,10 +72,12 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         }
 
         for (Eigen::Index i = 0; i < n; ++i) {
-            if (selected_indices.size() < k && !is_already_selected[i]) {
-                selected_indices.push_back(i);
-            } else {
-                remaining_indices.push_back(i);
+            if (!is_already_selected[static_cast<size_t>(i)]) {
+                if (selected_indices.size() < k) {
+                    selected_indices.push_back(i);
+                } else {
+                    remaining_indices.push_back(i);
+                }
             }
         }
 
@@ -84,20 +87,21 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         R.rightCols(n - k) = X(Eigen::all, remaining_indices);
 
         Eigen::MatrixX<Scalar> R_selected_dag =
-            R.leftCols(k).CompleteOrthogonalDecomposition().pseudoinverse();
+            R.leftCols(k).completeOrthogonalDecomposition().pseudoInverse();
 
         Eigen::MatrixX<Scalar> C = R_selected_dag * R;
         auto C_selected = C.leftCols(k);
         auto C_remaining = C.rightCols(n - k);
 
         Eigen::VectorX<Scalar> norm_sq_vec_selected =
-            static_cast<Scalar>(1) - C_selected.colwise().squaredNorm();
+            static_cast<Scalar>(1) - C_selected.colwise().squaredNorm().array();
         Eigen::VectorX<Scalar> norm_sq_vec_remaining =
-            static_cast<Scalar>(1) + C_remaining.colwise().squaredNorm();
+            static_cast<Scalar>(1) +
+            C_remaining.colwise().squaredNorm().array();
 
         Eigen::MatrixX<Scalar> B =
             norm_sq_vec_selected * norm_sq_vec_remaining.transpose() +
-            C_remaining.array().abs2();
+            C_remaining.array().abs2().matrix();
 
         Eigen::MatrixXf::Index i_max, j_max;
         Scalar max_val = B.maxCoeff(&i_max, &j_max);
@@ -121,15 +125,15 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
 
             // Swapping indices
             std::swap(selected_indices[i_max], remaining_indices[j_max]);
-            std::swap(C_selected.col(i_max), C_remaining.col(j_max));
+            C_selected.col(i_max).swap(C_remaining.col(j_max));
 
             // Updating B
-            norm_sq_vec_selected =
-                static_cast<Scalar>(1) - C_selected.colwise().squaredNorm();
-            norm_sq_vec_remaining =
-                static_cast<Scalar>(1) + C_remaining.colwise().squaredNorm();
+            norm_sq_vec_selected = static_cast<Scalar>(1) -
+                                   C_selected.colwise().squaredNorm().array();
+            norm_sq_vec_remaining = static_cast<Scalar>(1) +
+                                    C_remaining.colwise().squaredNorm().array();
             B = norm_sq_vec_selected * norm_sq_vec_remaining.transpose() +
-                C_remaining.array().abs2();
+                C_remaining.array().abs2().matrix();
 
             // Choosing the columns to swap
             max_val = B.maxCoeff(&i_max, &j_max);
@@ -176,8 +180,13 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
     }
 
   private:
-    Scalar
-        c; //< Algorithm searches for \f$ \sqrt{c} \f$-optimal volume submatrix
+    /*!
+     * @brief Parameter determining the algorithms stopping criterion.
+     *
+     * Algorithms stops when finds \f$ \sqrt{c} \f$ locally maximum volume
+     * submatrix.
+     */
+    Scalar c;
 };
 
 } // namespace MatSubset
