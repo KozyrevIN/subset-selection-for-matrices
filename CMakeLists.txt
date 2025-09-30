@@ -34,6 +34,7 @@ if (BUILD_LIB)
 
     ExternalProject_Add(
         MatSubset
+        UPDATE_DISCONNECTED 1
         SOURCE_DIR       "${CMAKE_CURRENT_SOURCE_DIR}/lib"
         BINARY_DIR       "${CMAKE_CURRENT_BINARY_DIR}/lib"
         CMAKE_ARGS       ${CMAKE_ARGS}
