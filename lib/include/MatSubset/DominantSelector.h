@@ -21,8 +21,7 @@ namespace MatSubset {
  *
  * The algorithm selects the initial subset with nonzero volume by running
  * rank-revealing QR and adding first \f$ k-m \f$ non-selected columns. It then
- * iteratively refines the set \f$ S \f$ of already selected columns (initially
- * chosen to be \f$ \{1, 2, ..., k \} \f$) by finding a sunch indices \f$ i \in
+ * iteratively refines tis set \f$ S \f$ by finding sunch indices \f$ i \in
  * S \f$ and \f$ j \notin S \f$, that replacing i with j increases the squared
  * volume of \f$ X_S \f$ by \f$ c \f$ times. If no such repacement exists,
  * algorithm terminates.
