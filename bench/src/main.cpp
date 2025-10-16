@@ -5,7 +5,7 @@
 
 #include <nlohmann/json.hpp> // For parsing .json files
 
-#include "../include/Tester.h" // For the Tester class
+#include "Tester.h" // For the Tester class
 
 int main(int argc, char *argv[]) {
     // Argument validation

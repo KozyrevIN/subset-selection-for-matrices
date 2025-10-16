@@ -37,8 +37,11 @@ build
 # Out folder
 out
 
-#vscode files
+# Vscode files
 .vscode
 
-#clangd cache
+# Clangd cache
 .cache
+
+# Context for AI agents
+CLAUDE.md

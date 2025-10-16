@@ -8,7 +8,12 @@ FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download
 FetchContent_MakeAvailable(json)
 
 # Creating executable target
-add_executable(${PROJECT_NAME} src/main.cpp) 
+add_executable(${PROJECT_NAME} src/main.cpp)
+
+# Add include directory for headers
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 
 # Setting c++ standard
 set_target_properties(${PROJECT_NAME} PROPERTIES
