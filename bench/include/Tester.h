@@ -1,13 +1,11 @@
 #ifndef MAT_SUBSET_BENCH_TESTER_H
 #define MAT_SUBSET_BENCH_TESTER_H
 
-#include <algorithm>  // For std::replace
 #include <filesystem> // For std::filesystem::path
-#include <functional> // For std::function
+#include <format>     // For std::format
+#include <fstream>    // For std::ofstream
 #include <iostream>   // For reading from and writing to the console
-#include <map>        // For std::map
 #include <memory>     // For std::unique_ptr
-#include <ostream>    // For writing into files
 #include <string>     // For std::string
 #include <vector>     // For std::vector
 
@@ -16,8 +14,10 @@
 #include <nlohmann/json.hpp>     // For parsing .json files
 #include <omp.h>                 // For parallelization
 
-#include "MatrixGenerators.h" // For random matrix generators
-#include "Utils.h"            // For add_underscores function
+#include "MatrixGeneratorFactory.h" // For matrix generator factory
+#include "ProgressBar.h"            // For progress bar
+#include "SelectorFactory.h"        // For selector factory
+#include "Utils.h"                  // For add_underscores function
 
 namespace MatSubset::Bench {
 
@@ -26,113 +26,42 @@ template <typename Scalar> class Tester {
     Tester(const nlohmann::json &experiments_config,
            const std::filesystem::path &output_path)
         : experiments_config(experiments_config), output_path(output_path) {
-
-        populateSelectorFactory();
-        populateMatrixGeneratorFactory();
+        // Factories are automatically populated via DefaultSelectorFactory
+        // and DefaultMatrixGeneratorFactory constructors
     }
 
     void runAll() {
+        size_t num_experiments = experiments_config.size();
+        size_t current_experiment = 0;
+
         for (auto &experiment_config : experiments_config) {
+            current_experiment++;
+            std::string experiment_name =
+                experiment_config.at("name").get<std::string>();
+
+            std::cout << "\n[" << current_experiment << "/" << num_experiments
+                      << "] Running experiment: " << experiment_name
+                      << std::endl;
+
             runExperiment(experiment_config);
         }
+
+        std::cout << "\n";
     }
 
   private:
     const nlohmann::json experiments_config; //< Description of experiments
     const std::filesystem::path output_path; //< Path to the output directory
 
-    // Factory maps and population methods for subset selectors
-    using SelectorFactory =
-        std::map<std::string,
-                 std::function<std::unique_ptr<SelectorBase<Scalar>>(
-                     const nlohmann::json &)>>;
-
-    SelectorFactory selector_factory;
-
-    template <typename SelectorType> void registerSelector() {
-        auto dummy_instance = std::make_unique<SelectorType>();
-        std::string name = dummy_instance->getAlgorithmName();
-        selector_factory[name] = [](const nlohmann::json &selector_config) {
-            return std::make_unique<SelectorType>();
-        };
-    }
-
-    void populateSelectorFactory() {
-        registerSelector<DualSetSelector<Scalar>>();
-        registerSelector<FrobeniusRemovalSelector<Scalar>>();
-        registerSelector<InterlacingFamiliesSelector<Scalar>>();
-        registerSelector<RankRevealingQRSelector<Scalar>>();
-        registerSelector<SelectorBase<Scalar>>();
-        registerSelector<SpectralRemovalSelector<Scalar>>();
-        registerSelector<SpectralSelectionSelector<Scalar>>();
-        registerSelector<VolumeRemovalSelector<Scalar>>();
-    }
-
-    // Factory maps and population methods for subset random matrix
-    // generators
-    using MatrixGeneratorFactory =
-        std::map<std::string,
-                 std::function<std::unique_ptr<MatrixGeneratorBase<Scalar>>(
-                     const nlohmann::json &)>>;
-
-    MatrixGeneratorFactory matrix_generator_factory;
-
-    template <typename MatrixGeneratorType> void registerMatrixGenerator() {
-        if constexpr (std::is_same_v<SigmaMatrixGenerator<Scalar>,
-                                     MatrixGeneratorType>) {
-            Eigen::VectorX<Scalar> sigma_values(1);
-            sigma_values << static_cast<Scalar>(1);
-            auto dummy_instance =
-                std::make_unique<MatrixGeneratorType>(1, 1, sigma_values);
-            std::string name = dummy_instance->getMatrixType();
-            matrix_generator_factory[name] =
-                [](const nlohmann::json &generator_config) {
-                    Eigen::Index m =
-                        generator_config.at("rows").get<Eigen::Index>();
-                    Eigen::Index n =
-                        generator_config.at("cols").get<Eigen::Index>();
-
-                    auto temp_vector = generator_config.at("singular_values")
-                                           .get<std::vector<Scalar>>();
-
-                    Eigen::VectorX<Scalar> sigma_values =
-                        Eigen::Map<Eigen::VectorX<Scalar>>(temp_vector.data(),
-                                                           temp_vector.size());
-
-                    return std::make_unique<MatrixGeneratorType>(m, n,
-                                                                 sigma_values);
-                };
-        } else {
-            auto dummy_instance = std::make_unique<MatrixGeneratorType>(1, 1);
-            std::string name = dummy_instance->getMatrixType();
-            matrix_generator_factory[name] =
-                [](const nlohmann::json &generator_config) {
-                    Eigen::Index m =
-                        generator_config.at("rows").get<Eigen::Index>();
-                    Eigen::Index n =
-                        generator_config.at("cols").get<Eigen::Index>();
-                    return std::make_unique<MatrixGeneratorType>(m, n);
-                };
-        }
-    }
-
-    void populateMatrixGeneratorFactory() {
-        registerMatrixGenerator<GaussianMatrixGenerator<Scalar>>();
-        registerMatrixGenerator<GraphIncidenceMatrixGenerator<Scalar>>();
-        registerMatrixGenerator<MatrixGeneratorBase<Scalar>>();
-        registerMatrixGenerator<OrthonormalVectorsMatrixGenerator<Scalar>>();
-        registerMatrixGenerator<SigmaMatrixGenerator<Scalar>>();
-        registerMatrixGenerator<
-            WeightedGraphIncidenceMatrixGenerator<Scalar>>();
-    }
+    // Factory instances for creating selectors and matrix generators
+    DefaultSelectorFactory<Scalar> selector_factory;
+    DefaultMatrixGeneratorFactory<Scalar> matrix_generator_factory;
 
     // Function to run single experiment
     void runExperiment(const nlohmann::json &experiment_config) {
         // Check if the experiment is enabled
         if (!experiment_config.value("enabled", true)) {
-            std::cout << "Skipping disabled experiment: "
-                      << experiment_config.at("name").get<std::string>()
-                      << std::endl;
+            std::cout << "Experiment disabled, skipping..." << std::endl;
             return;
         }
 
@@ -141,20 +70,13 @@ template <typename Scalar> class Tester {
         const auto &algorithms_json = experiment_config.at("algorithms");
 
         for (const auto &algorithm_config : algorithms_json) {
-            std::string algorithm_name =
-                algorithm_config.at("name").get<std::string>();
-            auto &factory_function = selector_factory.at(algorithm_name);
-            auto selector_ptr = factory_function(algorithm_config);
+            auto selector_ptr = selector_factory.create(algorithm_config);
             selectors.push_back(std::move(selector_ptr));
         }
 
         // Construct the matrix generator
         const auto &matrix_config = experiment_config.at("matrix");
-        const std::string matrix_type =
-            matrix_config.at("type").get<std::string>();
-        auto &generator_factory_function =
-            matrix_generator_factory.at(matrix_type);
-        auto matrix_generator = generator_factory_function(matrix_config);
+        auto matrix_generator = matrix_generator_factory.create(matrix_config);
 
         // Determine k values
         std::vector<Eigen::Index> k_values;
@@ -190,7 +112,12 @@ template <typename Scalar> class Tester {
                                 << std::endl;
         }
 
-        // Main loop
+        // Main loop with progress tracking
+        std::cout << std::endl;  // Add newline so progress bar appears below
+        ProgressBar progress_bar(k_values.size() * trials_per_k *
+                                 selectors.size());
+        int k_max_len = std::to_string(k_values.back()).length();
+
         for (Eigen::Index k : k_values) {
 #pragma omp parallel for schedule(static)
             for (int trial = 0; trial < trials_per_k; ++trial) {
@@ -224,6 +151,9 @@ template <typename Scalar> class Tester {
                         X_dag_frobenius_norm / X_S_dag_frobenius_norm;
 #pragma omp critical
                     {
+                        std::string label =
+                            "k = " + std::format("{:^{}}", k, k_max_len);
+                        progress_bar.update(label);
                         output_files[i] << k << "," << pinv_spectral_norm_ratio
                                         << "," << pinv_frobenius_norm_ratio
                                         << "," << wall_time_ms << std::endl;
@@ -231,6 +161,8 @@ template <typename Scalar> class Tester {
                 }
             }
         }
+
+        std::cout << std::endl;
     }
 };
 
