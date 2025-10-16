@@ -5,9 +5,25 @@
 
 #include <nlohmann/json.hpp> // For parsing .json files
 
-#include "Tester.h" // For the Tester class
+#include "SelectorFactory.h" // TEST: For factory testing
+// #include "Tester.h" // For the Tester class
 
 int main(int argc, char *argv[]) {
+    // TEST: Verify SelectorFactory compiles
+    MatSubset::Bench::DefaultSelectorFactory<double> factory;
+    nlohmann::json test_config;
+    test_config["name"] = "dual set";
+    try {
+        auto selector = factory.create(test_config);
+        std::cout << "Factory test: Created selector: "
+                  << selector->getAlgorithmName() << std::endl;
+    } catch (const std::exception& e) {
+        std::cout << "Factory test error: " << e.what() << std::endl;
+    }
+    return 0;
+
+    // ORIGINAL CODE BELOW (commented out for testing)
+    /*
     // Argument validation
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <path_to_config.json>"
@@ -73,4 +89,5 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Benchmarking finished successfully." << std::endl;
     return 0;
+    */
 }
