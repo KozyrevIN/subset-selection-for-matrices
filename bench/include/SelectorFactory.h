@@ -205,7 +205,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * DominantSelector requires a "c" parameter (c > 1) that controls the
      * convergence criterion. The JSON config must contain {"c": value}.
      *
-     * Note: Uses dummy value of 1.01 for registration only; actual instances
+     * @note Uses dummy value of 1.01 for registration only; actual instances
      * use the c value from config.
      */
     void registerDominantSelector() {
