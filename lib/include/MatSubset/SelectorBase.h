@@ -66,12 +66,25 @@ template <typename Scalar> class SelectorBase {
      */
     [[nodiscard]] std::vector<Eigen::Index>
     selectSubset(const Eigen::MatrixX<Scalar> &X, Eigen::Index k) {
+
+        const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
+
         // Common precondition checks
         assert(
-            X.rows() >= 1 && X.cols() >= 1 && k >= 1 &&
+            m >= 1 && n >= 1 && k >= 1 &&
             "Matrix dimensions (m, n) and k must be strictly positive (>= 1).");
-        assert(X.rows() <= k && k <= X.cols() &&
+        assert(m <= k && k <= n &&
                "Subset selection constraint violated: m <= k <= n must hold.");
+
+        // Handle edge case: if k = n, return all column indices
+        if (k == n) {
+            std::vector<Eigen::Index> all_indices(n);
+            for (Eigen::Index i = 0; i < n; ++i) {
+                all_indices[i] = i;
+            }
+            return all_indices;
+        }
 
         return selectSubsetImpl(X, k); // Call the virtual implementation
     }
@@ -133,7 +146,7 @@ template <typename Scalar> class SelectorBase {
     template <Norm norm>
     [[nodiscard]] Scalar bound(Eigen::Index m, Eigen::Index n,
                                Eigen::Index k) const {
-                                
+
         static_assert(norm == Norm::Frobenius || norm == Norm::Spectral,
                       "SelectorBase::bound: This norm is unsupported for the "
                       "bound calculation!");

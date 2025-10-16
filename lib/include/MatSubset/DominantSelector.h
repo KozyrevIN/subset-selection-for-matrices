@@ -60,15 +60,6 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
-        // Handle edge case: if k = n, return all column indices
-        if (k == n) {
-            std::vector<Eigen::Index> all_indices(n);
-            for (Eigen::Index i = 0; i < n; ++i) {
-                all_indices[i] = i;
-            }
-            return all_indices;
-        }
-
         // Preparing starting sets of indices
         std::vector<Eigen::Index> selected_indices =
             RankRevealingQRSelector<Scalar>::selectSubsetImpl(X, m);
