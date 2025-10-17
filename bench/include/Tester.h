@@ -1,13 +1,15 @@
 #ifndef MAT_SUBSET_BENCH_TESTER_H
 #define MAT_SUBSET_BENCH_TESTER_H
 
-#include <filesystem> // For std::filesystem::path
-#include <format>     // For std::format
-#include <fstream>    // For std::ofstream
-#include <iostream>   // For reading from and writing to the console
-#include <memory>     // For std::unique_ptr
-#include <string>     // For std::string
-#include <vector>     // For std::vector
+#include <chrono>      // For timestamps
+#include <ctime>       // For std::ctime
+#include <filesystem>  // For std::filesystem::path
+#include <format>      // For std::format
+#include <fstream>     // For std::ofstream
+#include <iostream>    // For reading from and writing to the console
+#include <memory>      // For std::unique_ptr
+#include <string>      // For std::string
+#include <vector>      // For std::vector
 
 #include <Eigen/Core>            // For vectors and matrices
 #include <MatSubset/MatSubset.h> // For subset selection algorithms and utils
@@ -34,6 +36,9 @@ template <typename Scalar> class Tester {
         size_t num_experiments = experiments_config.size();
         size_t current_experiment = 0;
 
+        // Track experiment names for index.json
+        std::vector<std::string> experiment_names;
+
         for (auto &experiment_config : experiments_config) {
             current_experiment++;
             std::string experiment_name =
@@ -43,8 +48,15 @@ template <typename Scalar> class Tester {
                       << "] Running experiment: " << experiment_name
                       << std::endl;
 
-            runExperiment(experiment_config);
+            // Only add to index if experiment actually runs
+            bool ran = runExperiment(experiment_config);
+            if (ran) {
+                experiment_names.push_back(experiment_name);
+            }
         }
+
+        // Write index.json to the root output folder
+        writeIndexFile(experiment_names);
 
         std::cout << "\n";
     }
@@ -58,11 +70,11 @@ template <typename Scalar> class Tester {
     DefaultMatrixGeneratorFactory<Scalar> matrix_generator_factory;
 
     // Function to run single experiment
-    void runExperiment(const nlohmann::json &experiment_config) {
+    bool runExperiment(const nlohmann::json &experiment_config) {
         // Check if the experiment is enabled
         if (!experiment_config.value("enabled", true)) {
             std::cout << "Experiment disabled, skipping..." << std::endl;
-            return;
+            return false;
         }
 
         // Construct the vector of relevant selectors
@@ -95,17 +107,40 @@ template <typename Scalar> class Tester {
 
         int trials_per_k = experiment_config.at("trials_per_k").get<int>();
 
-        // Create output files
-        std::filesystem::create_directories(output_path);
+        // Create experiment subfolder
         std::string experiment_name =
             experiment_config.at("name").get<std::string>();
+        std::filesystem::path experiment_folder =
+            output_path / Utils::add_underscores(experiment_name);
+        std::filesystem::create_directories(experiment_folder);
+
+        // Save experiment configuration for reproducibility
+        nlohmann::json saved_config = experiment_config;
+
+        // Replace k_values_range with the actual k_values array if it was a range
+        if (saved_config.contains("k_values_range")) {
+            saved_config.erase("k_values_range");
+        }
+        saved_config["k_values"] = k_values;
+
+        // Remove runtime-specific fields
+        saved_config.erase("enabled");
+
+        // Add metadata with start time
+        auto start_time = std::chrono::system_clock::now();
+        auto start_timestamp = std::chrono::system_clock::to_time_t(start_time);
+        saved_config["metadata"]["start_time"] = std::ctime(&start_timestamp);
+        saved_config["metadata"]["num_threads"] = omp_get_max_threads();
+
+        // Write initial config (will be updated with finish time later)
+        std::filesystem::path config_file_path = experiment_folder / "config.json";
+
         std::vector<std::ofstream> output_files;
 
         for (const auto &selector : selectors) {
             std::string algorithm_name = selector->getAlgorithmName();
             std::filesystem::path file_path =
-                output_path / (Utils::add_underscores(experiment_name) + "_" +
-                               Utils::add_underscores(algorithm_name) + ".csv");
+                experiment_folder / (Utils::add_underscores(algorithm_name) + ".csv");
             output_files.emplace_back(file_path);
             output_files.back() << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
                                    "norm_ratio,wall_time_ms"
@@ -162,7 +197,28 @@ template <typename Scalar> class Tester {
             }
         }
 
+        // Add finish time and write final config
+        auto finish_time = std::chrono::system_clock::now();
+        auto finish_timestamp = std::chrono::system_clock::to_time_t(finish_time);
+        saved_config["metadata"]["finish_time"] = std::ctime(&finish_timestamp);
+
+        std::ofstream config_file(config_file_path);
+        config_file << saved_config.dump(4) << std::endl;
+        config_file.close();
+
         std::cout << std::endl;
+        return true;
+    }
+
+    // Function to write index.json file in the output folder
+    void writeIndexFile(const std::vector<std::string> &experiment_names) {
+        nlohmann::json index_data;
+        index_data["experiments"] = experiment_names;
+
+        std::filesystem::path index_file_path = output_path / "index.json";
+        std::ofstream index_file(index_file_path);
+        index_file << index_data.dump(4) << std::endl;
+        index_file.close();
     }
 };
 
