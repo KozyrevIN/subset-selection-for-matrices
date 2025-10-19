@@ -126,6 +126,13 @@ class ExperimentPlotter:
         max_y = 0
         algorithm_names = []
 
+        # Determine the bound column name based on the metric
+        bound_column = None
+        if csv_column == 'pinv_spectral_norm_ratio':
+            bound_column = 'spectral_bound'
+        elif csv_column == 'pinv_frobenius_norm_ratio':
+            bound_column = 'frobenius_bound'
+
         for idx, (algorithm_name, df) in enumerate(data.items()):
             algorithm_names.append(algorithm_name)
 
@@ -150,6 +157,23 @@ class ExperimentPlotter:
             ax.plot(k_values, mean_values, color=color, label=algorithm_name)
             ax.fill_between(k_values, mean_values - ci, mean_values + ci,
                            color=color, alpha=0.3, linewidth=0)
+
+            # Plot theoretical bounds if available and applicable
+            if bound_column is not None and bound_column in df.columns:
+                bound_values = df[bound_column]
+
+                # Square the bounds if requested (to match the plotted values)
+                if square_norms:
+                    bound_values = bound_values ** 2
+
+                # Get unique bound values per k (they should all be the same for a given k)
+                mean_bound_values = bound_values.groupby(df['k']).mean()
+
+                # Plot bounds as dashed lines with the same color
+                ax.plot(k_values, mean_bound_values, color=color,
+                       linestyle='--', linewidth=0.8, alpha=0.8)
+
+                max_y = max(max_y, np.max(bound_values))
 
             max_y = max(max_y, np.max(values))
 
@@ -282,6 +306,9 @@ class ExperimentPlotter:
                                           markerfacecolor='black',
                                           markeredgecolor='white', alpha=0.3,
                                           label='standard deviation', markersize=6))
+            custom_legend.append(plt.Line2D([0], [0], linestyle='--',
+                                          label='theoretical bound', color='black',
+                                          linewidth=0.8, alpha=0.8))
 
             leg = fig.legend(handles=custom_legend, framealpha=0.9,
                            loc='upper center', bbox_to_anchor=(0.5, 0.00),

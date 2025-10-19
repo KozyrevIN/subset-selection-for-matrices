@@ -58,17 +58,11 @@ class RankRevealingQRSelector : public SelectorBase<Scalar> {
                "RankRevealingQRSelector only supports k == m.");
 
         Eigen::ColPivHouseholderQR<Eigen::MatrixX<Scalar>> qr(X);
-        Eigen::MatrixX<Scalar> P = qr.colsPermutation();
+        const auto &permutation = qr.colsPermutation();
 
-        std::vector<Eigen::Index> indices(k);
-
-        for (int j = 0; j < k; ++j) {
-            int i = 0;
-            for (; std::abs(P(i, j)) == 0; ++i)
-                indices[j] = i;
-        }
-
-        std::sort(indices.begin(), indices.end());
+        // Extract the first k indices from the permutation
+        std::vector<Eigen::Index> indices(permutation.indices().data(),
+                                          permutation.indices().data() + k);
 
         return indices;
     }

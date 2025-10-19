@@ -1,15 +1,15 @@
 #ifndef MAT_SUBSET_BENCH_TESTER_H
 #define MAT_SUBSET_BENCH_TESTER_H
 
-#include <chrono>      // For timestamps
-#include <ctime>       // For std::ctime
-#include <filesystem>  // For std::filesystem::path
-#include <format>      // For std::format
-#include <fstream>     // For std::ofstream
-#include <iostream>    // For reading from and writing to the console
-#include <memory>      // For std::unique_ptr
-#include <string>      // For std::string
-#include <vector>      // For std::vector
+#include <chrono>     // For timestamps
+#include <ctime>      // For std::ctime
+#include <filesystem> // For std::filesystem::path
+#include <format>     // For std::format
+#include <fstream>    // For std::ofstream
+#include <iostream>   // For reading from and writing to the console
+#include <memory>     // For std::unique_ptr
+#include <string>     // For std::string
+#include <vector>     // For std::vector
 
 #include <Eigen/Core>            // For vectors and matrices
 #include <MatSubset/MatSubset.h> // For subset selection algorithms and utils
@@ -117,7 +117,8 @@ template <typename Scalar> class Tester {
         // Save experiment configuration for reproducibility
         nlohmann::json saved_config = experiment_config;
 
-        // Replace k_values_range with the actual k_values array if it was a range
+        // Replace k_values_range with the actual k_values array if it was a
+        // range
         if (saved_config.contains("k_values_range")) {
             saved_config.erase("k_values_range");
         }
@@ -133,27 +134,43 @@ template <typename Scalar> class Tester {
         saved_config["metadata"]["num_threads"] = omp_get_max_threads();
 
         // Write initial config (will be updated with finish time later)
-        std::filesystem::path config_file_path = experiment_folder / "config.json";
+        std::filesystem::path config_file_path =
+            experiment_folder / "config.json";
 
         std::vector<std::ofstream> output_files;
 
         for (const auto &selector : selectors) {
             std::string algorithm_name = selector->getAlgorithmName();
             std::filesystem::path file_path =
-                experiment_folder / (Utils::add_underscores(algorithm_name) + ".csv");
+                experiment_folder /
+                (Utils::add_underscores(algorithm_name) + ".csv");
             output_files.emplace_back(file_path);
-            output_files.back() << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
-                                   "norm_ratio,wall_time_ms"
-                                << std::endl;
+            output_files.back()
+                << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
+                   "norm_ratio,wall_time_ms,spectral_bound,frobenius_bound"
+                << std::endl;
         }
 
         // Main loop with progress tracking
-        std::cout << std::endl;  // Add newline so progress bar appears below
+        std::cout << std::endl; // Add newline so progress bar appears below
         ProgressBar progress_bar(k_values.size() * trials_per_k *
                                  selectors.size());
         int k_max_len = std::to_string(k_values.back()).length();
 
         for (Eigen::Index k : k_values) {
+            // Calculate theoretical bounds once per k (independent of trials)
+            auto [m, n] = matrix_generator->getMatrixSize();
+
+            std::vector<Scalar> spectral_bounds(selectors.size());
+            std::vector<Scalar> frobenius_bounds(selectors.size());
+
+            for (int i = 0; i < selectors.size(); ++i) {
+                spectral_bounds[i] = std::sqrt(
+                    selectors[i]->template bound<Norm::Spectral>(m, n, k));
+                frobenius_bounds[i] = std::sqrt(
+                    selectors[i]->template bound<Norm::Frobenius>(m, n, k));
+            }
+
 #pragma omp parallel for schedule(static)
             for (int trial = 0; trial < trials_per_k; ++trial) {
 
@@ -198,7 +215,9 @@ template <typename Scalar> class Tester {
                         progress_bar.update(label);
                         output_files[i] << k << "," << pinv_spectral_norm_ratio
                                         << "," << pinv_frobenius_norm_ratio
-                                        << "," << wall_time_ms << std::endl;
+                                        << "," << wall_time_ms << ","
+                                        << spectral_bounds[i] << ","
+                                        << frobenius_bounds[i] << std::endl;
                     }
                 }
             }
@@ -206,7 +225,8 @@ template <typename Scalar> class Tester {
 
         // Add finish time and write final config
         auto finish_time = std::chrono::system_clock::now();
-        auto finish_timestamp = std::chrono::system_clock::to_time_t(finish_time);
+        auto finish_timestamp =
+            std::chrono::system_clock::to_time_t(finish_time);
         saved_config["metadata"]["finish_time"] = std::ctime(&finish_timestamp);
 
         std::ofstream config_file(config_file_path);
