@@ -34,6 +34,10 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
         assert(
             m <= n &&
             "Number of edges (n) must be at least number of vertices - 1 (m)");
+        Eigen::Index max_edges = m * (m + 1) / 2;
+        assert(n <= max_edges &&
+               "Number of edges (n) must be smaller then maximum possible "
+               "amount of edges in a graph with m + 1 verticies");
     }
 
     /*!
@@ -49,6 +53,10 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
         assert(
             m <= n &&
             "Number of edges (n) must be at least number of vertices - 1 (m)");
+        Eigen::Index max_edges = m * (m + 1) / 2;
+        assert(n <= max_edges &&
+               "Number of edges (n) must be smaller then maximum possible "
+               "amount of edges in a graph with m + 1 verticies");
     }
 
     /*!

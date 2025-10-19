@@ -1,6 +1,8 @@
 #ifndef MAT_SUBSET_BENCH_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
 #define MAT_SUBSET_BENCH_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
 
+#include <cassert> // For assert
+
 #include <Eigen/SVD> // For Eigen::BDCSVD
 
 #include "GraphIncidenceMatrixGenerator.h" // For the base class
