@@ -157,8 +157,15 @@ template <typename Scalar> class Tester {
 #pragma omp parallel for schedule(static)
             for (int trial = 0; trial < trials_per_k; ++trial) {
 
-                const Eigen::MatrixX<Scalar> X =
-                    matrix_generator->generateMatrix();
+                Eigen::MatrixX<Scalar> X;
+#pragma omp critical
+                {
+                    // Matrix generation must be serialized to avoid race
+                    // conditions on the shared RNG in matrix_generator
+                    X = matrix_generator->generateMatrix();
+                }
+
+                // Norm calculations can be done in parallel
                 Scalar X_dag_spectral_norm =
                     MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(X);
                 Scalar X_dag_frobenius_norm =
