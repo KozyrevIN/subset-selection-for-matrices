@@ -92,14 +92,12 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         auto C_selected = C.leftCols(k);
         auto C_remaining = C.rightCols(n - k);
 
-        Eigen::VectorX<Scalar> norm_sq_vec_selected =
-            static_cast<Scalar>(1) - C_selected.colwise().squaredNorm().array();
-        Eigen::VectorX<Scalar> norm_sq_vec_remaining =
-            static_cast<Scalar>(1) +
-            C_remaining.colwise().squaredNorm().array();
+        Eigen::ArrayX<Scalar> l = C.colwise().squaredNorm();
+        auto l_selected = l.head(k);
+        auto l_remaining = l.tail(n - k);
 
         Eigen::MatrixX<Scalar> B =
-            norm_sq_vec_selected * norm_sq_vec_remaining.transpose() +
+            (1 - l_selected).matrix() * (1 + l_remaining).matrix().transpose() +
             C_remaining.array().abs2().matrix();
 
         Eigen::MatrixXf::Index i_max, j_max;
@@ -111,31 +109,45 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         Eigen::Index swap_count = 0;
 
         // Main loop
-        Scalar denominator;
         Eigen::MatrixX<Scalar> last_row(1, n);
-        while ((max_val > c) && (swap_count < max_swap_count)) {
-            // Updating C
-            denominator = static_cast<Scalar>(1) + norm_sq_vec_remaining(j_max);
-            last_row = C_remaining.col(j_max).transpose() * C / denominator;
-            denominator = static_cast<Scalar>(1) - norm_sq_vec_selected(i_max);
-            C +=
-                (C_selected.col(i_max) / denominator - C_remaining.col(j_max)) *
-                last_row;
+        while ((max_val > c) && (swap_count <= max_swap_count)) {
 
-            // Swapping indices
-            std::swap(selected_indices[i_max], remaining_indices[j_max]);
+            // Add extra column
+            last_row = C_remaining.col(j_max).transpose() * C /
+                       (1 + l_remaining(j_max));
+            C -= C_remaining.col(j_max) * last_row;
+            l -= last_row.transpose().array().abs2() / (1 + l_remaining(j_max));
+
+            // Swap newly added column and one destined to removal
+            std::swap(selected_indices[static_cast<size_t>(i_max)],
+                      remaining_indices[static_cast<size_t>(j_max)]);
+            std::swap(l_selected(i_max), l_remaining(j_max));
+
             C_selected.col(i_max).swap(C_remaining.col(j_max));
+            std::swap(last_row(i_max), last_row(k + j_max));
+            C.row(i_max).swap(last_row);
+            swap_count++;
 
-            // Updating B
-            norm_sq_vec_selected = static_cast<Scalar>(1) -
-                                   C_selected.colwise().squaredNorm().array();
-            norm_sq_vec_remaining = static_cast<Scalar>(1) +
-                                    C_remaining.colwise().squaredNorm().array();
-            B = norm_sq_vec_selected * norm_sq_vec_remaining.transpose() +
+            // Remove the column
+            l += last_row.transpose().array().abs2() / (1 - l_remaining(j_max));
+            C += C_remaining.col(j_max) * last_row * (1 + l_remaining(j_max));
+
+            B = (1 - l_selected).matrix() *
+                    (1 + l_remaining).matrix().transpose() +
                 C_remaining.array().abs2().matrix();
 
-            // Choosing the columns to swap
             max_val = B.maxCoeff(&i_max, &j_max);
+        }
+
+        // Warning if maximum swap count was reached
+        if (swap_count > max_swap_count) {
+            std::cerr
+                << "Warning: DominantSelector reached maximum swap count ("
+                << max_swap_count
+                << "). This is theoretically impossible and may indicate "
+                   "numerical errors or invalid input matrix (e.g., "
+                   "rank-deficient)."
+                << std::endl;
         }
 
         return selected_indices;
