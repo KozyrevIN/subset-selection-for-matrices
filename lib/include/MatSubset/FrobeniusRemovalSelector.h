@@ -69,8 +69,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
         Eigen::VectorX<Scalar> S_inv2 =
             svd.singularValues().array().inverse().square();
 
-        Eigen::MatrixX<Scalar> V_dag =
-            V.completeOrthogonalDecomposition().pseudoInverse().transpose();
+        Eigen::MatrixX<Scalar> V_dag = V;
         Eigen::ArrayX<Scalar> l =
             (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
         Eigen::ArrayX<Scalar> d = (V.transpose() * V_dag).diagonal().array();
