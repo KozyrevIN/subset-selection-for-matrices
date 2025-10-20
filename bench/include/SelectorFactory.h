@@ -145,7 +145,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerNoArgsSelector<DualSetSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
-        registerNoArgsSelector<RankRevealingQRSelector>();
+        registerNoArgsSelector<ColumnPivotingSelector>();
         registerNoArgsSelector<SelectorBase>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();

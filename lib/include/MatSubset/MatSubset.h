@@ -2,7 +2,7 @@
 #include "DualSetSelector.h"
 #include "FrobeniusRemovalSelector.h"
 #include "InterlacingFamiliesSelector.h"
-#include "RankRevealingQRSelector.h"
+#include "ColumnPivotingSelector.h"
 #include "SelectorBase.h"
 #include "SpectralRemovalSelector.h"
 #include "SpectralSelectionSelector.h"

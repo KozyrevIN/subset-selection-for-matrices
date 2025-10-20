@@ -7,8 +7,8 @@
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
-#include "Enums.h"                   // For MatSubset::Norm
-#include "RankRevealingQRSelector.h" // For the base class
+#include "ColumnPivotingSelector.h" // Base class
+#include "Enums.h"                  // For MatSubset::Norm
 
 namespace MatSubset {
 
@@ -18,7 +18,11 @@ namespace MatSubset {
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
  * This class implements Algorithm 3 from Osinsky
- * (2024), "Volume-based Subset Selection".
+ * (2024), "Volume-based Subset Selection". For \f$ k = m \f$ this algorithm is
+ * equivalent to Maxvol algorithm (Goreinov et. al. (2010), "How to find a good
+ * submatrix") and to selecting pivot columns identified by strong RRQR
+ * algorithm (Gu and Eisenstat (1996), "Efficient algorithms for computing a
+ * strong rank-revealing qr factorization")
  *
  * The algorithm selects the initial subset with nonzero volume by running
  * rank-revealing QR and adding first \f$ k-m \f$ non-selected columns. It then
@@ -28,7 +32,7 @@ namespace MatSubset {
  * algorithm terminates.
  */
 template <typename Scalar>
-class DominantSelector : public RankRevealingQRSelector<Scalar> {
+class DominantSelector : public ColumnPivotingSelector<Scalar> {
   public:
     /*!
      * @brief Default constructor for `DominantSelector`.
@@ -62,7 +66,7 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
 
         // Preparing starting sets of indices
         std::vector<Eigen::Index> selected_indices =
-            RankRevealingQRSelector<Scalar>::selectSubsetImpl(X, m);
+            ColumnPivotingSelector<Scalar>::selectSubsetImpl(X, m);
         std::vector<Eigen::Index> remaining_indices;
         remaining_indices.reserve(n - k);
 
@@ -97,12 +101,19 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
         auto l_selected = l.head(k);
         auto l_remaining = l.tail(n - k);
 
-        Eigen::MatrixX<Scalar> B =
-            (1 - l_selected).matrix() * (1 + l_remaining).matrix().transpose() +
-            C_remaining.array().abs2().matrix();
-
         Eigen::MatrixXf::Index i_max, j_max;
-        Scalar max_val = B.maxCoeff(&i_max, &j_max);
+        Scalar max_val;
+        Eigen::MatrixX<Scalar> B;
+        if (k > m) {
+            B = (1 - l_selected).matrix() *
+                    (1 + l_remaining).matrix().transpose() +
+                C_remaining.array().abs2().matrix();
+
+            max_val = B.maxCoeff(&i_max, &j_max);
+        } else {
+            max_val = C_remaining.cwiseAbs().maxCoeff(&i_max, &j_max);
+            max_val *= max_val;
+        }
 
         // Computing maximun possible number of swaps
         Eigen::Index max_swap_count = static_cast<Eigen::Index>(
@@ -133,11 +144,17 @@ class DominantSelector : public RankRevealingQRSelector<Scalar> {
             l += last_row.transpose().array().abs2() / (1 - l_remaining(j_max));
             C += C_remaining.col(j_max) * last_row * (1 + l_remaining(j_max));
 
-            B = (1 - l_selected).matrix() *
-                    (1 + l_remaining).matrix().transpose() +
-                C_remaining.array().abs2().matrix();
+            // Select indices to swap
+            if (k > m) {
+                B = (1 - l_selected).matrix() *
+                        (1 + l_remaining).matrix().transpose() +
+                    C_remaining.array().abs2().matrix();
 
-            max_val = B.maxCoeff(&i_max, &j_max);
+                max_val = B.maxCoeff(&i_max, &j_max);
+            } else {
+                max_val = C_remaining.cwiseAbs().maxCoeff(&i_max, &j_max);
+                max_val *= max_val;
+            }
         }
 
         // Warning if maximum swap count was reached

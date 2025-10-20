@@ -1,7 +1,6 @@
 #ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 #define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 
-#include <Eigen/QR>  // For completeOrthogonalDecomposition
 #include <Eigen/SVD> // For Eigen::BDCSVD
 
 #include "SelectorBase.h" // Base class
