@@ -159,7 +159,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
     void removeColumn(std::vector<Eigen::Index> &cols, Eigen::ArrayX<Scalar> &l,
                       Eigen::ArrayX<Scalar> &d, Eigen::MatrixX<Scalar> &V,
                       Eigen::MatrixX<Scalar> &V_dag,
-                      Eigen::Index idx_to_remove) {
+                      Eigen::Index idx_to_remove) const {
 
         // `cols` is the vector of original indices, its size is the
         // current active_size.
