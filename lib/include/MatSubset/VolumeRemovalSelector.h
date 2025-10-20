@@ -56,10 +56,9 @@ class VolumeRemovalSelector : public SelectorBase<Scalar> {
         Eigen::JacobiSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
         Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
 
-        Eigen::MatrixX<Scalar> V_dag =
-            V.completeOrthogonalDecomposition().pseudoInverse().transpose();
+        Eigen::MatrixX<Scalar> V_dag = V;
         Eigen::ArrayX<Scalar> d =
-            1 - (V.transpose() * V_dag).diagonal().array();
+            static_cast<Scalar>(1) - (V.transpose() * V_dag).diagonal().array();
 
         while (cols.size() > k) {
             Eigen::Index j_max;
@@ -88,9 +87,9 @@ class VolumeRemovalSelector : public SelectorBase<Scalar> {
      * @param idx_to_remove The 0-based index *within the current active set* to
      * remove.
      */
-    void removeColumn(std::vector<Eigen::Index> &cols, Eigen::ArrayX<Scalar> d,
-                      Eigen::MatrixX<Scalar> V, Eigen::MatrixX<Scalar> V_dag,
-                      Eigen::Index idx_to_remove) {
+    void removeColumn(std::vector<Eigen::Index> &cols, Eigen::ArrayX<Scalar> &d,
+                      Eigen::MatrixX<Scalar> &V, Eigen::MatrixX<Scalar> &V_dag,
+                      Eigen::Index idx_to_remove) const {
 
         Eigen::Index new_size = static_cast<Eigen::Index>(cols.size()) - 1;
 
