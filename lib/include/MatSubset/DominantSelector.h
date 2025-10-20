@@ -1,8 +1,9 @@
 #ifndef MAT_SUBSET_DOMINANT_SELECTOR_H
 #define MAT_SUBSET_DOMINANT_SELECTOR_H
 
-#include <cassert> // For assert
-#include <cmath>   // For std::log, std::ceil
+#include <cassert>  // For assert
+#include <cmath>    // For std::log, std::ceil
+#include <iostream> // For std::cerr
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
