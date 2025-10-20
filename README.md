@@ -2,25 +2,29 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight header-only C++ library implementing efficient approximation algorithms for subset selection for matrices, built on top of the Eigen linear algebra library.
+A lightweight header-only C++ library implementing efficient approximation algorithms for subset selection problem for matrices, built on top of the Eigen linear algebra library.
 
 ## Installation
 
 ### Dependencies
-For using library and running examples:
+
+**Required (library and examples):**
 - [Eigen 3.3+](https://eigen.tuxfamily.org)
 
-For running tests:
-- [doctest](https://github.com/doctest/doctest) (fetched automatically)
+**Optional (tests, enabled with `-DBUILD_TESTS=ON`):**
+- [doctest 2.4.12](https://github.com/doctest/doctest) (fetched automatically)
 
-For generating documentation:
+**Optional (documentation, enabled with `-DBUILD_DOCS=ON`):**
 - [Doxygen](https://doxygen.nl/)
 - [m.css](https://mcss.mosra.cz/) (fetched automatically)
-- Latex compiler along with required fonts
+- Python 3
+- LaTeX with fonts (texlive-base, texlive-latex-extra, texlive-fonts-extra, texlive-fonts-recommended)
 
-For running benchmarking code:
-- [JsonCpp](https://github.com/open-source-parsers/jsoncpp)
-- python 3 with notebook support, numpy, matplotlib
+**Optional (benchmarks, enabled with `-DBUILD_BENCH=ON`):**
+- [nlohmann/json 3.12.0](https://github.com/nlohmann/json) (fetched automatically)
+- [OpenMP](https://www.openmp.org/)
+- Python 3 with NumPy, pandas, Matplotlib (for plotter.py)
+- LaTeX (for plot text rendering)
 
 ### Using CMake Superbuild
 ```bash
@@ -57,9 +61,10 @@ Explore complete examples in the [examples/](examples/) directory:
 
 ## References
 
-1. Avron & Boutsidis (2013) - [Faster subset selection for matrices](https://arxiv.org/abs/1307.0405)
-2. Xie & Xu (2021) - [Fixed-block selection methods](https://doi.org/10.1137/1.9781611976472.15)
-3. *Upcoming articles from our team* (2025)
+1. Avron & Boutsidis (2013) - [Faster subset selection for matrices and applications](https://arxiv.org/abs/1307.0405)
+2. Kozyrev & Osinsky (2025) - [Subset selection for matrices in spectral norm](https://arxiv.org/abs/2507.20435)
+3. Xie & Xu (2021) - [Subset selection for matrices with fixed blocks](https://doi.org/10.1137/1.9781611976472.15)
+
 
 ## License
 
