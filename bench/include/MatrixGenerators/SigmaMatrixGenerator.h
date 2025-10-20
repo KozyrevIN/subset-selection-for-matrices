@@ -74,13 +74,19 @@ class SigmaMatrixGenerator : public OrthonormalVectorsMatrixGenerator<Scalar> {
         auto [m, n] = this->matrixSize;
         Eigen::Index k = sigma.size();
 
-        // Generate random orthonormal matrices U (m x k) and V (n x k)
-        // using the inherited helper function. This correctly uses the
-        // single, stateful random number generator from the base class.
-        Eigen::MatrixX<Scalar> U = this->generateOrthonormalMatrix(m, k);
-        Eigen::MatrixX<Scalar> V = this->generateOrthonormalMatrix(n, k);
+        Eigen::MatrixX<Scalar> U, V;
+        {
+            // Lock mutex only for RNG access
+            std::lock_guard<std::mutex> lock(this->gen_mutex);
 
-        // Construct the final matrix from A = U * Sigma * V^T'
+            // Generate random orthonormal matrices U (m x k) and V (n x k)
+            // using the inherited helper function. This correctly uses the
+            // single, stateful random number generator from the base class.
+            U = this->generateOrthonormalMatrix(m, k);
+            V = this->generateOrthonormalMatrix(n, k);
+        } // Mutex unlocked here
+
+        // Construct the final matrix from A = U * Sigma * V^T without holding lock
         return U * sigma.asDiagonal() * V.transpose();
     }
 };

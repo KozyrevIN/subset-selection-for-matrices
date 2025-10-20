@@ -81,7 +81,14 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
      * 4. Returning the transpose of the matrix of right singular vectors (V).
      */
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
-        Eigen::MatrixX<Scalar> M = incidenceMatrix();
+        Eigen::MatrixX<Scalar> M;
+        {
+            // Lock mutex only for RNG access, not for expensive SVD
+            std::lock_guard<std::mutex> lock(this->gen_mutex);
+            M = incidenceMatrix();
+        } // Mutex unlocked here
+
+        // Perform SVD without holding the lock
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(M, Eigen::ComputeThinV);
         Eigen::MatrixX<Scalar> V = svd.matrixV();
         V.conservativeResize(Eigen::NoChange, this->matrixSize.first);
@@ -92,6 +99,9 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
     /*!
      * @brief Generates the incidence matrix of a random connected graph.
      * @return An Eigen::MatrixX<Scalar> representing the incidence matrix.
+     *
+     * @note: This method must be called while holding gen_mutex (typically
+     * from generateMatrix() which acquires the lock).
      */
     [[nodiscard]] Eigen::MatrixX<Scalar> incidenceMatrix() {
         auto [m, n] = this->matrixSize;

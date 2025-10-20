@@ -65,16 +65,22 @@ class WeightedGraphIncidenceMatrixGenerator
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
         auto [m, n] = this->matrixSize;
 
-        std::uniform_real_distribution<Scalar> dis(0, 1);
-        Eigen::VectorX<Scalar> weights(n);
-        weights.setConstant(1);
-        for (Eigen::Index i = 0; i < n; ++i) {
-            weights(i) -= dis(this->gen);
-        }
+        Eigen::MatrixX<Scalar> M;
+        {
+            // Lock mutex only for RNG access, not for expensive SVD
+            std::lock_guard<std::mutex> lock(this->gen_mutex);
 
-        Eigen::MatrixX<Scalar> M =
-            this->incidenceMatrix() * weights.cwiseSqrt().asDiagonal();
+            std::uniform_real_distribution<Scalar> dis(0, 1);
+            Eigen::VectorX<Scalar> weights(n);
+            weights.setConstant(1);
+            for (Eigen::Index i = 0; i < n; ++i) {
+                weights(i) -= dis(this->gen);
+            }
 
+            M = this->incidenceMatrix() * weights.cwiseSqrt().asDiagonal();
+        } // Mutex unlocked here
+
+        // Perform SVD without holding the lock
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(M, Eigen::ComputeThinV);
         Eigen::MatrixX<Scalar> V = svd.matrixV();
         V.conservativeResize(Eigen::NoChange, this->matrixSize.first);

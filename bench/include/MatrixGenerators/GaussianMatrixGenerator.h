@@ -54,6 +54,10 @@ class GaussianMatrixGenerator : public MatrixGeneratorBase<Scalar> {
      */
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
         auto [m, n] = this->matrixSize;
+
+        // Lock mutex for thread-safe access to RNG and reproducible sequence
+        std::lock_guard<std::mutex> lock(this->gen_mutex);
+
         return generateGaussianMatrix(m, n);
     }
 
@@ -68,11 +72,15 @@ class GaussianMatrixGenerator : public MatrixGeneratorBase<Scalar> {
      * This helper function is exposed to derived classes so they can use the
      * Gaussian generation mechanism for their own purposes, using the same
      * seeded random number generator.
+     *
+     * @note: This method must be called while holding gen_mutex (typically
+     * from generateMatrix() which acquires the lock).
      */
     [[nodiscard]] Eigen::MatrixX<Scalar>
     generateGaussianMatrix(Eigen::Index rows, Eigen::Index cols) {
         Eigen::MatrixX<Scalar> mat(rows, cols);
         std::normal_distribution<Scalar> dist(0.0, 1.0);
+
         for (Eigen::Index i = 0; i < rows; ++i) {
             for (Eigen::Index j = 0; j < cols; ++j) {
                 mat(i, j) = dist(this->gen);

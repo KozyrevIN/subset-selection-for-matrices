@@ -1,6 +1,7 @@
 #ifndef MAT_SUBSET_BENCH_MATRIX_GENERATOR_BASE_H
 #define MAT_SUBSET_BENCH_MATRIX_GENERATOR_BASE_H
 
+#include <mutex>   // For std::mutex, std::lock_guard
 #include <random>  // For std::mt19937, std::random_device
 #include <string>  // For std::string
 #include <utility> // For std::pair
@@ -17,10 +18,17 @@ namespace MatSubset::Bench {
  * This base class provides common functionality for matrix generation,
  * including storing matrix dimensions and managing a random number generator.
  * Derived classes implement specific matrix generation algorithms.
+ *
+ * @note The `generateMatrix()` method is thread-safe and can
+ * be called concurrently from multiple threads on the same instance. The RNG
+ * state is protected by a mutex to ensure reproducible sequences: for a given
+ * seed, any sequence of generated matrices will always be identical regardless
+ * of thread interleaving.
  */
 template <typename Scalar> class MatrixGeneratorBase {
   protected:
-    std::mt19937 gen; ///< Mersenne Twister random number generator.
+    mutable std::mt19937 gen; ///< Mersenne Twister random number generator.
+    mutable std::mutex gen_mutex; ///< Mutex protecting the RNG for thread-safety.
     const std::pair<Eigen::Index, Eigen::Index>
         matrixSize; ///< Dimensions of the matrix (rows, columns).
 

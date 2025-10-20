@@ -55,6 +55,10 @@ class OrthonormalVectorsMatrixGenerator
      */
     [[nodiscard]] Eigen::MatrixX<Scalar> generateMatrix() override {
         auto [m, n] = this->matrixSize;
+
+        // Lock mutex for thread-safe access to RNG and reproducible sequence
+        std::lock_guard<std::mutex> lock(this->gen_mutex);
+
         return generateOrthonormalMatrix(m, n);
     }
 
@@ -75,6 +79,9 @@ class OrthonormalVectorsMatrixGenerator
      *
      * This helper is exposed to derived classes that need to generate
      * random orthonormal matrices as part of a larger algorithm.
+     *
+     * @note: This method must be called while holding gen_mutex (typically
+     * from generateMatrix() which acquires the lock).
      */
     [[nodiscard]] Eigen::MatrixX<Scalar>
     generateOrthonormalMatrix(Eigen::Index rows, Eigen::Index cols) {
