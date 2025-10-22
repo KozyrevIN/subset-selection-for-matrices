@@ -68,6 +68,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
         std::vector<Eigen::Index> selected_indices =
             ColumnPivotingSelector<Scalar>::selectSubsetImpl(X, m);
         std::vector<Eigen::Index> remaining_indices;
+        selected_indices.reserve(k);
         remaining_indices.reserve(n - k);
 
         std::vector<bool> is_already_selected(n, false);
@@ -85,7 +86,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
             }
         }
 
-        // Initializing neccesary matrices
+        // Initializing neccessary matrices
         Eigen::MatrixX<Scalar> R(m, n);
         R.leftCols(k) = X(Eigen::all, selected_indices);
         R.rightCols(n - k) = X(Eigen::all, remaining_indices);
@@ -101,7 +102,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
         auto l_selected = l.head(k);
         auto l_remaining = l.tail(n - k);
 
-        Eigen::MatrixXf::Index i_max, j_max;
+        Eigen::Index i_max, j_max;
         Scalar max_val;
         Eigen::MatrixX<Scalar> B;
         if (k > m) {
