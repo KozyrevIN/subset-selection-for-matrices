@@ -62,7 +62,7 @@ template <typename Scalar> class SelectorFactory {
      * @code
      * {"name": "dual set"}                          // No-args selector
      * {"name": "spectral selection", "eps": 0.01}   // Selector with eps
-     * {"name": "dominant", "c": 1.01}                // DominantSelector with c
+     * {"name": "dominant", "c": 1.01}               // DominantSelector with c
      * @endcode
      */
     std::unique_ptr<SelectorBase<Scalar>>
@@ -104,19 +104,20 @@ template <typename Scalar> class SelectorFactory {
  * registered.
  * @tparam Scalar The underlying scalar type (e.g., float, double).
  *
- * This factory comes pre-populated with all 8 standard selector algorithms
+ * This factory comes pre-populated with all standard selector algorithms
  * from the MatSubset library, ready to use. It handles different constructor
  * signatures automatically:
- * - No-args selectors (DualSetSelector, RankRevealingQRSelector, etc.)
+ * - No-args selectors (DualSetSelector, ColumnPivotingSelector, etc.)
  * - Selectors with optional eps parameter (SpectralSelectionSelector, etc.)
- * - DominantSelector with required c parameter
+ * - Selectors with required c parameter (DominantSelector, RectMaxvolSelector)
  *
  * Registered selectors:
  * - "dominant" - DominantSelector (requires "c" parameter)
  * - "dual set" - DualSetSelector
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
- * - "rank revealing QR" - RankRevealingQRSelector
+ * - "column pivoting" - ColumnPivotingSelector
+ * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
  * - "first k columns" - SelectorBase (baseline)
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
  * - "spectral selection" - SpectralSelectionSelector (optional "eps")
@@ -137,15 +138,16 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * @brief Constructor that registers all standard selectors.
      *
      * Automatically populates the factory with creation functions for all
-     * 8 standard MatSubset selector algorithms. After construction, the
+     * 10 standard MatSubset selector algorithms. After construction, the
      * factory is immediately ready to create selectors via create().
      */
     DefaultSelectorFactory() {
-        registerDominantSelector();
+        registerCArgSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
         registerNoArgsSelector<ColumnPivotingSelector>();
+        registerCArgSelector<RectMaxvolSelector>();
         registerNoArgsSelector<SelectorBase>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
@@ -200,20 +202,24 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
     }
 
     /*!
-     * @brief Registers the DominantSelector with required c parameter.
+     * @brief Registers a selector with a required c constructor argument.
+     * @tparam Selector Template template parameter for the selector class.
      *
-     * DominantSelector requires a "c" parameter (c > 1) that controls the
-     * convergence criterion. The JSON config must contain {"c": value}.
+     * Creates a registration for selectors that require a "c" parameter
+     * (c > 1). The JSON config must contain {"c": value}.
+     *
+     * Applies to: DominantSelector, RectMaxvolSelector.
      *
      * @note Uses dummy value of 1.01 for registration only; actual instances
      * use the c value from config.
      */
-    void registerDominantSelector() {
-        auto dummy = std::make_unique<DominantSelector<Scalar>>(1.01);
+    template <template <typename> class Selector>
+    void registerCArgSelector() {
+        auto dummy = std::make_unique<Selector<Scalar>>(1.01);
         std::string name = dummy->getAlgorithmName();
         typename SelectorFactory<Scalar>::Creator creator =
             [](const nlohmann::json &config) {
-                return std::make_unique<DominantSelector<Scalar>>(
+                return std::make_unique<Selector<Scalar>>(
                     config.at("c").get<Scalar>());
             };
         this->registerSelector(name, creator);
