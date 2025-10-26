@@ -115,10 +115,11 @@ template <typename Scalar> class SelectorFactory {
  * - "dominant" - DominantSelector (requires "c" parameter)
  * - "dual set" - DualSetSelector
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
+ * - "frobenius selection" - FrobeniusSelectionSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
  * - "column pivoting" - ColumnPivotingSelector
+ * - "random columns" - RandomColumnsSelector (optional "seed")
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
- * - "first k columns" - SelectorBase (baseline)
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
  * - "spectral selection" - SpectralSelectionSelector (optional "eps")
  * - "volume removal" - VolumeRemovalSelector
@@ -138,21 +139,21 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * @brief Constructor that registers all standard selectors.
      *
      * Automatically populates the factory with creation functions for all
-     * 10 standard MatSubset selector algorithms. After construction, the
+     * standard MatSubset selector algorithms. After construction, the
      * factory is immediately ready to create selectors via create().
      */
     DefaultSelectorFactory() {
         registerCArgSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
+        registerNoArgsSelector<FrobeniusSelectionSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
         registerNoArgsSelector<ColumnPivotingSelector>();
+        registerSeedArgSelector<RandomColumnsSelector>();
         registerCArgSelector<RectMaxvolSelector>();
-        registerNoArgsSelector<SelectorBase>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
         registerNoArgsSelector<VolumeRemovalSelector>();
-        registerNoArgsSelector<FrobeniusSelectionSelector>();
     }
 
   private:
@@ -214,14 +215,40 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * @note Uses dummy value of 1.01 for registration only; actual instances
      * use the c value from config.
      */
-    template <template <typename> class Selector>
-    void registerCArgSelector() {
+    template <template <typename> class Selector> void registerCArgSelector() {
         auto dummy = std::make_unique<Selector<Scalar>>(1.01);
         std::string name = dummy->getAlgorithmName();
         typename SelectorFactory<Scalar>::Creator creator =
             [](const nlohmann::json &config) {
                 return std::make_unique<Selector<Scalar>>(
                     config.at("c").get<Scalar>());
+            };
+        this->registerSelector(name, creator);
+    }
+
+    /*!
+     * @brief Registers a selector with an optional seed constructor argument.
+     * @tparam Selector Template template parameter for the selector class.
+     *
+     * Creates a registration for selectors that accept an optional seed
+     * parameter for reproducible random number generation. If "seed" is
+     * present in the JSON config, it's passed to the constructor; otherwise,
+     * default construction is used (which will use random seeding).
+     *
+     * Applies to: RandomColumnsSelector.
+     */
+    template <template <typename> class Selector>
+    void registerSeedArgSelector() {
+        auto dummy = std::make_unique<Selector<Scalar>>();
+        std::string name = dummy->getAlgorithmName();
+        typename SelectorFactory<Scalar>::Creator creator =
+            [](const nlohmann::json &config) {
+                if (config.contains("seed")) {
+                    return std::make_unique<Selector<Scalar>>(
+                        config.at("seed").get<std::mt19937::result_type>());
+                } else {
+                    return std::make_unique<Selector<Scalar>>();
+                }
             };
         this->registerSelector(name, creator);
     }

@@ -40,18 +40,17 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
 
   protected:
     /*!
-     * @brief Core implementation for selecting a subset of \f$ k \f$ columns.
+     * @brief Selects a starting set of \f$ m \f$ columns that form a
+     * well-conditioned submatrix.
      * @param X The input matrix (dimensions \f$ m \times n \f$) from which
-     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
-     * for theoretical guarantees.
-     * @param k The number of columns to select. Must be equal to \f$ m \f$ for
-     * this method.
+     * columns are to be selected.
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
-     * of the selected columns.
+     * of \f$ m \f$ selected columns.
+     *
+     * This method is intended to be called by derived classes as part of their
+     * `selectSubsetImpl` implementation to obtain an initial highly nondegenerate
+     * subset of columns.
      */
-    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override = 0;
-
     std::vector<Eigen::Index> selectStartingSet(const Eigen::MatrixX<Scalar> &X) {
 
         const Eigen::Index m = X.rows();

@@ -12,15 +12,15 @@
 namespace MatSubset {
 
 /*!
- * @brief Base class for algorithms that approximate the subset selection
- * problem for matrices.
+ * @brief Abstract base class for algorithms that approximate the subset
+ * selection problem for matrices.
  * @tparam Scalar The underlying scalar type of the matrix elements (e.g.,
  * float, double).
  *
- * This base class defines the common interface for various algorithms that
- * perform subset selection for matrices. Derived classes are expected to
- * implement specific strategies for selecting \f$ k \f$ columns from an \f$ m
- * \times n \f$ input matrix \f$ X \f$.
+ * This abstract base class defines the common interface for various algorithms
+ * that perform subset selection for matrices. Derived classes must implement
+ * specific strategies for selecting \f$ k \f$ columns from an \f$ m \times n
+ * \f$ input matrix \f$ X \f$.
  *
  * The problem typically assumes the input matrix \f$ X \f$ is of full rank
  * (i.e., rank \f$ m \f$). While algorithms might function on rank-deficient
@@ -28,10 +28,15 @@ namespace MatSubset {
  * for full rank at runtime can be computationally expensive and is generally
  * not performed by these selectors.
  *
- * The selection logic is implemented by overriding the `selectSubsetImpl`
- * method. The bound calculation logic is implemented by overriding `boundImpl`.
- * Common precondition checks are handled in the public-facing methods,
- * enforcing \f$ m, k, n \ge 1 \f$ and \f$ m \le k\le n \f$.
+ * The selection logic is implemented by overriding the pure virtual
+ * `selectSubsetImpl` method. The bound calculation logic can optionally be
+ * implemented by overriding `boundImpl`. Common precondition checks are handled
+ * in the public-facing methods, enforcing \f$ m, k, n \ge 1 \f$ and \f$ m \le
+ * k\le n \f$.
+ *
+ * @note This class is abstract and cannot be instantiated directly. Use
+ * concrete derived classes like `RandomColumnsSelector` or other specific
+ * selection algorithms.
  */
 template <typename Scalar> class SelectorBase {
   public:
@@ -45,10 +50,11 @@ template <typename Scalar> class SelectorBase {
     /*!
      * @brief Gets the human-readable name of the subset selection algorithm.
      * @return A string representing the algorithm's name.
+     *
      * Derived classes should override this to return their specific algorithm
-     * name. The default implementation returns "first k columns".
+     * name.
      */
-    virtual std::string getAlgorithmName() const { return "first k columns"; }
+    virtual std::string getAlgorithmName() const = 0;
 
     /*!
      * @brief Selects a subset of \f$ k \f$ columns from the input matrix \f$ X
@@ -171,19 +177,10 @@ template <typename Scalar> class SelectorBase {
      * @return A `std::vector` of `Eigen::Index` of selected column indices.
      *
      * Derived classes MUST override this method to implement their specific
-     * selection logic. The default base class implementation selects the first
-     * \f$ k \f$ columns.
+     * selection logic.
      */
     virtual std::vector<Eigen::Index>
-    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k) {
-        // No assertions here as they are handled by the public selectSubset
-        // k >= 1 is guaranteed by assertions in public selectSubset.
-        std::vector<Eigen::Index> cols(static_cast<size_t>(k));
-        for (Eigen::Index i = 0; i < k; ++i) {
-            cols[static_cast<size_t>(i)] = i;
-        }
-        return cols;
-    }
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k) = 0;
 
     /*!
      * @brief Core implementation for calculating the bound.
