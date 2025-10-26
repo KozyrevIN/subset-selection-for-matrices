@@ -19,17 +19,15 @@ namespace MatSubset {
  * In each step, it greedily removes the column from the currently active set,
  * to maximize the Frobenius norm of remaining submatrix. The key difference
  * from the original algorithm from the article is that our modification does
- * not require recalculation of SVD on each step.
- *
- * The `eps` parameter is used as a threshold for values in
- * denominator, to ensure numerical stability.
+ * not require recalculation of SVD on each step. Instead
  */
 template <typename Scalar>
 class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for `FrobeniusRemovalSelector`.
-     * @param eps Small positive tolerance value. Defaults to `1e-6`.
+     * @param eps Small positive tolerance value used as a threshold for values
+     * in denominator. Defaults to `1e-6`.
      */
     explicit FrobeniusRemovalSelector(Scalar eps = static_cast<Scalar>(1e-6))
         : eps_(eps) {}
