@@ -48,10 +48,14 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
      * of \f$ m \f$ selected columns.
      *
      * This method is intended to be called by derived classes as part of their
-     * `selectSubsetImpl` implementation to obtain an initial highly nondegenerate
-     * subset of columns.
+     * `selectSubsetImpl` implementation to obtain an initial highly
+     * nondegenerate subset of columns.
+     *
+     * @note The input matrix must have orthonormal rows for algorithm to work
+     * as intended.
      */
-    std::vector<Eigen::Index> selectStartingSet(const Eigen::MatrixX<Scalar> &X) {
+    std::vector<Eigen::Index>
+    selectStartingSet(const Eigen::MatrixX<Scalar> &X) {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
