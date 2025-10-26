@@ -2,6 +2,7 @@
 #include "DominantSelector.h"
 #include "DualSetSelector.h"
 #include "FrobeniusRemovalSelector.h"
+#include "FrobeniusSelectionSelector.h"
 #include "InterlacingFamiliesSelector.h"
 #include "RectMaxvolSelector.h"
 #include "SelectorBase.h"

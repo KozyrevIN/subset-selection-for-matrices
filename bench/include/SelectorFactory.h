@@ -152,6 +152,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
         registerNoArgsSelector<VolumeRemovalSelector>();
+        registerNoArgsSelector<FrobeniusSelectionSelector>();
     }
 
   private:

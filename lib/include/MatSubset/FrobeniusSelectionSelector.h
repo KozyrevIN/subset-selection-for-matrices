@@ -1,13 +1,14 @@
-#ifndef MAT_SUBSET_COLUMN_PIVOTING_SELECTOR_H
-#define MAT_SUBSET_COLUMN_PIVOTING_SELECTOR_H
+#ifndef MAT_SUBSET_FROBENIUS_SELECTION_SELECTOR_H
+#define MAT_SUBSET_FROBENIUS_SELECTION_SELECTOR_H
+
+#include <cmath> // For stc::copysign
 
 #include "SelectorBase.h" // Base class
 
 namespace MatSubset {
 
 /*!
- * @brief Finds a submatrix with large volume by column pivoting. Equivalent to
- * selecting `m` first pivot columns identified by QR with column pivoting.
+ * @brief Approximates subset selection problem for matrices using algorithm
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
  * This selector iteratively selects a column with largest component orthogonal
@@ -23,18 +24,20 @@ namespace MatSubset {
  * m \f$ is the number of rows in the input matrix.
  */
 template <typename Scalar>
-class ColumnPivotingSelector : public SelectorBase<Scalar> {
+class FrobeniusSelectionSelector : public SelectorBase<Scalar> {
   public:
     /*!
-     * @brief Default constructor for `ColumnPivotingSelector`.
+     * @brief Default constructor for `FrobeniusSelectionSelector`.
      */
-    ColumnPivotingSelector() = default;
+    FrobeniusSelectionSelector() = default;
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
      * @return The string "column pivoting".
      */
-    std::string getAlgorithmName() const override { return "column pivoting"; }
+    std::string getAlgorithmName() const override {
+        return "frobenius selection";
+    }
 
   protected:
     /*!
@@ -49,23 +52,49 @@ class ColumnPivotingSelector : public SelectorBase<Scalar> {
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
                                                Eigen::Index k) override {
-        // This selector expects k to be equal to the number of rows
-        assert(k == X.rows() && "ColumnPivotingSelector only supports k == m.");
 
-        Eigen::MatrixX<Scalar> R = X;
-        std::vector<Eigen::Index> indices;
-        for (Eigen::Index i = 0; i < k; ++i) {
-            Eigen::ArrayX<Scalar> gamma = R.colwise().squaredNorm();
-            Eigen::Index j_max;
-            Scalar gamma_max = gamma.maxCoeff(&j_max);
-            indices.push_back(j_max);
-            R -= R.col(j_max) * (R.col(j_max).transpose() * R) / gamma_max;
+        const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
+        // This selector expects k to be equal to the number of rows
+        assert(k == m && "FrobeniusSelectionSelector only supports k == m.");
+
+        std::vector<Eigen::Index> indices(n);
+        for (Eigen::Index j = 0; j < n; ++j) {
+            indices[j] = j;
         }
 
+        Eigen::MatrixX<Scalar> W = Eigen::MatrixX<Scalar>::Zero(m, n);
+        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
+        Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
+
+        for (Eigen::Index i = 0; i < k; ++i) {
+            Eigen::ArrayX<Scalar> l =
+                (static_cast<Scalar>(1) +
+                 W.topRows(i).colwise().squaredNorm().array()) /
+                V.bottomRows(m - i).colwise().squaredNorm().array();
+            Eigen::Index j_min;
+            l.tail(n - i).minCoeff(&j_min);
+            j_min += i;
+
+            std::swap(indices[static_cast<size_t>(i)],
+                      indices[static_cast<size_t>(j_min)]);
+            V.col(i).swap(V.col(j_min));
+            W.col(i).swap(W.col(j_min));
+
+            Eigen::VectorX<Scalar> v = V.col(i).tail(m - i);
+            v(0) += std::copysign(v.norm(), v(0));
+            v /= v.norm();
+
+            V.bottomRows(m - i) -= 2 * v * v.transpose() * V.bottomRows(m - i);
+            W.topRows(i) -= W.col(i).head(i) * V.row(i) / V(i, i);
+            W.row(i) += V.row(i) / V(i, i);
+        }
+
+        indices.resize(k);
         return indices;
     }
 };
 
 } // namespace MatSubset
 
-#endif // MAT_SUBSET_COLUMN_PIVOTING_SELECTOR_H
+#endif // MAT_SUBSET_FROBENIUS_SELECTION_SELECTOR_H
