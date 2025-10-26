@@ -27,7 +27,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
     /*!
      * @brief Constructor for `FrobeniusRemovalSelector`.
      * @param eps Small positive tolerance value used as a threshold for values
-     * in denominator. Defaults to `1e-6`.
+     *            in denominator. Defaults to `1e-6`.
      */
     explicit FrobeniusRemovalSelector(Scalar eps = static_cast<Scalar>(1e-6))
         : eps_(eps) {}
