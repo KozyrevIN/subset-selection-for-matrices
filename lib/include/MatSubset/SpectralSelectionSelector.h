@@ -16,7 +16,7 @@ namespace MatSubset {
  * @tparam Scalar The underlying Scalar type (e.g., `float`, `double`).
  *
  * This class implements an algorithm developed by our team (Algorithm 4 in
- * Kozyrev, Osinsky (2025), "Subset selection for matrices in spectral norm"),
+ * Kozyrev and Osinsky (2025), "Subset selection for matrices in spectral norm"),
  * which builds upon the theoretical foundations of barrier-based methods for
  * matrix sparsification, similar in spirit to dual set (Avron and Boutsidis,
  * 2012) but with distinct derivations for its update rules and parameters.

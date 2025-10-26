@@ -11,11 +11,7 @@ namespace MatSubset {
  * the selected submatrix.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
- * This selector implements Algorithm 2 from Osinsky (2025), "Close to optimal
- * column approximation using a single SVD". It greedily selects columns that
- * minimize the Frobenius norm of the selected submatrix. Other selectors like
- * `FrobeniusSelectionSelector` and use this algorithm internally to
- * obtain the starting set of columns.
+ * Implement a novel greedy selection algorithm
  *
  * @note This class is abstract and not intended for independent use. No objects
  * of this class can be created.
