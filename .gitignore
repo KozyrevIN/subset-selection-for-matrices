@@ -43,6 +43,7 @@ out
 # Clangd files
 .cache
 .clangd
+.clang-tidy
 
 # Context for AI agents
 CLAUDE.md
