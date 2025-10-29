@@ -190,7 +190,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
      * @note The bound for Frobenius norm from Osinsky (2024),
      * Corollary 1, is not standard (it mixes different norms), we use
      * inequality \f$ \lVert X \rVert_2 \le \lVert X \rVert_F \f$ to produce a
-     * looser bound, wich fits into our framework.
+     * looser bound, which fits into our framework.
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                      Norm norm) const override {

@@ -71,7 +71,7 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<Scalar> {
      * @note The bound for Frobenius norm from Avron and Boutsidis (2012),
      * Corollary 3.3, is not standard (it mixes different norms), we use
      * inequality \f$ \lVert X \rVert_2 \le \lVert X \rVert_F \f$ to produce a
-     * looser bound, wich fits into our framework.
+     * looser bound, which fits into our framework.
      */
     Scalar boundImpl(Eigen::Index m, Eigen::Index n, Eigen::Index k,
                      Norm norm) const override {
