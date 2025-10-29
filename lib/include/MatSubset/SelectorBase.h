@@ -54,7 +54,7 @@ template <typename Scalar> class SelectorBase {
      * Derived classes should override this to return their specific algorithm
      * name.
      */
-    virtual std::string getAlgorithmName() const = 0;
+    [[nodiscard]] virtual std::string getAlgorithmName() const = 0;
 
     /*!
      * @brief Selects a subset of \f$ k \f$ columns from the input matrix \f$ X
