@@ -29,36 +29,22 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
      */
     FrobeniusPivotingBase() = default;
 
-    /*!
-     * @brief Gets the human-readable name of the algorithm.
-     * @return The string representing the specific algorithm name.
-     *
-     * Derived classes must override this method to provide their specific
-     * algorithm name.
-     */
-    virtual std::string getAlgorithmName() const override = 0;
-
   protected:
     /*!
-     * @brief Selects a starting set of \f$ m \f$ columns that form a
-     * well-conditioned submatrix.
-     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
-     * columns are to be selected.
-     * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
-     * of \f$ m \f$ selected columns.
+     * @brief Permutes columns of matrix \f$ V \f$
+     * to form a well-conditioned submatrix in its first m columns.
+     * @param V The input matrix (dimensions \f$ m \times n \f$). This matrix is
+     * expected to have orthonormal rows.
+     * @return A `std::vector` of `Eigen::Index` of permuted 0-based indices.
      *
      * This method is intended to be called by derived classes as part of their
      * `selectSubsetImpl` implementation to obtain an initial highly
      * nondegenerate subset of columns.
-     *
-     * @note The input matrix must have orthonormal rows for algorithm to work
-     * as intended.
      */
-    std::vector<Eigen::Index>
-    selectStartingSet(const Eigen::MatrixX<Scalar> &X) {
+    std::vector<Eigen::Index> selectStartingSet(Eigen::MatrixX<Scalar> &V) {
 
-        const Eigen::Index m = X.rows();
-        const Eigen::Index n = X.cols();
+        const Eigen::Index m = V.rows();
+        const Eigen::Index n = V.cols();
 
         std::vector<Eigen::Index> indices(n);
         for (Eigen::Index j = 0; j < n; ++j) {
@@ -66,8 +52,6 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
         }
 
         Eigen::MatrixX<Scalar> W = Eigen::MatrixX<Scalar>::Zero(m, n);
-        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
 
         for (Eigen::Index i = 0; i < m; ++i) {
             Eigen::ArrayX<Scalar> l =
@@ -92,7 +76,6 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
             W.row(i) += V.row(i) / V(i, i);
         }
 
-        indices.resize(m);
         return indices;
     }
 };
