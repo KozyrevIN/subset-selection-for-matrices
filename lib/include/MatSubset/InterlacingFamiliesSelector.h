@@ -14,7 +14,7 @@ namespace MatSubset {
 /*!
  * @brief Approximates subset selection problem for matrices using an algorithm
  * based on interlacing families of polynomials.
- * @tparam Scalar The underlying Scalar type (e.g., `float`, `double`).
+ * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
  * This class implements a deterministic greedy selection algorithm developed by
  * Xie and Xu (2021), "Subset Selection for Matrices with Fixed Blocks"

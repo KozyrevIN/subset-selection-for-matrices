@@ -66,7 +66,7 @@ class RectMaxvolSelector : public DominantSelector<Scalar> {
             }
         }
 
-        // Initializing neccessary matrices
+        // Initializing necessary matrices
         Eigen::MatrixX<Scalar> X_selected = X(Eigen::all, selected_indices);
         Eigen::MatrixX<Scalar> X_remaining = X(Eigen::all, remaining_indices);
         Eigen::MatrixX<Scalar> X_selected_dag =

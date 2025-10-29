@@ -13,7 +13,7 @@ namespace MatSubset {
 /*!
  * @brief Approximates subset selection problem for matrices using a
  * novel spectral selection algorithm.
- * @tparam Scalar The underlying Scalar type (e.g., `float`, `double`).
+ * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
  * This class implements an algorithm developed by our team (Algorithm 4 in
  * Kozyrev and Osinsky (2025), "Subset selection for matrices in spectral
@@ -210,7 +210,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
                           const Eigen::ArrayX<Scalar> &eigenvalues) const {
 
         assert(l < eigenvalues(0) &&
-               "l must be smaller then the smallest eigenvalue");
+               "l must be smaller than the smallest eigenvalue");
         return (eigenvalues - l).inverse().sum();
     }
 
@@ -336,7 +336,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
                      const Eigen::ArrayX<Scalar> &eigenvalues) const {
 
         assert(m > 1 &&
-               "In the heuristic update strategy, m must be greater then 1.");
+               "In the heuristic update strategy, m must be greater than 1.");
         Scalar left = -static_cast<Scalar>(m - 1) / static_cast<Scalar>(m + 1);
         Scalar right = eigenvalues(0);
         const Scalar GOLDEN_RATIO = (1 + std::sqrt(5)) / static_cast<Scalar>(2);
@@ -392,7 +392,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
                      const Eigen::ArrayX<Scalar> &eigenvalues) const {
 
         assert(m > 1 &&
-               "In the heuristic update strategy, m must be greater then 1.");
+               "In the heuristic update strategy, m must be greater than 1.");
         auto f = [&m, &n, &k, &cols_selected_size, &eigenvalues,
                   this](Scalar l) {
             return this->computeB(m, n, k, l, cols_selected_size, eigenvalues);

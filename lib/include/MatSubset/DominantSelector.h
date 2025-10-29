@@ -26,9 +26,9 @@ namespace MatSubset {
  *
  * The algorithm selects the initial subset with nonzero volume by running
  * rank-revealing QR and adding first \f$ k-m \f$ non-selected columns. It then
- * iteratively refines tis set \f$ S \f$ by finding sunch indices \f$ i \in
+ * iteratively refines this set \f$ S \f$ by finding such indices \f$ i \in
  * S \f$ and \f$ j \notin S \f$, that replacing i with j increases the squared
- * volume of \f$ X_S \f$ by \f$ c \f$ times. If no such repacement exists,
+ * volume of \f$ X_S \f$ by \f$ c \f$ times. If no such replacement exists,
  * algorithm terminates.
  */
 template <typename Scalar>
@@ -39,7 +39,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
      */
     DominantSelector(Scalar c) : c(c) {
         assert(c > 1 &&
-               "In the dominant algorithm parameter c must be greater then 1.");
+               "In the dominant algorithm parameter c must be greater than 1.");
     };
 
     /*!
@@ -86,7 +86,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
             }
         }
 
-        // Initializing neccessary matrices
+        // Initializing necessary matrices
         Eigen::MatrixX<Scalar> R(m, n);
         R.leftCols(k) = X(Eigen::all, selected_indices);
         R.rightCols(n - k) = X(Eigen::all, remaining_indices);
