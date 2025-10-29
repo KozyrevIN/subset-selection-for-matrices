@@ -3,7 +3,6 @@
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
-#include "DominantSelector.h"
 #include "DominantSelector.h" // Base class
 #include "Enums.h"            // For MatSubset::Norm
 
