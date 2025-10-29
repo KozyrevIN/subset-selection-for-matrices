@@ -37,7 +37,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
     /*!
      * @brief Default constructor for `DominantSelector`.
      */
-    DominantSelector(Scalar c) : c(c) {
+    explicit DominantSelector(Scalar c) : c(c) {
         assert(c > 1 &&
                "In the dominant algorithm parameter c must be greater than 1.");
     };

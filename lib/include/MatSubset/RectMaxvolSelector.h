@@ -25,7 +25,7 @@ class RectMaxvolSelector : public DominantSelector<Scalar> {
     /*!
      * @brief Default constructor for `RectMaxvolSelector`.
      */
-    RectMaxvolSelector(Scalar c) : DominantSelector<Scalar>(c){};
+    explicit RectMaxvolSelector(Scalar c) : DominantSelector<Scalar>(c){};
 
     /*!
      * @brief Gets the human-readable name of the algorithm.

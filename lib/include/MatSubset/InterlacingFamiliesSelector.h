@@ -33,7 +33,7 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
      * @param eps Tolerance value for polynomial root finding.
      *            Defaults to `1e-4`.
      */
-    InterlacingFamiliesSelector(Scalar eps = 1e-4) : eps_(eps) {}
+    explicit InterlacingFamiliesSelector(Scalar eps = 1e-4) : eps_(eps) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
