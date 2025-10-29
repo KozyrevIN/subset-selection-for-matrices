@@ -40,8 +40,9 @@ out
 # Vscode files
 .vscode
 
-# Clangd cache
+# Clangd files
 .cache
+.clangd
 
 # Context for AI agents
 CLAUDE.md
