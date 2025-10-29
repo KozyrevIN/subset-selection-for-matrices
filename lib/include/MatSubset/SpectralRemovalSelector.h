@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_SPECTRAL_REMOVAL_H
-#define MAT_SUBSET_SPECTRAL_REMOVAL_H
+#ifndef MAT_SUBSET_SPECTRAL_REMOVAL_SELECTOR_H
+#define MAT_SUBSET_SPECTRAL_REMOVAL_SELECTOR_H
 
 #include <Eigen/SVD> // For Eigen::BDCSVD
 
@@ -97,4 +97,4 @@ class SpectralRemovalSelector : public FrobeniusRemovalSelector<Scalar> {
 
 } // namespace MatSubset
 
-#endif // MAT_SUBSET_SPECTRAL_REMOVAL_H
+#endif // MAT_SUBSET_SPECTRAL_REMOVAL_SELECTOR_H
