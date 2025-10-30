@@ -1,4 +1,3 @@
-#include "ColumnPivotingSelector.h"
 #include "DominantSelector.h"
 #include "DualSetSelector.h"
 #include "FrobeniusRemovalSelector.h"

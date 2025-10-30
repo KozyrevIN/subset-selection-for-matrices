@@ -7,8 +7,8 @@
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
-#include "ColumnPivotingSelector.h" // Base class
-#include "Enums.h"                  // For MatSubset::Norm
+#include "VolumePivotingBase.h" // Base class
+#include "Enums.h"               // For MatSubset::Norm
 
 namespace MatSubset {
 
@@ -22,7 +22,7 @@ namespace MatSubset {
  * equivalent to Maxvol algorithm (Goreinov et. al. (2010), "How to find a good
  * submatrix") and to selecting pivot columns identified by strong RRQR
  * algorithm (Gu and Eisenstat (1996), "Efficient algorithms for computing a
- * strong rank-revealing qr factorization")
+ * strong rank-revealing QR factorization")
  *
  * The algorithm selects the initial subset with nonzero volume by running
  * rank-revealing QR and adding first \f$ k-m \f$ non-selected columns. It then
@@ -32,7 +32,7 @@ namespace MatSubset {
  * algorithm terminates.
  */
 template <typename Scalar>
-class DominantSelector : public ColumnPivotingSelector<Scalar> {
+class DominantSelector : public VolumePivotingBase<Scalar> {
   public:
     /*!
      * @brief Default constructor for `DominantSelector`.
@@ -66,7 +66,7 @@ class DominantSelector : public ColumnPivotingSelector<Scalar> {
 
         // Preparing starting sets of indices
         std::vector<Eigen::Index> selected_indices =
-            ColumnPivotingSelector<Scalar>::selectSubsetImpl(X, m);
+            VolumePivotingBase<Scalar>::selectStartingSet(X);
         std::vector<Eigen::Index> remaining_indices;
         selected_indices.reserve(k);
         remaining_indices.reserve(n - k);

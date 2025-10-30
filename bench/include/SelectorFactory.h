@@ -107,7 +107,7 @@ template <typename Scalar> class SelectorFactory {
  * This factory comes pre-populated with all standard selector algorithms
  * from the MatSubset library, ready to use. It handles different constructor
  * signatures automatically:
- * - No-args selectors (DualSetSelector, ColumnPivotingSelector, etc.)
+ * - No-args selectors (DualSetSelector, etc.)
  * - Selectors with optional eps parameter (SpectralSelectionSelector, etc.)
  * - Selectors with required c parameter (DominantSelector, RectMaxvolSelector)
  *
@@ -117,7 +117,6 @@ template <typename Scalar> class SelectorFactory {
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
  * - "frobenius selection" - FrobeniusSelectionSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
- * - "column pivoting" - ColumnPivotingSelector
  * - "random columns" - RandomColumnsSelector (optional "seed")
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
@@ -148,7 +147,6 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerNoArgsSelector<FrobeniusSelectionSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
-        registerNoArgsSelector<ColumnPivotingSelector>();
         registerSeedArgSelector<RandomColumnsSelector>();
         registerCArgSelector<RectMaxvolSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();
