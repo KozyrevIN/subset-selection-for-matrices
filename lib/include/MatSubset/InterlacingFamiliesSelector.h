@@ -33,7 +33,7 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
      * @param eps Tolerance value for polynomial root finding.
      *            Defaults to `1e-4`.
      */
-    explicit InterlacingFamiliesSelector(Scalar eps = 1e-4) : eps_(eps) {}
+    explicit InterlacingFamiliesSelector(Scalar eps = 1e-4) : eps(eps) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
@@ -99,7 +99,7 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
 
                 poly_solver.compute(f_z);
                 bool has_root;
-                lambdas(j) = poly_solver.smallestRealRoot(has_root, eps_);
+                lambdas(j) = poly_solver.smallestRealRoot(has_root, eps);
             }
 
             Eigen::Index j_max;
@@ -152,7 +152,7 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
     }
 
   private:
-    Scalar eps_;
+    Scalar eps;
 
     /*! @brief Constructs a polynomial from its roots.
      *  Polynomial coefficients are returned in an order compatible with Eigen's

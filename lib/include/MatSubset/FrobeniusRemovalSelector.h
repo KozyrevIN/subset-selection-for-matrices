@@ -30,7 +30,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
      * in denominator. Defaults to `1e-6`.
      */
     explicit FrobeniusRemovalSelector(Scalar eps = static_cast<Scalar>(1e-6))
-        : eps_(eps) {}
+        : eps(eps) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
@@ -75,7 +75,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
 
             Eigen::Index j_min = 0;
             while (j_min < cols.size() &&
-                   d(j_min) >= static_cast<Scalar>(1) - eps_) {
+                   d(j_min) >= static_cast<Scalar>(1) - eps) {
                 ++j_min;
             }
 
@@ -83,7 +83,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
                    "Have not found a column with d_j < 1 - eps.");
 
             for (Eigen::Index j = j_min + 1; j < cols.size(); ++j) {
-                if (d(j) < static_cast<Scalar>(1) - eps_ &&
+                if (d(j) < static_cast<Scalar>(1) - eps &&
                     l(j) + l(j_min) * d(j) < l(j_min) + l(j) * d(j_min)) {
                     j_min = j;
                 }
@@ -138,7 +138,7 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
     }
 
   private:
-    Scalar eps_; /*!< Tolerance for \f$ d_j \f$ values. */
+    Scalar eps; /*!< Tolerance for \f$ d_j \f$ values. */
 
     /*!
      * @brief Helper to remove column `idx_to_remove` from active data
