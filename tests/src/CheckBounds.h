@@ -24,10 +24,9 @@ void check_bounds(MatSubset::SelectorBase<Scalar> *selector,
          11, 12, 13, 14, 15;
     // clang-format on
 
-    // Checking bounds for each k and norm
-    std::vector<MatSubset::Norm> norms{MatSubset::Norm::Frobenius,
-                                       MatSubset::Norm::Spectral};
-    for (auto norm : norms) {
+    // Helper lambda to check bounds for a specific norm
+    auto check_for_norm = [&](auto norm_constant) {
+        constexpr MatSubset::Norm norm = norm_constant;
         for (Eigen::Index k = k_begin; k <= k_end; ++k) {
             SUBCASE("Check bounds for given k and norm") {
                 std::vector<Eigen::Index> indices =
@@ -49,5 +48,11 @@ void check_bounds(MatSubset::SelectorBase<Scalar> *selector,
                 CHECK(X_pinv_sqr / X_S_pinv_sqr >= bound_1);
             }
         }
-    }
+    };
+
+    // Check bounds for each norm type
+    check_for_norm(
+        std::integral_constant<MatSubset::Norm, MatSubset::Norm::Frobenius>{});
+    check_for_norm(
+        std::integral_constant<MatSubset::Norm, MatSubset::Norm::Spectral>{});
 }

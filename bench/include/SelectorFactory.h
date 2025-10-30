@@ -121,6 +121,7 @@ template <typename Scalar> class SelectorFactory {
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
  * - "spectral selection" - SpectralSelectionSelector (optional "eps")
+ * - "volume add-remove" - VolumeAddRemoveSelector (requires "c" parameter)
  * - "volume removal" - VolumeRemovalSelector
  *
  * Usage example:
@@ -151,6 +152,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerCArgSelector<RectMaxvolSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
+        registerCArgSelector<VolumeAddRemoveSelector>();
         registerNoArgsSelector<VolumeRemovalSelector>();
     }
 

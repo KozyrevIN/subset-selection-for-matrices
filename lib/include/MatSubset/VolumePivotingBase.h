@@ -38,31 +38,43 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
 
   protected:
     /*!
-     * @brief Selects `m` columns with large volume using column pivoting.
-     * @param X The input matrix (dimensions \f$ m \times n \f$) from which
-     * columns are to be selected. It is assumed that \f$ X \f$ is full rank
-     * for theoretical guarantees.
+     * @brief Permutes columns of matrix \f$ X \f$ to form a well-conditioned
+     * submatrix in its first m columns using volume-based column pivoting.
+     * @param X The input matrix (dimensions \f$ m \times n \f$). Columns are
+     * permuted in-place so that the first m columns form a highly nondegenerate
+     * submatrix with large volume.
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
-     * of the selected columns.
+     * tracking the column permutation.
      *
      * This method is intended to be called by derived classes as part of their
      * `selectSubsetImpl` implementation to obtain an initial highly
      * nondegenerate subset of m columns with large volume.
+     *
+     * After execution, X(:, 0:m-1) contains the selected columns, and the
+     * returned indices vector tracks which original column index is now at
+     * each position.
      */
     std::vector<Eigen::Index>
-    selectStartingSet(const Eigen::MatrixX<Scalar> &X) {
+    selectStartingSet(Eigen::MatrixX<Scalar> &X) {
         const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
 
-        Eigen::MatrixX<Scalar> R = X;
-        std::vector<Eigen::Index> indices;
-        indices.reserve(m);
+        std::vector<Eigen::Index> indices(n);
+        for (Eigen::Index j = 0; j < n; ++j) {
+            indices[j] = j;
+        }
 
         for (Eigen::Index i = 0; i < m; ++i) {
-            Eigen::ArrayX<Scalar> gamma = R.colwise().squaredNorm();
+            Eigen::ArrayX<Scalar> gamma = X.colwise().squaredNorm();
             Eigen::Index j_max;
-            Scalar gamma_max = gamma.maxCoeff(&j_max);
-            indices.push_back(j_max);
-            R -= R.col(j_max) * (R.col(j_max).transpose() * R) / gamma_max;
+            Scalar gamma_max = gamma.tail(n - i).maxCoeff(&j_max);
+            j_max += i;
+
+            std::swap(indices[static_cast<size_t>(i)],
+                      indices[static_cast<size_t>(j_max)]);
+            X.col(i).swap(X.col(j_max));
+
+            X -= X.col(i) * (X.col(i).transpose() * X) / gamma_max;
         }
 
         return indices;

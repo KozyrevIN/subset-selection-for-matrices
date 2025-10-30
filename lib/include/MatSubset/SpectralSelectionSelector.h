@@ -22,7 +22,7 @@ namespace MatSubset {
  * Boutsidis, 2012) but with distinct derivations for its update rules and
  * parameters.
  *
- * The `eps_` constructor parameter is a tolerance used within the binary
+ * The `eps` constructor parameter is a tolerance used within the binary
  * search.
  */
 template <typename Scalar>
@@ -33,7 +33,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
      * @param eps Tolerance for the binary search used in updating parameter
      * \f$ l \f$. Defaults to `1e-6`.
      */
-    SpectralSelectionSelector(Scalar eps = 1e-6) : eps_(eps) {}
+    SpectralSelectionSelector(Scalar eps = 1e-6) : eps(eps) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
@@ -170,7 +170,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
     }
 
   private:
-    Scalar eps_; // Relative tolerance for binary and golden-section search
+    Scalar eps; // Relative tolerance for binary and golden-section search
 
     /*!
      * @brief Calculates the initial value of parameter \f$ \epsilon \f$.
@@ -261,7 +261,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
 
         const int MAX_ITERATIONS = 100;
         int iter = 0;
-        while ((right - left) > eps_ && iter < MAX_ITERATIONS) {
+        while ((right - left) > eps && iter < MAX_ITERATIONS) {
             Scalar mid = (left + right) / static_cast<Scalar>(2);
             Scalar f_mid = f(mid);
 
@@ -348,7 +348,7 @@ class SpectralSelectionSelector : public SelectorBase<Scalar> {
 
         const int MAX_ITERATIONS = 100;
         int iter = 0;
-        while ((right - left) > eps_ && iter < MAX_ITERATIONS) {
+        while ((right - left) > eps && iter < MAX_ITERATIONS) {
             if (b1 > b2) {
                 // The maximum is in the left interval [left, l2].
                 right = l2;

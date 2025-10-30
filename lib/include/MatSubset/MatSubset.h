@@ -7,6 +7,7 @@
 #include "RectMaxvolSelector.h"
 #include "SpectralRemovalSelector.h"
 #include "SpectralSelectionSelector.h"
+#include "VolumeAddRemoveSelector.h"
 #include "VolumeRemovalSelector.h"
 
 #include "Utils.h"

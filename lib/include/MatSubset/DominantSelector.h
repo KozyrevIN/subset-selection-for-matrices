@@ -64,33 +64,15 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
-        // Preparing starting sets of indices
-        std::vector<Eigen::Index> selected_indices =
-            VolumePivotingBase<Scalar>::selectStartingSet(X);
-        std::vector<Eigen::Index> remaining_indices;
-        selected_indices.reserve(k);
-        remaining_indices.reserve(n - k);
+        // Make a copy to permute in-place
+        Eigen::MatrixX<Scalar> R = X;
 
-        std::vector<bool> is_already_selected(n, false);
-        for (Eigen::Index i : selected_indices) {
-            is_already_selected[static_cast<size_t>(i)] = true;
-        }
+        // Permute columns so first m columns form a high-volume submatrix
+        std::vector<Eigen::Index> indices =
+            VolumePivotingBase<Scalar>::selectStartingSet(R);
 
-        for (Eigen::Index i = 0; i < n; ++i) {
-            if (!is_already_selected[static_cast<size_t>(i)]) {
-                if (selected_indices.size() < k) {
-                    selected_indices.push_back(i);
-                } else {
-                    remaining_indices.push_back(i);
-                }
-            }
-        }
-
-        // Initializing necessary matrices
-        Eigen::MatrixX<Scalar> R(m, n);
-        R.leftCols(k) = X(Eigen::all, selected_indices);
-        R.rightCols(n - k) = X(Eigen::all, remaining_indices);
-
+        // R is now permuted: first m columns are selected, rest are remaining
+        // indices tracks the permutation
         Eigen::MatrixX<Scalar> R_selected_dag =
             R.leftCols(k).completeOrthogonalDecomposition().pseudoInverse();
 
@@ -132,8 +114,8 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             l -= last_row.transpose().array().abs2() / (1 + l_remaining(j_max));
 
             // Swap newly added column and one destined to removal
-            std::swap(selected_indices[static_cast<size_t>(i_max)],
-                      remaining_indices[static_cast<size_t>(j_max)]);
+            std::swap(indices[static_cast<size_t>(i_max)],
+                      indices[static_cast<size_t>(k + j_max)]);
             std::swap(l_selected(i_max), l_remaining(j_max));
 
             C_selected.col(i_max).swap(C_remaining.col(j_max));
@@ -169,7 +151,9 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
                 << std::endl;
         }
 
-        return selected_indices;
+        // Return only the first k indices (selected columns)
+        indices.resize(k);
+        return indices;
     }
 
     /*!
