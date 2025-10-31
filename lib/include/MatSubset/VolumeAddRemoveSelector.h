@@ -3,9 +3,8 @@
 
 #include <cassert>  // For assert
 #include <cmath>    // For std::log, std::ceil
-#include <iostream> // For std::cerr
+#include <iostream> // For std::cerr (warnings)
 
-#include <Eigen/LU> // For .inverse()
 #include <Eigen/QR> // For Eigen::HouseholderQR
 
 #include "Enums.h"              // For MatSubset::Norm
@@ -103,19 +102,6 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         Eigen::ArrayX<Scalar> b = term_1 + (1 - l_selected) * (1 + l_j_max);
         Eigen::Index i_max;
 
-        // DEBUG: Verify l after column addition
-        {
-            Eigen::MatrixX<Scalar> R_selected_with_j = R.leftCols(k);
-            Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                R_selected_with_j.completeOrthogonalDecomposition()
-                    .pseudoInverse() *
-                R;
-            Eigen::ArrayX<Scalar> l_expected =
-                R_selected_pinv_R.colwise().squaredNorm();
-            Scalar max_diff = (l - l_expected).abs().maxCoeff();
-            //std::cerr << "Before swaps: max_diff = " << max_diff << std::endl;
-        }
-
         // Computing maximum possible number of swaps
         Eigen::Index max_swap_count = static_cast<Eigen::Index>(
             std::ceil(2 * m * std::log(k) / std::log(c)));
@@ -123,117 +109,34 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
 
         // Main loop
         Eigen::ArrayX<Scalar> extra_row;
+        Eigen::VectorX<Scalar> Y_times_v;
         while ((b.maxCoeff(&i_max) > c) && (swap_count <= max_swap_count)) {
-            /*
-            v = C_remaining.col(j_max);
-            Eigen::VectorX<Scalar> v_2 = Y * v;
-            Y -= v_2 * v_2.transpose() * Y / (1 + l_j_max);
-            l = ((C_selected.transpose() * Y) * C).colwise().squaredNorm();
-
-            // DEBUG: Verify l after column addition
-            {
-                Eigen::MatrixX<Scalar> R_selected_with_j = R.leftCols(k + 1);
-                R_selected_with_j.col(k) = R.col(k + j_max);
-                Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                    R_selected_with_j.completeOrthogonalDecomposition()
-                        .pseudoInverse() *
-                    R;
-                Eigen::ArrayX<Scalar> l_expected =
-                    R_selected_pinv_R.colwise().squaredNorm();
-                Scalar max_diff = (l - l_expected).abs().maxCoeff();
-                std::cerr << "After addition (swap " << swap_count
-                          << "): max_diff = " << max_diff << std::endl;
-                l = l_expected;
-            }
-
-            // Swap newly added column and one destined to removal
-            std::swap(indices[static_cast<size_t>(i_max)],
-                      indices[static_cast<size_t>(k + j_max)]);
-            std::swap(l_selected(i_max), l_remaining(j_max));
-            C_selected.col(i_max).swap(C_remaining.col(j_max));
-            swap_count++;
-
-            v = C_remaining.col(j_max);
-            v_2 = Y * v;
-            Y += v_2 * v_2.transpose() / (1 - l_remaining(j_max));
-            l = ((C.transpose() * Y) * C).diagonal().array().square();
-
-            {
-                // DEBUG: Verify l after column removal
-
-                Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                    R.leftCols(k)
-                        .completeOrthogonalDecomposition()
-                        .pseudoInverse() *
-                    R;
-                Eigen::ArrayX<Scalar> l_expected =
-                    R_selected_pinv_R.colwise().squaredNorm();
-                Scalar max_diff = (l - l_expected).abs().maxCoeff();
-                std::cerr << "After removal (swap " << swap_count
-                          << "): max_diff = " << max_diff << std::endl
-                          << std::endl;
-            }
-            */
-
             // Recalculate l and Y upon column addition
             v = C_remaining.col(j_max);
-            Eigen::VectorX<Scalar> v_2 = Y * v;
-            Y -= v_2 * v_2.transpose() / (1 + l_j_max);
+            Y_times_v = Y * v;
+            Y -= Y_times_v * Y_times_v.transpose() / (1 + l_j_max);
             extra_row = ((v.transpose() * Y) * C).array().square();
             l -= extra_row * (1 + l_j_max);
 
-            // DEBUG: Verify l after column addition
-            {
-                Eigen::MatrixX<Scalar> R_selected_with_j = R.leftCols(k + 1);
-                R_selected_with_j.col(k) = R.col(k + j_max);
-                Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                    R_selected_with_j.completeOrthogonalDecomposition()
-                        .pseudoInverse() *
-                    R;
-                Eigen::ArrayX<Scalar> l_expected =
-                    R_selected_pinv_R.colwise().squaredNorm();
-                Scalar max_diff = (l - l_expected).abs().maxCoeff();
-                std::cerr << "After addition (swap " << swap_count
-                          << "): max_diff = " << max_diff << std::endl;
-            }
-
             // Swap newly added column and one destined to removal
             std::swap(indices[static_cast<size_t>(i_max)],
                       indices[static_cast<size_t>(k + j_max)]);
             std::swap(l_selected(i_max), l_remaining(j_max));
             C_selected.col(i_max).swap(C_remaining.col(j_max));
+            l_j_max = l_remaining(j_max);
             swap_count++;
 
             // Recalculate l and Y upon column removal
             v = C_remaining.col(j_max);
-            v_2 = Y * v;
-            //Y = (C_selected * C_selected.transpose()).inverse();
-            Y += v_2 * v_2.transpose() / (1 - l_remaining(j_max));
+            Y_times_v = Y * v;
+            Y += Y_times_v * Y_times_v.transpose() / (1 - l_j_max);
             extra_row = ((v.transpose() * Y) * C).array().square();
-            l += extra_row * (1 - l_remaining(j_max));
-
-            // DEBUG: Verify l after column removal
-            {
-                R.col(i_max).swap(R.col(k + j_max));
-                Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                    R.leftCols(k)
-                        .completeOrthogonalDecomposition()
-                        .pseudoInverse() *
-                    R;
-                Eigen::ArrayX<Scalar> l_expected =
-                    R_selected_pinv_R.colwise().squaredNorm();
-                Scalar max_diff = (l - l_expected).abs().maxCoeff();
-                std::cerr << "After removal (swap " << swap_count
-                          << "): max_diff = " << max_diff << std::endl
-                          << std::endl;
-            }
+            l += extra_row * (1 - l_j_max);
 
             // Find new indices for replacement
             l_j_max = l_remaining.maxCoeff(&j_max);
             v = C_remaining.col(j_max);
             term_1 = ((v.transpose() * Y) * C_selected).array().square();
-            // term_1 =
-            // R_selected_pinv_R.col(j_max).transpose().array().square();
             b = term_1 + (1 - l_selected) * (1 + l_j_max);
         }
 
