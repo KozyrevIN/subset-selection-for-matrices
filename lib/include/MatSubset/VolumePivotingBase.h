@@ -59,13 +59,16 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
+        // Make a copy for orthogonalization process
+        Eigen::MatrixX<Scalar> R = X;
+
         std::vector<Eigen::Index> indices(n);
         for (Eigen::Index j = 0; j < n; ++j) {
             indices[j] = j;
         }
 
         for (Eigen::Index i = 0; i < m; ++i) {
-            Eigen::ArrayX<Scalar> gamma = X.colwise().squaredNorm();
+            Eigen::ArrayX<Scalar> gamma = R.colwise().squaredNorm();
             Eigen::Index j_max;
             Scalar gamma_max = gamma.tail(n - i).maxCoeff(&j_max);
             j_max += i;
@@ -73,8 +76,9 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             std::swap(indices[static_cast<size_t>(i)],
                       indices[static_cast<size_t>(j_max)]);
             X.col(i).swap(X.col(j_max));
+            R.col(i).swap(R.col(j_max));
 
-            X -= X.col(i) * (X.col(i).transpose() * X) / gamma_max;
+            R -= R.col(i) * (R.col(i).transpose() * R) / gamma_max;
         }
 
         return indices;

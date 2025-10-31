@@ -111,7 +111,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             last_row = C_remaining.col(j_max).transpose() * C /
                        (1 + l_remaining(j_max));
             C -= C_remaining.col(j_max) * last_row;
-            l -= last_row.transpose().array().abs2() / (1 + l_remaining(j_max));
+            l -= last_row.transpose().array().abs2() * (1 + l_remaining(j_max));
 
             // Swap newly added column and one destined to removal
             std::swap(indices[static_cast<size_t>(i_max)],

@@ -206,7 +206,7 @@ template <typename Scalar> class Tester {
                     {
                         std::string label =
                             "k = " + std::format("{:^{}}", k, k_max_len);
-                        progress_bar.update(label);
+                        //progress_bar.update(label);
                         output_files[i] << k << "," << pinv_spectral_norm_ratio
                                         << "," << pinv_frobenius_norm_ratio
                                         << "," << wall_time_ms << ","
