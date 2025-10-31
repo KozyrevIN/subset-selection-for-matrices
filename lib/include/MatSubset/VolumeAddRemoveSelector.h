@@ -124,6 +124,56 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         // Main loop
         Eigen::ArrayX<Scalar> extra_row;
         while ((b.maxCoeff(&i_max) > c) && (swap_count <= max_swap_count)) {
+            v = C_remaining.col(j_max);
+            Eigen::VectorX<Scalar> v_2 = Y * v;
+            Y -= v_2 * v_2.transpose() * Y / (1 + l_j_max);
+            l = ((C_selected.transpose() * Y) * C).colwise().squaredNorm();
+
+            // DEBUG: Verify l after column addition
+            {
+                Eigen::MatrixX<Scalar> R_selected_with_j = R.leftCols(k + 1);
+                R_selected_with_j.col(k) = R.col(k + j_max);
+                Eigen::MatrixX<Scalar> R_selected_pinv_R =
+                    R_selected_with_j.completeOrthogonalDecomposition()
+                        .pseudoInverse() *
+                    R;
+                Eigen::ArrayX<Scalar> l_expected =
+                    R_selected_pinv_R.colwise().squaredNorm();
+                Scalar max_diff = (l - l_expected).abs().maxCoeff();
+                std::cerr << "After addition (swap " << swap_count
+                          << "): max_diff = " << max_diff << std::endl;
+                l = l_expected;
+            }
+
+             // Swap newly added column and one destined to removal
+            std::swap(indices[static_cast<size_t>(i_max)],
+                      indices[static_cast<size_t>(k + j_max)]);
+            std::swap(l_selected(i_max), l_remaining(j_max));
+            C_selected.col(i_max).swap(C_remaining.col(j_max));
+            swap_count++;
+
+            v = C_remaining.col(j_max);
+            v_2 = Y * v;
+            Y += v_2 * v_2.transpose() / (1 - l_remaining(j_max));
+            l = ((C.transpose() * Y) * C).diagonal().array().square();
+
+            {
+                // DEBUG: Verify l after column removal
+
+                Eigen::MatrixX<Scalar> R_selected_pinv_R =
+                    R.leftCols(k)
+                        .completeOrthogonalDecomposition()
+                        .pseudoInverse() *
+                    R;
+                Eigen::ArrayX<Scalar> l_expected =
+                    R_selected_pinv_R.colwise().squaredNorm();
+                Scalar max_diff = (l - l_expected).abs().maxCoeff();
+                std::cerr << "After removal (swap " << swap_count
+                          << "): max_diff = " << max_diff << std::endl
+                          << std::endl;
+            }
+
+            /*
             // Recalculate l and Y upon column addition
             v = C_remaining.col(j_max);
             Eigen::VectorX<Scalar> v_2 = Y * v;
@@ -175,12 +225,14 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                       << "): max_diff = " << max_diff << std::endl
                       << std::endl;
             l = l_expected;
+            */
 
             // Find new indices for replacement
             l_j_max = l_remaining.maxCoeff(&j_max);
             v = C_remaining.col(j_max);
-            //term_1 = ((v.transpose() * Y) * C_selected).array().square();
-            term_1 = R_selected_pinv_R.col(j_max).transpose().array().square();
+            term_1 = ((v.transpose() * Y) * C_selected).array().square();
+            // term_1 =
+            // R_selected_pinv_R.col(j_max).transpose().array().square();
             b = term_1 + (1 - l_selected) * (1 + l_j_max);
         }
 
