@@ -113,7 +113,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             Eigen::ArrayX<Scalar> l_expected =
                 R_selected_pinv_R.colwise().squaredNorm();
             Scalar max_diff = (l - l_expected).abs().maxCoeff();
-            std::cerr << "Before swaps: max_diff = " << max_diff << std::endl;
+            //std::cerr << "Before swaps: max_diff = " << max_diff << std::endl;
         }
 
         // Computing maximum possible number of swaps
@@ -124,6 +124,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         // Main loop
         Eigen::ArrayX<Scalar> extra_row;
         while ((b.maxCoeff(&i_max) > c) && (swap_count <= max_swap_count)) {
+            /*
             v = C_remaining.col(j_max);
             Eigen::VectorX<Scalar> v_2 = Y * v;
             Y -= v_2 * v_2.transpose() * Y / (1 + l_j_max);
@@ -145,7 +146,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                 l = l_expected;
             }
 
-             // Swap newly added column and one destined to removal
+            // Swap newly added column and one destined to removal
             std::swap(indices[static_cast<size_t>(i_max)],
                       indices[static_cast<size_t>(k + j_max)]);
             std::swap(l_selected(i_max), l_remaining(j_max));
@@ -172,12 +173,12 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                           << "): max_diff = " << max_diff << std::endl
                           << std::endl;
             }
+            */
 
-            /*
             // Recalculate l and Y upon column addition
             v = C_remaining.col(j_max);
             Eigen::VectorX<Scalar> v_2 = Y * v;
-            Y -= v_2 * v_2.transpose() * Y / (1 + l_j_max);
+            Y -= v_2 * v_2.transpose() / (1 + l_j_max);
             extra_row = ((v.transpose() * Y) * C).array().square();
             l -= extra_row * (1 + l_j_max);
 
@@ -194,7 +195,6 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                 Scalar max_diff = (l - l_expected).abs().maxCoeff();
                 std::cerr << "After addition (swap " << swap_count
                           << "): max_diff = " << max_diff << std::endl;
-                l = l_expected;
             }
 
             // Swap newly added column and one destined to removal
@@ -207,25 +207,26 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             // Recalculate l and Y upon column removal
             v = C_remaining.col(j_max);
             v_2 = Y * v;
+            //Y = (C_selected * C_selected.transpose()).inverse();
             Y += v_2 * v_2.transpose() / (1 - l_remaining(j_max));
             extra_row = ((v.transpose() * Y) * C).array().square();
             l += extra_row * (1 - l_remaining(j_max));
 
             // DEBUG: Verify l after column removal
-
-            Eigen::MatrixX<Scalar> R_selected_pinv_R =
-                R.leftCols(k)
-                    .completeOrthogonalDecomposition()
-                    .pseudoInverse() *
-                R;
-            Eigen::ArrayX<Scalar> l_expected =
-                R_selected_pinv_R.colwise().squaredNorm();
-            Scalar max_diff = (l - l_expected).abs().maxCoeff();
-            std::cerr << "After removal (swap " << swap_count
-                      << "): max_diff = " << max_diff << std::endl
-                      << std::endl;
-            l = l_expected;
-            */
+            {
+                R.col(i_max).swap(R.col(k + j_max));
+                Eigen::MatrixX<Scalar> R_selected_pinv_R =
+                    R.leftCols(k)
+                        .completeOrthogonalDecomposition()
+                        .pseudoInverse() *
+                    R;
+                Eigen::ArrayX<Scalar> l_expected =
+                    R_selected_pinv_R.colwise().squaredNorm();
+                Scalar max_diff = (l - l_expected).abs().maxCoeff();
+                std::cerr << "After removal (swap " << swap_count
+                          << "): max_diff = " << max_diff << std::endl
+                          << std::endl;
+            }
 
             // Find new indices for replacement
             l_j_max = l_remaining.maxCoeff(&j_max);
