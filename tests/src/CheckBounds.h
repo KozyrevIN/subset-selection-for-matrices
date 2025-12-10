@@ -20,8 +20,8 @@ void check_bounds(MatSubset::SelectorBase<Scalar> *selector,
     Eigen::MatrixX<Scalar> X(m, n);
     // clang-format off
     X <<  1,  2,  3,  4,  5,
-          6,  7,  8,  9, 10,
-         11, 12, 13, 14, 15;
+          0,  6,  7,  8,  9,
+          0,  0, 10, 11, 12;
     // clang-format on
 
     // Helper lambda to check bounds for a specific norm

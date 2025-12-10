@@ -173,7 +173,6 @@ template <typename Scalar> class Tester {
 
 #pragma omp parallel for schedule(static)
             for (int trial = 0; trial < trials_per_k; ++trial) {
-                
                 // generateNatrix() is thread safe
                 Eigen::MatrixX<Scalar> X = matrix_generator->generateMatrix();
 
