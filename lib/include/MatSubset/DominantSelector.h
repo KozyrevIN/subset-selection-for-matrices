@@ -189,7 +189,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             return S_1 / (S_1 + core_mult);
         } else {
             Scalar S_m = static_cast<Scalar>(m);
-            return S_1 / (S_m + core_mult);
+            return S_m / (S_m + core_mult);
         }
     }
 
