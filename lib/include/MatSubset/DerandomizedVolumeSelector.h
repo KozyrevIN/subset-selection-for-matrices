@@ -234,41 +234,30 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         const Eigen::Index max_binom_deg = max_deg;
         const Eigen::Index num_coeffs = max_binom_deg - min_binom_deg + 1;
 
+        // We sort binomials from one corresponding to largest deg to smallest
         Eigen::VectorX<Scalar> binoms(num_coeffs);
         binoms(0) = 1;
         for (Eigen::Index i = 1; i < num_coeffs; ++i) {
             const Scalar idx = static_cast<Scalar>(max_binom_deg - i);
-            binoms(i) = -binoms(i - 1) * (x_minus_1_deg - idx + 1) / idx;
+            binoms(i) = -binoms(i - 1) * (idx + 1) / (x_minus_1_deg - idx - 1);
         }
 
         // Apply to p
         Eigen::VectorX<Scalar> p_new(max_deg - min_deg + 1);
         for (Eigen::Index i = 0; i < max_deg - min_deg + 1; ++i) {
-            Eigen::Index conv_length = min_deg - p_deg + 1;
-            p_new(i) = binoms.tail(conv_length).dot(p.head(conv_length));
+            Eigen::Index conv_length = std::min(binoms.size() - i, p_deg);
+            p_new(i) = p.head(conv_length).dot(binoms.segment(i, conv_length));
         }
+        p = p_new;
 
-        // For g: degree is p_deg - 1, so total degree is g_deg + x_minus_1_deg
-        // = max_deg - 1. We need degrees [min_deg, max_deg - 1].
-        const Eigen::Index num_coeffs_g = num_coeffs - 1;
-        const Eigen::Index min_binom_idx_g =
-            std::max(min_deg - g_deg, static_cast<Eigen::Index>(0));
-
-        Eigen::VectorX<Scalar> binom_g(num_coeffs_g);
-        binom_g[0] = Scalar(1);
-        for (Eigen::Index i = 1; i < num_coeffs_g; ++i) {
-            const Eigen::Index idx = min_binom_idx_g + i;
-            binom_g[i] =
-                binom_g[i - 1] * (-(x_minus_1_deg - idx + 1)) / Scalar(idx);
+        // Apply to g
+        Eigen::MatrixX<Scalar> g_new(max_deg - min_deg, max_deg - min_deg);
+        for (Eigen::Index i = 0; i < max_deg - min_deg + 1; ++i) {
+            Eigen::Index conv_length = std::min(binoms.size() - i, g_deg);
+            g_new.col(i) =
+                g.leftCols(conv_length) * binoms.segnemt(i, conv_length);
         }
-
-        // Apply to p: element-wise multiply and trim
-        p = (p.segment(min_deg, num_coeffs).array() * binom_p.array()).matrix();
-
-        // Apply to g: element-wise multiply rows and trim
-        g = (g.middleCols(min_deg, num_coeffs_g).array().rowwise() *
-             binom_g.transpose().array())
-                .matrix();
+        g = g_new;
     }
 };
 
