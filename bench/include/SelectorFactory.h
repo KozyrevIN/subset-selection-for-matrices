@@ -112,6 +112,7 @@ template <typename Scalar> class SelectorFactory {
  * - Selectors with required c parameter (DominantSelector, RectMaxvolSelector)
  *
  * Registered selectors:
+ * - "derandomized volume" - DerandomizedVolumeSelector (optional "eps")
  * - "dominant" - DominantSelector (requires "c" parameter)
  * - "dual set" - DualSetSelector
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
@@ -143,6 +144,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * factory is immediately ready to create selectors via create().
      */
     DefaultSelectorFactory() {
+        registerEpsArgSelector<DerandomizedVolumeSelector>();
         registerCArgSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
