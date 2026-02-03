@@ -104,12 +104,19 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
                 max_deg_p = d;
                 const Eigen::Index num_coeffs = max_deg_p - min_deg_p + 1;
                 p = p.tail(num_coeffs).eval();
-                g = g.rightCols(num_coeffs - 1).eval();
+                if (num_coeffs <= g.cols()) {
+                    g = g.rightCols(num_coeffs).eval();
+                } else {
+                    Eigen::MatrixX<Scalar> g_new = Eigen::MatrixX<Scalar>::Zero(g.rows(), num_coeffs);
+                    g_new.rightCols(g.cols()) = g;
+                    g = g_new;
+                }
             }
 
             // Characteristic polynomial construction
             Eigen::MatrixX<Scalar> Lambda_inv_Q_squared =
-                active_roots.asDiagonal() * Q.middleRows(l, r - l).cwiseAbs2();
+                active_roots.asDiagonal() *
+                Q.middleRows(l + roots_deflated, r - l).cwiseAbs2();
             Eigen::ArrayX<Scalar> scale_coeffs =
                 1 + Lambda_inv_Q_squared.colwise().sum().array();
             Eigen::ArrayXX<Scalar> g_factor = g.transpose() *
@@ -169,6 +176,9 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             eigensolver.compute(M);
             lambda = eigensolver.eigenvalues().reverse();
             Q = eigensolver.eigenvectors().rowwise().reverse().transpose() * Q;
+
+            // Update r to count nonzero eigenvalues (within tolerance)
+            r = (lambda.array() > tolerance).count();
         }
 
         return selected_indices;
