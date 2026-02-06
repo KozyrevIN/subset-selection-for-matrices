@@ -3,6 +3,7 @@
 
 #include "MatrixGenerators/GaussianMatrixGenerator.h"
 #include "MatrixGenerators/GraphIncidenceMatrixGenerator.h"
+#include "MatrixGenerators/MatrixFromFileGenerator.h"
 #include "MatrixGenerators/MatrixGeneratorBase.h"
 #include "MatrixGenerators/OrthonormalVectorsMatrixGenerator.h"
 #include "MatrixGenerators/SigmaMatrixGenerator.h"

@@ -37,6 +37,9 @@ build
 # Out folder
 out
 
+# Supplementary folder
+supplementary
+
 # Vscode files
 .vscode
 

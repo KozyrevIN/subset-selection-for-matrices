@@ -169,6 +169,7 @@ class DefaultMatrixGeneratorFactory : public MatrixGeneratorFactory<Scalar> {
         registerStandardGenerator<WeightedGraphIncidenceMatrixGenerator>();
         registerStandardGenerator<OrthonormalVectorsMatrixGenerator>();
         registerSigmaGenerator();
+        registerMatrixFromFileGenerator();
     }
 
   private:
@@ -240,6 +241,34 @@ class DefaultMatrixGeneratorFactory : public MatrixGeneratorFactory<Scalar> {
                     return std::make_unique<SigmaMatrixGenerator<Scalar>>(
                         m, n, sigma_values);
                 }
+            };
+        this->registerGenerator(type, creator);
+    }
+
+    /*!
+     * @brief Registers MatrixFromFileGenerator with required file_path parameter.
+     *
+     * MatrixFromFileGenerator requires a "file_path" parameter specifying the
+     * path to the data file (ARFF, CSV, or other supported formats). The matrix
+     * dimensions are automatically determined from the file contents.
+     *
+     * Example JSON configuration:
+     * @code
+     * {"type": "matrix from file",
+     *  "file_path": "supplementary/bank32nh.arff"}
+     * @endcode
+     *
+     * @note The "rows" and "cols" fields are not required for this generator
+     * as dimensions are determined from the file.
+     */
+    void registerMatrixFromFileGenerator() {
+        // Use the known type string directly instead of creating a dummy instance
+        std::string type = "matrix from file";
+
+        typename MatrixGeneratorFactory<Scalar>::Creator creator =
+            [](const nlohmann::json &config) {
+                std::string file_path = config.at("file_path").get<std::string>();
+                return std::make_unique<MatrixFromFileGenerator<Scalar>>(file_path);
             };
         this->registerGenerator(type, creator);
     }
