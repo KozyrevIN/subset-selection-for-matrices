@@ -10,6 +10,7 @@
 #include <Eigen/QR>          // For Eigen::HouseholderQR
 
 #include "SelectorBase.h" // Base class
+#include "Utils.h"        // For SecularEquationSolver
 
 namespace MatSubset {
 
@@ -27,10 +28,11 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
   public:
     /*!
      * @brief Constructor for `DerandomizedVolumeSelector`.
-     * @param tolerance Small tolerance for numerical stability. Default: 1e-8.
+     * @param tolerance Small tolerance for numerical stability. Default:
+     * sqrt(machine epsilon).
      */
     explicit DerandomizedVolumeSelector(
-        Scalar tolerance = static_cast<Scalar>(1e-8))
+        Scalar tolerance = std::sqrt(std::numeric_limits<Scalar>::epsilon()))
         : tolerance(tolerance) {}
 
     /*!
@@ -374,7 +376,7 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * @return Updated eigenvalues after adding rank-1 update.
      *
      * Computes eigenvalues of diag(lambda_extended) + q_col * q_col^T
-     * using self-adjoint eigensolver, where lambda_extended is lambda_deflated
+     * using secular equation solver, where lambda_extended is lambda_deflated
      * padded with a zero if q_col is longer.
      */
     Eigen::VectorX<Scalar>
@@ -392,11 +394,8 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             lambda_extended = lambda_deflated;
         }
 
-        Eigen::MatrixX<Scalar> M = q_col * q_col.transpose();
-        M.diagonal() += lambda_extended;
-
-        Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigensolver(M);
-        return eigensolver.eigenvalues();
+        Utils::SecularEquationSolver<Scalar> solver;
+        return solver.solve(lambda_extended, q_col);
     }
 };
 

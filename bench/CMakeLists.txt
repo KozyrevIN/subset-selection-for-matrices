@@ -23,6 +23,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     OUTPUT_NAME "Bench"
 )
 
+# Add conditional compile flags for Debug and Release
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Debug>:-g -O0>
+    $<$<CONFIG:Release>:-O3 -march=native -DNDEBUG>
+)
+
 # Managing dependencies
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(MatSubset 0.0 REQUIRED)
