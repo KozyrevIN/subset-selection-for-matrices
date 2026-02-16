@@ -33,11 +33,13 @@ TEST_CASE_TEMPLATE("SecularEquationSolver: basic case", Scalar, float, double) {
     d << 1.0, 2.0, 3.0;
 
     Eigen::VectorX<Scalar> v(3);
-    v << 0.5, 0.3, 0.2;
+    v << 0.5, 0.3, 0.1;
 
     MatSubset::Utils::SecularEquationSolver<Scalar> solver;
     Eigen::VectorX<Scalar> computed = solver.solve(d, v);
+    std::cout << "computed eigenvalues = " << computed.transpose() << std::endl;
     Eigen::VectorX<Scalar> expected = computeEigenvaluesDirect(d, v);
+    std::cout << "expected eigenvalues = " << expected.transpose() << std::endl;
 
     checkEigenvaluesMatch(computed, expected);
 }

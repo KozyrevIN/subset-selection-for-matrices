@@ -4,8 +4,10 @@
 #include <Eigen/Core> // For vectors and matrices
 #include <Eigen/SVD>  // For Eigen::BDCSVD
 
-#include <cmath>  // For std::sqrt, std::abs
-#include <limits> // For std::numeric_limits
+#include <cmath>    // For std::sqrt, std::abs, std::fma
+#include <iostream> // For std::cerr
+#include <limits>   // For std::numeric_limits
+#include <tuple>    // For std::tuple
 
 #include "Enums.h" // For MatSubset::Norm
 
@@ -127,20 +129,22 @@ template <typename Scalar> class SecularEquationSolver {
      */
     Eigen::VectorX<Scalar> solve(const Eigen::VectorX<Scalar> &d,
                                  const Eigen::VectorX<Scalar> &v) const {
+        Eigen::ArrayX<Scalar> v_squared = v.array().square();
+
         // Deflation type 1: identify non-zero v components
-        Eigen::ArrayX<bool> mask =
-            (v.array().abs2() > v.array().abs2().mean() * tolerance);
+        Eigen::ArrayX<bool> mask = (v_squared > v_squared.mean() * tolerance);
 
         // Deflation type 2: merge clusters of equal diagonal elements
         Eigen::Index n = 0;
-        Eigen::VectorX<Scalar> v_deflated(v.size());
+        Eigen::VectorX<Scalar> v_squared_deflated(v.size());
         Eigen::Index i_1 = 0;
         Eigen::Index i_2 = 1;
         while (i_2 <= d.size()) {
             if ((i_2 == d.size()) ||
                 (d(i_2) - d(i_1) >= tolerance * std::abs(d(i_2)))) {
                 if (mask.segment(i_1, i_2 - i_1).sum() > 0) {
-                    v_deflated(n++) = v.segment(i_1, i_2 - i_1).norm();
+                    v_squared_deflated(n++) =
+                        v_squared.segment(i_1, i_2 - i_1).sum();
                     mask.segment(i_1, i_2 - i_1) =
                         Eigen::VectorX<bool>::Constant(i_2 - i_1, false);
                     mask((i_1 + i_2 - 1) / 2) = true;
@@ -150,8 +154,8 @@ template <typename Scalar> class SecularEquationSolver {
             ++i_2;
         }
 
-        v_deflated = v_deflated.head(n).eval();
-        Eigen::VectorX<Scalar> d_deflated(n);
+        v_squared_deflated = v_squared_deflated.head(n).eval();
+        Eigen::ArrayX<Scalar> d_deflated(n);
         Eigen::VectorX<Scalar> d_remaining(d.size() - n);
         i_1 = 0;
         i_2 = 0;
@@ -163,15 +167,8 @@ template <typename Scalar> class SecularEquationSolver {
             }
         }
 
-        // Solve secular equation for each deflated eigenvalue
-        Eigen::VectorX<Scalar> d_deflated_new(n);
-        for (Eigen::Index i = 0; i < n; ++i) {
-            Scalar left = d_deflated(i);
-            Scalar right = (i == (n - 1)) ? d_deflated(i) + v.squaredNorm()
-                                          : d_deflated(i + 1);
-            d_deflated_new(i) =
-                solveInInterval(d_deflated, v_deflated, i, left, right);
-        }
+        // Solve deflated secular equation
+        d_deflated = solveDeflated(d_deflated, v_squared_deflated);
 
         // Merge all eigenvalues together
         Eigen::VectorX<Scalar> d_new(d.size());
@@ -179,8 +176,8 @@ template <typename Scalar> class SecularEquationSolver {
         i_2 = 0;
         for (Eigen::Index i = 0; i < d.size(); ++i) {
             if (i_1 < n && (i_2 >= d_remaining.size() ||
-                            d_deflated_new(i_1) < d_remaining(i_2))) {
-                d_new(i) = d_deflated_new(i_1++);
+                            d_deflated(i_1) < d_remaining(i_2))) {
+                d_new(i) = d_deflated(i_1++);
             } else {
                 d_new(i) = d_remaining(i_2++);
             }
@@ -189,87 +186,241 @@ template <typename Scalar> class SecularEquationSolver {
         return d_new;
     }
 
-    /*!
-     * @brief Computes a single eigenvalue in a given interval.
-     * @param d Diagonal elements.
-     * @param v Rank-1 update vector.
-     * @param index The index for which we are solving for
-     * @param left Left endpoint of bracketing interval.
-     * @param right Right endpoint of bracketing interval.
-     * @return The eigenvalue in the interval [left, right].
-     *
-     * Uses bisection to find the root of the secular equation in the specified
-     * interval. The equation is shifted to improve numerical stability.
-     */
-    Scalar solveInInterval(const Eigen::VectorX<Scalar> &d,
-                           const Eigen::VectorX<Scalar> &v, Eigen::Index index,
-                           Scalar left, Scalar right) const {
-        // Choose shift to improve numerical stability
-        // We shift relative to the midpoint of the interval
-        Scalar mid = (left + right) / static_cast<Scalar>(2);
-        Scalar f_mid = evaluateSecularEquation(mid, d, v);
+    Eigen::ArrayX<Scalar>
+    solveDeflated(const Eigen::VectorX<Scalar> &d,
+                  const Eigen::VectorX<Scalar> &v_squared) const {
 
-        // Choose shift as the endpoint closer to the root
-        Scalar shift;
-        if (f_mid > static_cast<Scalar>(0)) {
-            shift = left;
-            left = 0;
-            right = mid - shift;
-        } else {
-            shift = right;
-            left = mid - shift;
-            right = 0;
+        const Eigen::Index n = d.size();
+        Eigen::ArrayX<Scalar> d_new(n);
+
+        // Quick return for n = 1 and n = 2
+        if (n == 1) {
+            d_new(0) = d(0) + v_squared(0);
+            return d_new;
+        } else if (n == 2) {
+            Eigen::ArrayX<Scalar> d_shifted = d;
+            auto [tau, shift, k_origin, k_neighbour] =
+                computeInitialGuessAndShiftD(d_shifted, v_squared, 0);
+            d_new(0) = tau + shift;
+            d_new(1) = d.sum() + v_squared.sum() - d_new(0);
+            return d_new;
         }
 
-        // Create shifted diagonal
-        Eigen::VectorX<Scalar> d_shifted = d.array() - shift;
+        // Main loop
+        const Scalar eps_m = std::numeric_limits<Scalar>::epsilon();
+        const int max_iter = 20;
 
-        // Sort diagonal to put smallest absolute values at the end to ensure
-        // stable summation
-        Eigen::VectorX<Scalar> d_sorted(d.size());
-        Eigen::VectorX<Scalar> v_sorted(v.size());
-        Eigen::Index neg_ptr = 0;            // moves forward through negatives
-        Eigen::Index pos_ptr = d.size() - 1; // moves backward through positives
+        for (Eigen::Index k = 0; k < n - 1; ++k) {
 
-        for (Eigen::Index i = 0; i < d.size(); ++i) {
-            bool take_neg =
-                (neg_ptr <= index) &&
-                (pos_ptr <= index ||
-                 std::abs(d_shifted(neg_ptr)) > std::abs(d_shifted(pos_ptr)));
-            if (take_neg) {
-                d_sorted(i) = d_shifted(neg_ptr);
-                v_sorted(i) = v(neg_ptr);
-                ++neg_ptr;
-            } else {
-                d_sorted(i) = d_shifted(pos_ptr);
-                v_sorted(i) = v(pos_ptr);
-                --pos_ptr;
+            bool use_fixed_weight = true;
+            Eigen::ArrayX<Scalar> d_shifted = d;
+            auto [tau, shift, k_origin, k_neighbour] =
+                computeInitialGuessAndShiftD(d_shifted, v_squared, k);
+            auto [f, f_prime, psi_prime, phi_prime, e] =
+                computeFAndComponents(tau, d_shifted, v_squared, k);
+
+            for (int i = 0; i < max_iter; ++i) {
+                // Convergence check
+                if (std::abs(f) <=
+                    eps_m * e + eps_m * std::abs(tau) * std::abs(f_prime)) {
+                    break;
+                }
+
+                // Perform iteration
+                if (use_fixed_weight) {
+                    applyFixedWeightCorrection(tau, d_shifted, v_squared, f,
+                                               f_prime, k_origin, k_neighbour);
+                } else {
+                    applyMiddleWayCorrection(tau, d_shifted, f, f_prime,
+                                             psi_prime, phi_prime, k);
+                }
+
+                // Compute f at new point
+                const Scalar f_prev = f;
+                std::tie(f, f_prime, psi_prime, phi_prime, e) =
+                    computeFAndComponents(tau, d_shifted, v_squared, k);
+
+                // Method switch logic
+                if (f * f_prev > static_cast<Scalar>(0) &&
+                    std::abs(f) > static_cast<Scalar>(0.1) * std::abs(f_prev)) {
+                    use_fixed_weight = !use_fixed_weight;
+                }
             }
+
+            d_new(k) = tau + shift;
         }
 
-        return shift + solveWithBisection(d_sorted, v_sorted, left, right);
+        // Handle last eigenvalue (k = n - 1)
+        d_new(n - 1) = d.sum() + v_squared.sum() - d_new.head(n - 1).sum();
+
+        return d_new;
     }
 
   private:
-    /*!
-     * @brief Evaluates the secular equation at a given point (unshifted).
-     * @param lambda The point at which to evaluate.
-     * @param d Diagonal elements.
-     * @param v Rank-1 update vector.
-     * @return Value of \f$ 1 + \sum_{i} \frac{v_i^2}{d_i - \lambda} \f$
-     */
-    Scalar evaluateSecularEquation(Scalar lambda,
-                                   const Eigen::VectorX<Scalar> &d,
-                                   const Eigen::VectorX<Scalar> &v) const {
-        return 1 + (v.cwiseAbs2().array() / (d.array() - lambda)).sum();
+    // Compute psi: sum of v_squared(j) / (d(j) - tau) for j <= k
+    // Performed in forward order for numerical stability
+    Scalar computePsi(Scalar tau, const Eigen::ArrayX<Scalar> &d,
+                      const Eigen::ArrayX<Scalar> &v_squared,
+                      Eigen::Index k) const {
+        Scalar psi = static_cast<Scalar>(0);
+        for (Eigen::Index j = 0; j <= k; ++j) {
+            Scalar delta = d(j) - tau;
+            psi += v_squared(j) / delta;
+        }
+        return psi;
+    }
+
+    // Compute phi: sum of v_squared(j) / (d(j) - tau) for j > k
+    // Performed in reverse order for numerical stability
+    Scalar computePhi(Scalar tau, const Eigen::ArrayX<Scalar> &d,
+                      const Eigen::ArrayX<Scalar> &v_squared,
+                      Eigen::Index k) const {
+        Scalar phi = static_cast<Scalar>(0);
+        for (Eigen::Index j = d.size() - 1; j > k; --j) {
+            Scalar delta = d(j) - tau;
+            phi += v_squared(j) / delta;
+        }
+        return phi;
+    }
+
+    std::tuple<Scalar, Scalar, Scalar, Scalar, Scalar>
+    computeFAndComponents(Scalar tau, const Eigen::ArrayX<Scalar> &d,
+                          const Eigen::ArrayX<Scalar> &v_squared,
+                          Eigen::Index k) const {
+        Scalar psi = static_cast<Scalar>(0);
+        Scalar psi_prime = static_cast<Scalar>(0);
+        Scalar phi = static_cast<Scalar>(0);
+        Scalar phi_prime = static_cast<Scalar>(0);
+        Scalar e_1 = static_cast<Scalar>(0);
+        Scalar e_2 = static_cast<Scalar>(0);
+
+        // Compute psi (sum j <= k), forward order (j=0 to k)
+        // d(0) - tau has largest magnitude, d(k) - tau = -tau
+        for (Eigen::Index j = 0; j <= k; ++j) {
+            Scalar delta = d(j) - tau;
+            Scalar term = v_squared(j) / delta;
+            psi += term;
+            psi_prime += term / delta;
+            e_1 += std::abs(psi);
+        }
+        e_1 += static_cast<Scalar>(5) * std::abs(psi);
+
+        // Compute phi (sum j > k), reverse order (j=n-1 down to k+1)
+        // d(n-1) - tau has largest magnitude
+        for (Eigen::Index j = d.size() - 1; j > k; --j) {
+            Scalar delta = d(j) - tau;
+            Scalar term = v_squared(j) / delta;
+            phi += term;
+            phi_prime += term / delta;
+            e_2 += std::abs(phi);
+        }
+        e_2 += static_cast<Scalar>(5) * std::abs(phi);
+
+        const Scalar f = static_cast<Scalar>(1) + psi + phi;
+        const Scalar f_prime = psi_prime + phi_prime;
+        const Scalar e = static_cast<Scalar>(2) + e_1 + e_2 + std::abs(f);
+
+        return {f, f_prime, psi_prime, phi_prime, e};
+    }
+
+    // Not for k = n - 1!
+    std::tuple<Scalar, Scalar, Eigen::Index, Eigen::Index>
+    computeInitialGuessAndShiftD(Eigen::ArrayX<Scalar> &d,
+                                 const Eigen::ArrayX<Scalar> &v_squared,
+                                 Eigen::Index k) const {
+
+        const Scalar mid = (d(k) + d(k + 1)) * static_cast<Scalar>(0.5);
+        const Scalar g_mid = static_cast<Scalar>(1) +
+                             computePsi(mid, d, v_squared, k - 1) +
+                             computePhi(mid, d, v_squared, k + 1);
+        const Scalar h_mid =
+            v_squared(k) / (d(k) - mid) + v_squared(k + 1) / (d(k + 1) - mid);
+
+        Scalar tau, shift;
+        Eigen::Index k_origin, k_neighbour;
+        if (g_mid + h_mid > 0) { // origin at k
+            k_origin = k;
+            k_neighbour = k + 1;
+        } else { // origin at k + 1
+            k_origin = k + 1;
+            k_neighbour = k;
+        }
+
+        shift = d(k_origin);
+        d -= shift;
+        tau = solveForTwoPoles(g_mid, v_squared(k_origin),
+                               v_squared(k_neighbour), d(k_neighbour));
+
+        return {tau, shift, k_origin, k_neighbour};
+    }
+
+    Scalar solveForTwoPoles(Scalar c, Scalar v_sq_origin, Scalar v_sq_neighbour,
+                            Scalar d_neighbour) const {
+
+        const Scalar a = c * d_neighbour + v_sq_origin + v_sq_neighbour;
+        const Scalar b = d_neighbour * v_sq_origin;
+        const Scalar disc = std::sqrt(std::fma(a, a, -4 * b * c));
+
+        Scalar tau;
+        if (a <= 0) {
+            tau = (a - disc) / (2 * c);
+        } else {
+            tau = (2 * b) / (a + disc);
+        }
+
+        return tau;
+    }
+
+    // Not for k = n - 1!
+    void applyFixedWeightCorrection(Scalar &tau,
+                                    const Eigen::ArrayX<Scalar> &d_shifted,
+                                    const Eigen::ArrayX<Scalar> &v_squared,
+                                    Scalar f, Scalar f_prime,
+                                    Eigen::Index k_origin,
+                                    Eigen::Index k_neighbour) const {
+
+        const Scalar delta_origin = -tau;
+        const Scalar delta_neighbour = d_shifted(k_neighbour) - tau;
+        const Scalar delta_sq_origin = delta_origin * delta_origin;
+
+        const Scalar v_sq_origin = v_squared(k_origin);
+        const Scalar v_sq_neighbour = delta_neighbour * delta_neighbour *
+                                      (f_prime - v_sq_origin / delta_sq_origin);
+        const Scalar c = f - delta_neighbour * f_prime -
+                         (d_shifted(k_origin) - d_shifted(k_neighbour)) *
+                             v_sq_origin / delta_sq_origin;
+
+        tau = solveForTwoPoles(c, v_sq_origin, v_sq_neighbour,
+                               d_shifted(k_neighbour));
+    }
+
+    // Not for k = n - 1!
+    void applyMiddleWayCorrection(Scalar &tau,
+                                  const Eigen::ArrayX<Scalar> &d_shifted,
+                                  Scalar f, Scalar f_prime, Scalar psi_prime,
+                                  Scalar phi_prime, Eigen::Index k) const {
+
+        const Scalar delta_1 = tau - d_shifted(k);
+        const Scalar delta_2 = tau - d_shifted(k + 1);
+        const Scalar delta_prod = delta_1 * delta_2;
+
+        const Scalar a = (delta_1 + delta_2) * f - delta_prod * f_prime;
+        const Scalar b = delta_prod * f;
+        const Scalar c = f - delta_1 * psi_prime - delta_2 * phi_prime;
+        const Scalar disc = std::sqrt(std::fma(a, a, -4 * b * c));
+
+        if (a <= 0) {
+            tau += (a - disc) / (2 * c);
+        } else {
+            tau += (2 * b) / (a + disc);
+        }
     }
 
     /*!
      * @brief Solves for a root using bisection method.
-     * @param d Diagonal elements (original).
+     * @param d Diagonal elements (shifted).
      * @param v Rank-1 update vector.
-     * @param d_shifted Shifted diagonal.
-     * @param shift The shift value.
+     * @param d Shifted diagonal.
      * @param left Left endpoint in shifted coordinates.
      * @param right Right endpoint in shifted coordinates.
      * @return The computed eigenvalue (in original, unshifted coordinates).
@@ -290,6 +441,8 @@ template <typename Scalar> class SecularEquationSolver {
 
             // Check convergence
             if (std::abs(b - a) < tolerance * (right - left)) {
+                std::cerr << "[Bisection] converged in " << iter + 1
+                          << " iterations\n";
                 return mid;
             }
 
@@ -301,6 +454,8 @@ template <typename Scalar> class SecularEquationSolver {
             }
         }
 
+        std::cerr << "[Bisection] reached max iterations (" << max_iterations
+                  << ")\n";
         return (a + b) / static_cast<Scalar>(2);
     }
 
