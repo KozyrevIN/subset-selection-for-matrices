@@ -208,10 +208,10 @@ template <typename Scalar> class SecularEquationSolver {
 
         // Main loop
         const Scalar eps_m = std::numeric_limits<Scalar>::epsilon();
-        const int max_iter = 20;
+        const int max_iter = 10;
 
+        Scalar increase_sum = 0;
         for (Eigen::Index k = 0; k < n - 1; ++k) {
-
             bool use_fixed_weight = true;
             Eigen::ArrayX<Scalar> d_shifted = d;
             auto [tau, shift, k_origin, k_neighbour] =
@@ -235,7 +235,7 @@ template <typename Scalar> class SecularEquationSolver {
                                              psi_prime, phi_prime, k);
                 }
 
-                // Compute f at new point
+                // Compute f at a new point
                 const Scalar f_prev = f;
                 std::tie(f, f_prime, psi_prime, phi_prime, e) =
                     computeFAndComponents(tau, d_shifted, v_squared, k);
@@ -248,10 +248,49 @@ template <typename Scalar> class SecularEquationSolver {
             }
 
             d_new(k) = tau + shift;
+            increase_sum += tau - d_shifted(k);
         }
 
         // Handle last eigenvalue (k = n - 1)
-        d_new(n - 1) = d.sum() + v_squared.sum() - d_new.head(n - 1).sum();
+        {
+            const Eigen::Index k = n - 1;
+            Eigen::ArrayX<Scalar> d_shifted = d;
+            const Scalar shift = d(k);
+            d_shifted -= shift;
+            Scalar tau = v_squared.sum() - increase_sum;
+
+            for (int i = 0; i < max_iter; ++i) {
+                // Compute f at a new point
+                auto [f, f_prime, psi_prime, phi_prime, e] =
+                    computeFAndComponents(tau, d_shifted, v_squared, k - 1);
+
+                // Convergence check
+                if (std::abs(f) <=
+                    eps_m * e + eps_m * std::abs(tau) * std::abs(f_prime)) {
+                    break;
+                }
+
+                // Perform iteration
+                const Scalar delta_origin = -tau;
+                const Scalar delta_neighbour = d_shifted(k - 1) - tau;
+                const Scalar delta_prod = delta_origin * delta_neighbour;
+
+                const Scalar a =
+                    (delta_origin + delta_neighbour) * f - delta_prod * f_prime;
+                const Scalar b = delta_prod * f;
+                const Scalar c = f - delta_neighbour * psi_prime -
+                                 v_squared(k) / delta_origin;
+                const Scalar disc = std::sqrt(std::fma(a, a, -4 * b * c));
+
+                if (a >= 0) {
+                    tau += (a + disc) / (2 * c);
+                } else {
+                    tau += (2 * b) / (a - disc);
+                }
+            }
+
+            d_new(k) = tau + shift;
+        }
 
         return d_new;
     }
