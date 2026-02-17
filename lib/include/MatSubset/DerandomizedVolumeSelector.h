@@ -71,7 +71,7 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         }
 
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigensolver;
-        // Eigenvvalues are sorted in non-decreasing order
+        // Eigenvalues are sorted in non-decreasing order
         Eigen::VectorX<Scalar> lambda = Eigen::VectorX<Scalar>::Zero(m);
         Eigen::Index r = 0;
 
@@ -103,13 +103,13 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
 
                     // Additional deflation
                     if (lambda_j(0) < tolerance) {
-                        lambda_j = lambda_j.tail(lambda_j.size() - 1);
+                        lambda_j = lambda_j.tail(lambda_j.size() - 1).eval();
                     }
                     if (x_minus_1_deg < 0) {
                         assert(x_minus_1_deg == -1 &&
                                "x_minus_1_deg can't be less than -1");
                         x_minus_1_deg = 0;
-                        lambda_j = lambda_j.head(lambda_j.size() - 1);
+                        lambda_j = lambda_j.head(lambda_j.size() - 1).eval();
                     }
 
                     p.col(j).head(lambda_j.size() + 1) =

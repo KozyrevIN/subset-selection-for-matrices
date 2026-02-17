@@ -109,13 +109,10 @@ template <typename Scalar> class SecularEquationSolver {
      * @brief Constructor for `SecularEquationSolver`.
      * @param tolerance Convergence tolerance for iterative solver. Default: 8 *
      * machine epsilon.
-     * @param max_iter Maximum number of iterations for the solver.
-     * Default: 100.
      */
     explicit SecularEquationSolver(
-        Scalar tolerance = 8 * std::numeric_limits<Scalar>::epsilon(),
-        int max_iter = 100)
-        : tolerance(tolerance), max_iterations(max_iter) {}
+        Scalar tolerance = 8 * std::numeric_limits<Scalar>::epsilon())
+        : tolerance(tolerance) {}
 
     /*!
      * @brief Computes all eigenvalues of \f$ \text{diag}(d) + vv^T \f$.
@@ -131,32 +128,33 @@ template <typename Scalar> class SecularEquationSolver {
                                  const Eigen::VectorX<Scalar> &v) const {
         Eigen::ArrayX<Scalar> v_squared = v.array().square();
 
-        // Deflation type 1: identify non-zero v components
-        Eigen::ArrayX<bool> mask = (v_squared > v_squared.mean() * tolerance);
+        // Deflation
+        Eigen::ArrayX<bool> mask =
+            Eigen::ArrayX<bool>::Constant(d.size(), false);
+        const Scalar mean_v_squared = v_squared.mean();
+        Eigen::ArrayX<Scalar> v_squared_deflated(v.size());
 
-        // Deflation type 2: merge clusters of equal diagonal elements
         Eigen::Index n = 0;
-        Eigen::VectorX<Scalar> v_squared_deflated(v.size());
         Eigen::Index i_1 = 0;
-        Eigen::Index i_2 = 1;
-        while (i_2 <= d.size()) {
+        Eigen::Index i_2 = 0;
+        Scalar v_sq_segment_sum = 0;
+        while (i_2 < d.size()) {
+            v_sq_segment_sum += v_squared(i_2++);
             if ((i_2 == d.size()) ||
                 (d(i_2) - d(i_1) >= tolerance * std::abs(d(i_2)))) {
-                if (mask.segment(i_1, i_2 - i_1).sum() > 0) {
-                    v_squared_deflated(n++) =
-                        v_squared.segment(i_1, i_2 - i_1).sum();
-                    mask.segment(i_1, i_2 - i_1) =
-                        Eigen::VectorX<bool>::Constant(i_2 - i_1, false);
+                if (v_sq_segment_sum >=
+                    tolerance * (i_2 - i_1) * mean_v_squared) {
+                    v_squared_deflated(n++) = v_sq_segment_sum;
                     mask((i_1 + i_2 - 1) / 2) = true;
                 }
                 i_1 = i_2;
+                v_sq_segment_sum = 0;
             }
-            ++i_2;
         }
 
         v_squared_deflated = v_squared_deflated.head(n).eval();
         Eigen::ArrayX<Scalar> d_deflated(n);
-        Eigen::VectorX<Scalar> d_remaining(d.size() - n);
+        Eigen::ArrayX<Scalar> d_remaining(d.size() - n);
         i_1 = 0;
         i_2 = 0;
         for (Eigen::Index i = 0; i < d.size(); ++i) {
@@ -187,7 +185,7 @@ template <typename Scalar> class SecularEquationSolver {
     }
 
     Eigen::ArrayX<Scalar>
-    solveDeflated(const Eigen::VectorX<Scalar> &d,
+    solveDeflated(Eigen::ArrayX<Scalar> &d,
                   const Eigen::VectorX<Scalar> &v_squared) const {
 
         const Eigen::Index n = d.size();
@@ -198,11 +196,10 @@ template <typename Scalar> class SecularEquationSolver {
             d_new(0) = d(0) + v_squared(0);
             return d_new;
         } else if (n == 2) {
-            Eigen::ArrayX<Scalar> d_shifted = d;
             auto [tau, shift, k_origin, k_neighbour] =
-                computeInitialGuessAndShiftD(d_shifted, v_squared, 0);
+                computeInitialGuessAndShiftD(d, v_squared, 0);
             d_new(0) = tau + shift;
-            d_new(1) = d.sum() + v_squared.sum() - d_new(0);
+            d_new(1) = d.sum() + shift + v_squared.sum() - tau;
             return d_new;
         }
 
@@ -213,11 +210,10 @@ template <typename Scalar> class SecularEquationSolver {
         Scalar increase_sum = 0;
         for (Eigen::Index k = 0; k < n - 1; ++k) {
             bool use_fixed_weight = true;
-            Eigen::ArrayX<Scalar> d_shifted = d;
             auto [tau, shift, k_origin, k_neighbour] =
-                computeInitialGuessAndShiftD(d_shifted, v_squared, k);
+                computeInitialGuessAndShiftD(d, v_squared, k);
             auto [f, f_prime, psi_prime, phi_prime, e] =
-                computeFAndComponents(tau, d_shifted, v_squared, k);
+                computeFAndComponents(tau, d, v_squared, k);
 
             for (int i = 0; i < max_iter; ++i) {
                 // Convergence check
@@ -228,17 +224,17 @@ template <typename Scalar> class SecularEquationSolver {
 
                 // Perform iteration
                 if (use_fixed_weight) {
-                    applyFixedWeightCorrection(tau, d_shifted, v_squared, f,
-                                               f_prime, k_origin, k_neighbour);
+                    applyFixedWeightCorrection(tau, d, v_squared, f, f_prime,
+                                               k_origin, k_neighbour);
                 } else {
-                    applyMiddleWayCorrection(tau, d_shifted, f, f_prime,
-                                             psi_prime, phi_prime, k);
+                    applyMiddleWayCorrection(tau, d, f, f_prime, psi_prime,
+                                             phi_prime, k);
                 }
 
                 // Compute f at a new point
                 const Scalar f_prev = f;
                 std::tie(f, f_prime, psi_prime, phi_prime, e) =
-                    computeFAndComponents(tau, d_shifted, v_squared, k);
+                    computeFAndComponents(tau, d, v_squared, k);
 
                 // Method switch logic
                 if (f * f_prev > static_cast<Scalar>(0) &&
@@ -248,21 +244,21 @@ template <typename Scalar> class SecularEquationSolver {
             }
 
             d_new(k) = tau + shift;
-            increase_sum += tau - d_shifted(k);
+            increase_sum += tau - d(k);
+            d += shift;
         }
 
         // Handle last eigenvalue (k = n - 1)
         {
             const Eigen::Index k = n - 1;
-            Eigen::ArrayX<Scalar> d_shifted = d;
             const Scalar shift = d(k);
-            d_shifted -= shift;
+            d -= shift;
             Scalar tau = v_squared.sum() - increase_sum;
 
             for (int i = 0; i < max_iter; ++i) {
                 // Compute f at a new point
                 auto [f, f_prime, psi_prime, phi_prime, e] =
-                    computeFAndComponents(tau, d_shifted, v_squared, k - 1);
+                    computeFAndComponents(tau, d, v_squared, k - 1);
 
                 // Convergence check
                 if (std::abs(f) <=
@@ -272,7 +268,7 @@ template <typename Scalar> class SecularEquationSolver {
 
                 // Perform iteration
                 const Scalar delta_origin = -tau;
-                const Scalar delta_neighbour = d_shifted(k - 1) - tau;
+                const Scalar delta_neighbour = d(k - 1) - tau;
                 const Scalar delta_prod = delta_origin * delta_neighbour;
 
                 const Scalar a =
@@ -290,6 +286,7 @@ template <typename Scalar> class SecularEquationSolver {
             }
 
             d_new(k) = tau + shift;
+            d += shift;
         }
 
         return d_new;
