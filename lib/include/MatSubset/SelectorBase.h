@@ -38,8 +38,10 @@ namespace MatSubset {
  * concrete derived classes like `RandomColumnsSelector` or other specific
  * selection algorithms.
  */
-template <typename Scalar> class SelectorBase {
+template <typename S> class SelectorBase {
   public:
+    using Scalar = S;
+
     /*! @brief Default constructor. */
     SelectorBase() = default;
 

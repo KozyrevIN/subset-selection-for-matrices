@@ -4,6 +4,7 @@
 #include "FrobeniusRemovalSelector.h"
 #include "FrobeniusSelectionSelector.h"
 #include "InterlacingFamiliesSelector.h"
+#include "LeverageScoresSelector.h"
 #include "RandomColumnsSelector.h"
 #include "RectMaxvolSelector.h"
 #include "SpectralRemovalSelector.h"

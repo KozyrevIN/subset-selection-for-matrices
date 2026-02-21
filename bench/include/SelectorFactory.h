@@ -118,6 +118,7 @@ template <typename Scalar> class SelectorFactory {
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
  * - "frobenius selection" - FrobeniusSelectionSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
+ * - "leverage scores" - LeverageScoresSelector (optional "seed")
  * - "random columns" - RandomColumnsSelector (optional "seed")
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
@@ -150,6 +151,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerNoArgsSelector<FrobeniusSelectionSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
+        registerSeedArgSelector<LeverageScoresSelector>();
         registerSeedArgSelector<RandomColumnsSelector>();
         registerCArgSelector<RectMaxvolSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();

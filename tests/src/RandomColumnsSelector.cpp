@@ -5,6 +5,7 @@
 #include <MatSubset/RandomColumnsSelector.h>
 
 #include "CheckBounds.h"
+#include "CheckReproducibility.h"
 #include "CheckSubset.h"
 
 TEST_CASE_TEMPLATE("random columns", Scalar, float, double) {
@@ -20,4 +21,7 @@ TEST_CASE_TEMPLATE("random columns", Scalar, float, double) {
 
     // Check bounds
     check_subset(selector.get(), 3, 5);
+
+    // Check reproducibility
+    check_reproducibility<MatSubset::RandomColumnsSelector<Scalar>>(5, 20);
 }

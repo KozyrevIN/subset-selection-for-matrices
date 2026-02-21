@@ -2,10 +2,9 @@
 #define MAT_SUBSET_RANDOM_COLUMNS_SELECTOR_H
 
 #include <algorithm> // For std::shuffle
-#include <mutex>     // For std::mutex, std::lock_guard
-#include <random>    // For std::mt19937, std::random_device
+#include <mutex>     // For std::lock_guard
 
-#include "SelectorBase.h" // Base class
+#include "RandomizedBase.h" // Base class
 
 namespace MatSubset {
 
@@ -29,34 +28,7 @@ namespace MatSubset {
  * interleaving.
  */
 template <typename Scalar>
-class RandomColumnsSelector : public SelectorBase<Scalar> {
-  private:
-    mutable std::mt19937 gen; ///< Mersenne Twister random number generator.
-    mutable std::mutex
-        gen_mutex; ///< Mutex protecting the RNG for thread-safety.
-
-    /*!
-     * @brief Creates and returns a fully-seeded mt19937 generator.
-     * @return A std::mt19937 object with its state initialized by
-     * std::seed_seq.
-     *
-     * This helper function encapsulates the logic for high-quality seeding. It
-     * gathers entropy from std::random_device and uses std::seed_seq to
-     * initialize the large state of the mt19937 engine.
-     */
-    static std::mt19937 create_seeded_generator() {
-        std::random_device rd;
-
-        // Gather 8 integers of entropy from the random_device
-        std::array<std::random_device::result_type, 8> seed_data;
-        std::generate(seed_data.begin(), seed_data.end(), std::ref(rd));
-
-        std::seed_seq seq(seed_data.begin(), seed_data.end());
-
-        // Construct and return the fully seeded generator
-        return std::mt19937(seq);
-    }
-
+class RandomColumnsSelector : public RandomizedBase<Scalar> {
   public:
     /*!
      * @brief Constructor with a random seed.
@@ -64,7 +36,7 @@ class RandomColumnsSelector : public SelectorBase<Scalar> {
      * This constructor uses a high-quality random seed from the system's
      * random device.
      */
-    RandomColumnsSelector() : gen{create_seeded_generator()} {}
+    RandomColumnsSelector() : RandomizedBase<Scalar>() {}
 
     /*!
      * @brief Constructor with a specified seed for reproducibility.
@@ -74,7 +46,7 @@ class RandomColumnsSelector : public SelectorBase<Scalar> {
      * across multiple runs, enabling reproducible experiments.
      */
     explicit RandomColumnsSelector(std::mt19937::result_type seed)
-        : gen{seed} {}
+        : RandomizedBase<Scalar>(seed) {}
 
     /*!
      * @brief Gets the human-readable name of the algorithm.
@@ -100,17 +72,17 @@ class RandomColumnsSelector : public SelectorBase<Scalar> {
                                                Eigen::Index k) override {
         const Eigen::Index n = X.cols();
 
-        // Lock mutex for thread-safe access to RNG and reproducible sequence
-        std::lock_guard<std::mutex> lock(gen_mutex);
-
         // Create a vector of all column indices
         std::vector<Eigen::Index> indices(static_cast<size_t>(n));
         for (Eigen::Index i = 0; i < n; ++i) {
             indices[static_cast<size_t>(i)] = i;
         }
 
+        // Lock mutex for thread-safe access to RNG and reproducible sequence
+        std::lock_guard<std::mutex> lock(this->gen_mutex);
+
         // Shuffle and take the first k elements
-        std::shuffle(indices.begin(), indices.end(), gen);
+        std::shuffle(indices.begin(), indices.end(), this->gen);
         indices.resize(static_cast<size_t>(k));
 
         return indices;
