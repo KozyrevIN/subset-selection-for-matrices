@@ -115,12 +115,14 @@ template <typename Scalar> class SelectorFactory {
  * - "derandomized volume" - DerandomizedVolumeSelector (optional "eps")
  * - "dominant" - DominantSelector (requires "c" parameter)
  * - "dual set" - DualSetSelector
+ * - "forward iterative volume sampling" - ForwardIterativeVolumeSamplingSelector (optional "seed")
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
  * - "frobenius selection" - FrobeniusSelectionSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
  * - "leverage scores" - LeverageScoresSelector (optional "seed")
  * - "random columns" - RandomColumnsSelector (optional "seed")
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
+ * - "reverse iterative volume sampling" - ReverseIterativeVolumeSamplingSelector (optional "seed")
  * - "spectral removal" - SpectralRemovalSelector (optional "eps")
  * - "spectral selection" - SpectralSelectionSelector (optional "eps")
  * - "volume add-remove" - VolumeAddRemoveSelector (requires "c" parameter)
@@ -148,12 +150,14 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerEpsArgSelector<DerandomizedVolumeSelector>();
         registerCArgSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
+        registerSeedArgSelector<ForwardIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerNoArgsSelector<FrobeniusSelectionSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
         registerSeedArgSelector<LeverageScoresSelector>();
         registerSeedArgSelector<RandomColumnsSelector>();
         registerCArgSelector<RectMaxvolSelector>();
+        registerSeedArgSelector<ReverseIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
         registerCArgSelector<VolumeAddRemoveSelector>();
