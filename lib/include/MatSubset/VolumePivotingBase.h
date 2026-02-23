@@ -55,7 +55,7 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
      * each position.
      */
     std::vector<Eigen::Index>
-    selectStartingSet(Eigen::MatrixX<Scalar> &X) {
+    selectStartingSet(Eigen::MatrixX<Scalar> &X) const {
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 

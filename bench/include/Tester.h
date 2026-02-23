@@ -13,8 +13,11 @@
 
 #include <Eigen/Core>            // For vectors and matrices
 #include <MatSubset/MatSubset.h> // For subset selection algorithms and utils
+#include <execution>             // For std::execution::par
+#include <mutex>                 // For std::mutex
 #include <nlohmann/json.hpp>     // For parsing .json files
-#include <omp.h>                 // For parallelization
+#include <numeric>               // For std::iota
+#include <thread>                // For std::thread::hardware_concurrency
 
 #include "MatrixGeneratorFactory.h" // For matrix generator factory
 #include "ProgressBar.h"            // For progress bar
@@ -131,7 +134,8 @@ template <typename Scalar> class Tester {
         auto start_time = std::chrono::system_clock::now();
         auto start_timestamp = std::chrono::system_clock::to_time_t(start_time);
         saved_config["metadata"]["start_time"] = std::ctime(&start_timestamp);
-        saved_config["metadata"]["num_threads"] = omp_get_max_threads();
+        saved_config["metadata"]["num_threads"] =
+            std::thread::hardware_concurrency();
 
         // Write initial config (will be updated with finish time later)
         std::filesystem::path config_file_path =
@@ -171,49 +175,57 @@ template <typename Scalar> class Tester {
                     selectors[i]->template bound<Norm::Frobenius>(m, n, k));
             }
 
-#pragma omp parallel for schedule(static)
-            for (int trial = 0; trial < trials_per_k; ++trial) {
-                // generateNatrix() is thread safe
-                Eigen::MatrixX<Scalar> X = matrix_generator->generateMatrix();
+            std::vector<int> trials(trials_per_k);
+            std::iota(trials.begin(), trials.end(), 0);
+            std::mutex output_mutex;
 
-                Scalar X_dag_spectral_norm =
-                    MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(X);
-                Scalar X_dag_frobenius_norm =
-                    MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(X);
+            std::for_each(
+                std::execution::par, trials.begin(), trials.end(), [&](int) {
+                    // generateMatrix() is thread safe
+                    Eigen::MatrixX<Scalar> X =
+                        matrix_generator->generateMatrix();
 
-                for (int i = 0; i < selectors.size(); ++i) {
-                    auto start_time = omp_get_wtime();
-                    std::vector<Eigen::Index> selected_indices =
-                        selectors[i]->selectSubset(X, k);
-                    auto end_time = omp_get_wtime();
+                    Scalar X_dag_spectral_norm =
+                        MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(X);
+                    Scalar X_dag_frobenius_norm =
+                        MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(X);
 
-                    double wall_time_ms = (end_time - start_time) * 1000.0;
+                    for (int i = 0; i < static_cast<int>(selectors.size());
+                         ++i) {
+                        auto t0 = std::chrono::steady_clock::now();
+                        std::vector<Eigen::Index> selected_indices =
+                            selectors[i]->selectSubset(X, k);
+                        auto t1 = std::chrono::steady_clock::now();
 
-                    Eigen::MatrixX<Scalar> X_S =
-                        X(Eigen::all, selected_indices);
-                    Scalar X_S_dag_spectral_norm =
-                        MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(
-                            X_S);
-                    Scalar X_S_dag_frobenius_norm =
-                        MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(
-                            X_S);
-                    Scalar pinv_spectral_norm_ratio =
-                        X_dag_spectral_norm / X_S_dag_spectral_norm;
-                    Scalar pinv_frobenius_norm_ratio =
-                        X_dag_frobenius_norm / X_S_dag_frobenius_norm;
-#pragma omp critical
-                    {
-                        std::string label =
-                            "k = " + std::format("{:^{}}", k, k_max_len);
-                        progress_bar.update(label);
-                        output_files[i] << k << "," << pinv_spectral_norm_ratio
-                                        << "," << pinv_frobenius_norm_ratio
-                                        << "," << wall_time_ms << ","
-                                        << spectral_bounds[i] << ","
-                                        << frobenius_bounds[i] << std::endl;
+                        double wall_time_ms =
+                            std::chrono::duration<double, std::milli>(t1 - t0)
+                                .count();
+
+                        Eigen::MatrixX<Scalar> X_S =
+                            X(Eigen::all, selected_indices);
+                        Scalar X_S_dag_spectral_norm =
+                            MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(
+                                X_S);
+                        Scalar X_S_dag_frobenius_norm =
+                            MatSubset::Utils::pinv_norm<Scalar,
+                                                        Norm::Frobenius>(X_S);
+                        Scalar pinv_spectral_norm_ratio =
+                            X_dag_spectral_norm / X_S_dag_spectral_norm;
+                        Scalar pinv_frobenius_norm_ratio =
+                            X_dag_frobenius_norm / X_S_dag_frobenius_norm;
+                        {
+                            std::lock_guard<std::mutex> lock(output_mutex);
+                            std::string label =
+                                "k = " + std::format("{:^{}}", k, k_max_len);
+                            progress_bar.update(label);
+                            output_files[i]
+                                << k << "," << pinv_spectral_norm_ratio << ","
+                                << pinv_frobenius_norm_ratio << ","
+                                << wall_time_ms << "," << spectral_bounds[i]
+                                << "," << frobenius_bounds[i] << std::endl;
+                        }
                     }
-                }
-            }
+                });
         }
 
         // Add finish time and write final config

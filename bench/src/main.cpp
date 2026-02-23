@@ -8,6 +8,10 @@
 #include "Tester.h" // For the Tester class
 
 int main(int argc, char *argv[]) {
+
+    // We parallelize manually, no need for Eigen to do so
+    Eigen::setNbThreads(1);
+
     // Argument validation
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <path_to_config.json>"
