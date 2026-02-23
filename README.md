@@ -22,7 +22,7 @@ A lightweight header-only C++ library implementing efficient approximation algor
 
 **Optional (benchmarks, enabled with `-DBUILD_BENCH=ON`):**
 - [nlohmann/json 3.12.0](https://github.com/nlohmann/json) (fetched automatically)
-- [OpenMP](https://www.openmp.org/)
+- [TBB](https://github.com/oneapi-src/oneTBB)
 - Python 3 with NumPy, pandas, Matplotlib (for plotter.py)
 - LaTeX (for plot text rendering)
 

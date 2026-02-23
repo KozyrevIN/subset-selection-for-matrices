@@ -42,7 +42,8 @@ class ExperimentPlotter:
     FIG_SIZE = (TEXT_WIDTH, 0.5 * TEXT_WIDTH * 0.8)  # Golden ratio
 
     def __init__(self, results_path: Path, output_path: Optional[Path] = None,
-                 show_legend: bool = True, show_titles: bool = True):
+                 show_legend: bool = True, show_titles: bool = True,
+                 log_scale: bool = False):
         """
         Initialize the plotter.
 
@@ -51,11 +52,13 @@ class ExperimentPlotter:
             output_path: Path where plots will be saved (default: same as results_path)
             show_legend: Whether to show legend in plots
             show_titles: Whether to show subplot titles
+            log_scale: Whether to use logarithmic y-axis scale
         """
         self.results_path = Path(results_path)
         self.output_path = Path(output_path) if output_path else self.results_path
         self.show_legend = show_legend
         self.show_titles = show_titles
+        self.log_scale = log_scale
 
         # Apply plot configuration
         plt.rcParams.update(self.PLOT_CONFIG)
@@ -180,7 +183,10 @@ class ExperimentPlotter:
         # Set axis limits
         if len(k_values) > 0:
             ax.set_xlim(k_values[0], k_values[0] + (k_values[-1] - k_values[0]) * (51.0 / 50))
-            ax.set_ylim(0, max_y * (51.0 / 50))
+            if self.log_scale:
+                ax.set_yscale('log')
+            else:
+                ax.set_ylim(0, max_y * (51.0 / 50))
 
         # Manage ticks
         ax.minorticks_on()
@@ -373,6 +379,11 @@ def main():
         action='store_true',
         help='Plot squared norm ratios instead of regular ratios'
     )
+    parser.add_argument(
+        '--log-scale',
+        action='store_true',
+        help='Use logarithmic scale for y-axis'
+    )
 
     args = parser.parse_args()
 
@@ -381,7 +392,8 @@ def main():
         results_path=args.results_path,
         output_path=args.output_path,
         show_legend=not args.no_legend,
-        show_titles=not args.no_titles
+        show_titles=not args.no_titles,
+        log_scale=args.log_scale
     )
 
     # Generate plots
