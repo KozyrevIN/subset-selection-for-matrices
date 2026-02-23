@@ -4,11 +4,12 @@
 #include <cassert>  // For assert
 #include <cmath>    // For std::log, std::ceil
 #include <iostream> // For std::cerr
+#include <limits>   // For std::numeric_limits
 
 #include <Eigen/QR> // For Eigen::CompleteOrthogonalDecomposition
 
+#include "Enums.h"              // For MatSubset::Norm
 #include "VolumePivotingBase.h" // Base class
-#include "Enums.h"               // For MatSubset::Norm
 
 namespace MatSubset {
 
@@ -38,8 +39,8 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
      * @brief Default constructor for `DominantSelector`.
      */
     explicit DominantSelector(Scalar c) : c(c) {
-        assert(c > 1 &&
-               "In the dominant algorithm parameter c must be greater than 1.");
+        assert(c >= 1 && "In the dominant algorithm parameter c must be "
+                         "greater or equal to 1.");
     };
 
     /*!
@@ -99,8 +100,11 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         }
 
         // Computing maximun possible number of swaps
-        Eigen::Index max_swap_count = static_cast<Eigen::Index>(
-            std::ceil(2 * m * std::log(k) / std::log(c)));
+        Eigen::Index max_swap_count = std::numeric_limits<Eigen::Index>::max();
+        if (c > 1) {
+            max_swap_count = static_cast<Eigen::Index>(
+                std::ceil(2 * m * std::log(k) / std::log(c)));
+        }
         Eigen::Index swap_count = 0;
 
         // Main loop
