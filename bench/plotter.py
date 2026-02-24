@@ -136,6 +136,17 @@ class ExperimentPlotter:
         elif csv_column == 'pinv_frobenius_norm_ratio':
             bound_column = 'frobenius_bound'
 
+        # For orthonormal metrics, compute analytical bounds as a function of k
+        orthonormal_bound_func = None
+        if csv_column == 'X_S_dag_X_frobenius_norm_inv':
+            m = config['matrix']['rows']
+            n = config['matrix']['cols']
+            orthonormal_bound_func = lambda k: np.sqrt((k - m + 1) / (m * (n - m + 1)))
+        elif csv_column == 'X_S_dag_X_spectral_norm_inv':
+            m = config['matrix']['rows']
+            n = config['matrix']['cols']
+            orthonormal_bound_func = lambda k: np.sqrt(1.0 / (1 + m * (n - k) / (k - m + 1)))
+
         for idx, (algorithm_name, df) in enumerate(data.items()):
             algorithm_names.append(algorithm_name)
 
@@ -176,6 +187,15 @@ class ExperimentPlotter:
                 ax.plot(k_values, mean_bound_values, color=color,
                        linestyle='--', linewidth=0.8, alpha=0.8)
 
+                max_y = max(max_y, np.max(bound_values))
+
+            # Plot analytical bounds for orthonormal metrics
+            if orthonormal_bound_func is not None:
+                bound_values = np.array([orthonormal_bound_func(k) for k in k_values])
+                if square_norms:
+                    bound_values = bound_values ** 2
+                ax.plot(k_values, bound_values, color='black',
+                       linestyle='--', linewidth=0.8, alpha=0.8)
                 max_y = max(max_y, np.max(bound_values))
 
             max_y = max(max_y, np.max(values))
@@ -235,6 +255,8 @@ class ExperimentPlotter:
         metric_column_map = {
             'spectral_norm': 'pinv_spectral_norm_ratio',
             'frobenius_norm': 'pinv_frobenius_norm_ratio',
+            'spectral_norm_orthonormal': 'X_S_dag_X_spectral_norm_inv',
+            'frobenius_norm_orthonormal': 'X_S_dag_X_frobenius_norm_inv',
             'wall_time': 'wall_time_ms'
         }
 
@@ -242,6 +264,8 @@ class ExperimentPlotter:
         metric_labels = {
             'spectral_norm': r'$\Vert X^\dag \Vert_2 / \Vert X_\mathcal{S}^\dag \Vert_2$',
             'frobenius_norm': r'$\Vert X^\dag \Vert_F / \Vert X_\mathcal{S}^\dag \Vert_F$',
+            'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2$',
+            'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F$',
             'wall_time': 'Wall time (ms)'
         }
 
@@ -249,6 +273,8 @@ class ExperimentPlotter:
         metric_labels_squared = {
             'spectral_norm': r'$\Vert X^\dag \Vert_2^2 / \Vert X_\mathcal{S}^\dag \Vert_2^2$',
             'frobenius_norm': r'$\Vert X^\dag \Vert_F^2 / \Vert X_\mathcal{S}^\dag \Vert_F^2$',
+            'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2^2$',
+            'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F^2$',
             'wall_time': 'Wall time (ms)'
         }
 
@@ -312,8 +338,20 @@ class ExperimentPlotter:
                                           markerfacecolor='black',
                                           markeredgecolor='white', alpha=0.3,
                                           label='standard deviation', markersize=6))
+            # Choose dashed-line legend label based on metric
+            if square_norms:
+                bound_legend_labels = {
+                    'frobenius_norm_orthonormal': r'$\frac{k-m+1}{m(n-m+1)}$',
+                    'spectral_norm_orthonormal': r'$\frac{k-m+1}{k-m+1+m(n-k)}$',
+                }
+            else:
+                bound_legend_labels = {
+                    'frobenius_norm_orthonormal': r'$\sqrt{\frac{1}{m}\frac{k-m+1}{n-m+1}}$',
+                    'spectral_norm_orthonormal': r'$\sqrt{\frac{k-m+1}{k-m+1+m(n-k)}}$',
+                }
+            bound_label = bound_legend_labels.get(metric, 'theoretical bound')
             custom_legend.append(plt.Line2D([0], [0], linestyle='--',
-                                          label='theoretical bound', color='black',
+                                          label=bound_label, color='black',
                                           linewidth=0.8, alpha=0.8))
 
             leg = fig.legend(handles=custom_legend, framealpha=0.9,
@@ -361,7 +399,9 @@ def main():
         '--metric', '-m',
         type=str,
         default='spectral_norm',
-        choices=['spectral_norm', 'frobenius_norm', 'wall_time'],
+        choices=['spectral_norm', 'frobenius_norm',
+                 'spectral_norm_orthonormal', 'frobenius_norm_orthonormal',
+                 'wall_time'],
         help='Metric to plot (default: spectral_norm)'
     )
     parser.add_argument(

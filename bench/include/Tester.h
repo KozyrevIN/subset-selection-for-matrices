@@ -3,21 +3,24 @@
 
 #include <chrono>     // For timestamps
 #include <ctime>      // For std::ctime
+#include <execution>  // For std::execution::par
 #include <filesystem> // For std::filesystem::path
 #include <format>     // For std::format
 #include <fstream>    // For std::ofstream
 #include <iostream>   // For reading from and writing to the console
 #include <memory>     // For std::unique_ptr
+#include <mutex>      // For std::mutex
+#include <numeric>    // For std::iota
 #include <string>     // For std::string
+#include <thread>     // For std::thread::hardware_concurrency
 #include <vector>     // For std::vector
 
-#include <Eigen/Core>            // For vectors and matrices
+#include <Eigen/Core> // For vectors and matrices
+#include <Eigen/QR>   // For Eigen::HouseholderQR
+
+#include <nlohmann/json.hpp> // For parsing .json files
+
 #include <MatSubset/MatSubset.h> // For subset selection algorithms and utils
-#include <execution>             // For std::execution::par
-#include <mutex>                 // For std::mutex
-#include <nlohmann/json.hpp>     // For parsing .json files
-#include <numeric>               // For std::iota
-#include <thread>                // For std::thread::hardware_concurrency
 
 #include "MatrixGeneratorFactory.h" // For matrix generator factory
 #include "ProgressBar.h"            // For progress bar
@@ -151,7 +154,9 @@ template <typename Scalar> class Tester {
             output_files.emplace_back(file_path);
             output_files.back()
                 << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
-                   "norm_ratio,wall_time_ms,spectral_bound,frobenius_bound"
+                   "norm_ratio,X_S_dag_X_spectral_norm_inv,X_S_dag_X_"
+                   "frobenius_norm_inv,wall_time_ms,spectral_bound,"
+                   "frobenius_bound"
                 << std::endl;
         }
 
@@ -190,6 +195,16 @@ template <typename Scalar> class Tester {
                     Scalar X_dag_frobenius_norm =
                         MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(X);
 
+                    // Compute Q from LQ decomposition of X (X = LQ)
+                    const Eigen::Index m_x = X.rows();
+                    const Eigen::Index n_x = X.cols();
+                    Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> lq(
+                        X.transpose());
+                    Eigen::MatrixX<Scalar> Q =
+                        (lq.householderQ() *
+                         Eigen::MatrixX<Scalar>::Identity(n_x, m_x))
+                            .transpose();
+
                     for (int i = 0; i < static_cast<int>(selectors.size());
                          ++i) {
                         auto t0 = std::chrono::steady_clock::now();
@@ -213,6 +228,19 @@ template <typename Scalar> class Tester {
                             X_dag_spectral_norm / X_S_dag_spectral_norm;
                         Scalar pinv_frobenius_norm_ratio =
                             X_dag_frobenius_norm / X_S_dag_frobenius_norm;
+
+                        Eigen::MatrixX<Scalar> Q_S =
+                            Q(Eigen::all, selected_indices);
+                        Scalar Q_S_dag_spectral_norm =
+                            MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(
+                                Q_S);
+                        Scalar Q_S_dag_frobenius_norm =
+                            MatSubset::Utils::pinv_norm<Scalar,
+                                                        Norm::Frobenius>(Q_S);
+                        Scalar X_S_dag_X_spectral_norm_inv =
+                            static_cast<Scalar>(1) / Q_S_dag_spectral_norm;
+                        Scalar X_S_dag_X_frobenius_norm_inv =
+                            static_cast<Scalar>(1) / Q_S_dag_frobenius_norm;
                         {
                             std::lock_guard<std::mutex> lock(output_mutex);
                             std::string label =
@@ -221,6 +249,8 @@ template <typename Scalar> class Tester {
                             output_files[i]
                                 << k << "," << pinv_spectral_norm_ratio << ","
                                 << pinv_frobenius_norm_ratio << ","
+                                << X_S_dag_X_spectral_norm_inv << ","
+                                << X_S_dag_X_frobenius_norm_inv << ","
                                 << wall_time_ms << "," << spectral_bounds[i]
                                 << "," << frobenius_bounds[i] << std::endl;
                         }
