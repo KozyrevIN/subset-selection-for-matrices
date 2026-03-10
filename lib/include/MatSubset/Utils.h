@@ -205,40 +205,38 @@ template <typename Scalar> class SecularEquationSolver {
 
         // Main loop
         const Scalar eps_m = std::numeric_limits<Scalar>::epsilon();
-        const int max_iter = 10;
+        const int max_iter = 30;
 
         Scalar increase_sum = 0;
         for (Eigen::Index k = 0; k < n - 1; ++k) {
             bool use_fixed_weight = true;
             auto [tau, shift, k_origin, k_neighbour] =
                 computeInitialGuessAndShiftD(d, v_squared, k);
-            auto [f, f_prime, psi_prime, phi_prime, e] =
-                computeFAndComponents(tau, d, v_squared, k);
+            auto fc = computeFAndComponents(tau, d, v_squared, k);
 
             for (int i = 0; i < max_iter; ++i) {
                 // Convergence check
-                if (std::abs(f) <=
-                    eps_m * e + eps_m * std::abs(tau) * std::abs(f_prime)) {
+                if (std::abs(fc.f) <= eps_m * fc.e + eps_m * std::abs(tau) *
+                                                         std::abs(fc.f_prime)) {
                     break;
                 }
 
                 // Perform iteration
                 if (use_fixed_weight) {
-                    applyFixedWeightCorrection(tau, d, v_squared, f, f_prime,
-                                               k_origin, k_neighbour);
+                    applyFixedWeightCorrection(tau, d, v_squared, fc, k_origin,
+                                               k_neighbour);
                 } else {
-                    applyMiddleWayCorrection(tau, d, f, f_prime, psi_prime,
-                                             phi_prime, k);
+                    applyMiddleWayCorrection(tau, d, v_squared, fc, k);
                 }
 
-                // Compute f at a new point
-                const Scalar f_prev = f;
-                std::tie(f, f_prime, psi_prime, phi_prime, e) =
-                    computeFAndComponents(tau, d, v_squared, k);
+                // Compute f at new point
+                const Scalar f_prev = fc.f;
+                fc = computeFAndComponents(tau, d, v_squared, k);
 
                 // Method switch logic
-                if (f * f_prev > static_cast<Scalar>(0) &&
-                    std::abs(f) > static_cast<Scalar>(0.1) * std::abs(f_prev)) {
+                if (fc.f * f_prev > static_cast<Scalar>(0) &&
+                    std::abs(fc.f) >
+                        static_cast<Scalar>(0.1) * std::abs(f_prev)) {
                     use_fixed_weight = !use_fixed_weight;
                 }
             }
@@ -257,12 +255,11 @@ template <typename Scalar> class SecularEquationSolver {
 
             for (int i = 0; i < max_iter; ++i) {
                 // Compute f at a new point
-                auto [f, f_prime, psi_prime, phi_prime, e] =
-                    computeFAndComponents(tau, d, v_squared, k - 1);
+                auto fc = computeFAndComponents(tau, d, v_squared, k);
 
                 // Convergence check
-                if (std::abs(f) <=
-                    eps_m * e + eps_m * std::abs(tau) * std::abs(f_prime)) {
+                if (std::abs(fc.f) <= eps_m * fc.e + eps_m * std::abs(tau) *
+                                                         std::abs(fc.f_prime)) {
                     break;
                 }
 
@@ -271,10 +268,10 @@ template <typename Scalar> class SecularEquationSolver {
                 const Scalar delta_neighbour = d(k - 1) - tau;
                 const Scalar delta_prod = delta_origin * delta_neighbour;
 
-                const Scalar a =
-                    (delta_origin + delta_neighbour) * f - delta_prod * f_prime;
-                const Scalar b = delta_prod * f;
-                const Scalar c = f - delta_neighbour * psi_prime -
+                const Scalar a = (delta_origin + delta_neighbour) * fc.f -
+                                 delta_prod * fc.f_prime;
+                const Scalar b = delta_prod * fc.f;
+                const Scalar c = fc.f - delta_neighbour * fc.psi_prime -
                                  v_squared(k) / delta_origin;
                 const Scalar disc = std::sqrt(std::fma(a, a, -4 * b * c));
 
@@ -293,13 +290,13 @@ template <typename Scalar> class SecularEquationSolver {
     }
 
   private:
-    // Compute psi: sum of v_squared(j) / (d(j) - tau) for j <= k
+    // Compute psi: sum of v_squared(j) / (d(j) - tau) for j < k
     // Performed in forward order for numerical stability
     Scalar computePsi(Scalar tau, const Eigen::ArrayX<Scalar> &d,
                       const Eigen::ArrayX<Scalar> &v_squared,
                       Eigen::Index k) const {
         Scalar psi = static_cast<Scalar>(0);
-        for (Eigen::Index j = 0; j <= k; ++j) {
+        for (Eigen::Index j = 0; j < k; ++j) {
             Scalar delta = d(j) - tau;
             psi += v_squared(j) / delta;
         }
@@ -319,10 +316,20 @@ template <typename Scalar> class SecularEquationSolver {
         return phi;
     }
 
-    std::tuple<Scalar, Scalar, Scalar, Scalar, Scalar>
-    computeFAndComponents(Scalar tau, const Eigen::ArrayX<Scalar> &d,
-                          const Eigen::ArrayX<Scalar> &v_squared,
-                          Eigen::Index k) const {
+    struct FComponents {
+        Scalar f;         ///< secular function value
+        Scalar f_prime;   ///< derivative
+        Scalar psi;       ///< sum_{j<k} v_sq(j) / (d(j) - tau)
+        Scalar psi_prime; ///< sum_{j<k} v_sq(j) / (d(j) - tau)^2
+        Scalar phi;       ///< sum_{j>k+1}  v_sq(j) / (d(j) - tau)
+        Scalar phi_prime; ///< sum_{j>k+1}  v_sq(j) / (d(j) - tau)^2
+        Scalar e;         ///< constant for converge
+    };
+
+    FComponents computeFAndComponents(Scalar tau,
+                                      const Eigen::ArrayX<Scalar> &d,
+                                      const Eigen::ArrayX<Scalar> &v_squared,
+                                      Eigen::Index k) const {
         Scalar psi = static_cast<Scalar>(0);
         Scalar psi_prime = static_cast<Scalar>(0);
         Scalar phi = static_cast<Scalar>(0);
@@ -330,9 +337,9 @@ template <typename Scalar> class SecularEquationSolver {
         Scalar e_1 = static_cast<Scalar>(0);
         Scalar e_2 = static_cast<Scalar>(0);
 
-        // Compute psi (sum j <= k), forward order (j=0 to k)
+        // Compute psi (sum j < k), forward order (j=0 to k - 1)
         // d(0) - tau has largest magnitude, d(k) - tau = -tau
-        for (Eigen::Index j = 0; j <= k; ++j) {
+        for (Eigen::Index j = 0; j < k; ++j) {
             Scalar delta = d(j) - tau;
             Scalar term = v_squared(j) / delta;
             psi += term;
@@ -341,9 +348,9 @@ template <typename Scalar> class SecularEquationSolver {
         }
         e_1 += static_cast<Scalar>(5) * std::abs(psi);
 
-        // Compute phi (sum j > k), reverse order (j=n-1 down to k+1)
+        // Compute phi (sum j > k), reverse order (j=n-1 down to k+2)
         // d(n-1) - tau has largest magnitude
-        for (Eigen::Index j = d.size() - 1; j > k; --j) {
+        for (Eigen::Index j = d.size() - 1; j > k + 1; --j) {
             Scalar delta = d(j) - tau;
             Scalar term = v_squared(j) / delta;
             phi += term;
@@ -352,11 +359,28 @@ template <typename Scalar> class SecularEquationSolver {
         }
         e_2 += static_cast<Scalar>(5) * std::abs(phi);
 
-        const Scalar f = static_cast<Scalar>(1) + psi + phi;
-        const Scalar f_prime = psi_prime + phi_prime;
-        const Scalar e = static_cast<Scalar>(2) + e_1 + e_2 + std::abs(f);
+        // Boundary term at k (the origin pole, = -tau in the shifted frame)
+        const Scalar delta_k = d(k) - tau;
+        const Scalar term_k = v_squared(k) / delta_k;
+        const Scalar term_k_p = term_k / delta_k;
 
-        return {f, f_prime, psi_prime, phi_prime, e};
+        // Boundary term at k+1 (the neighbour pole); absent when k = n-1
+        Scalar term_k1 = static_cast<Scalar>(0),
+               term_k1_p = static_cast<Scalar>(0);
+        if (k + 1 < d.size()) {
+            const Scalar delta_k1 = d(k + 1) - tau;
+            term_k1 = v_squared(k + 1) / delta_k1;
+            term_k1_p = term_k1 / delta_k1;
+        }
+
+        const Scalar f = static_cast<Scalar>(1) + psi + term_k + term_k1 + phi;
+        const Scalar f_prime = psi_prime + term_k_p + term_k1_p + phi_prime;
+        const Scalar e =
+            static_cast<Scalar>(2) + e_1 + e_2 +
+            static_cast<Scalar>(6) * (std::abs(term_k) + std::abs(term_k1)) +
+            std::abs(f);
+
+        return {f, f_prime, psi, psi_prime, phi, phi_prime, e};
     }
 
     // Not for k = n - 1!
@@ -367,7 +391,7 @@ template <typename Scalar> class SecularEquationSolver {
 
         const Scalar mid = (d(k) + d(k + 1)) * static_cast<Scalar>(0.5);
         const Scalar g_mid = static_cast<Scalar>(1) +
-                             computePsi(mid, d, v_squared, k - 1) +
+                             computePsi(mid, d, v_squared, k) +
                              computePhi(mid, d, v_squared, k + 1);
         const Scalar h_mid =
             v_squared(k) / (d(k) - mid) + v_squared(k + 1) / (d(k + 1) - mid);
@@ -411,20 +435,20 @@ template <typename Scalar> class SecularEquationSolver {
     void applyFixedWeightCorrection(Scalar &tau,
                                     const Eigen::ArrayX<Scalar> &d_shifted,
                                     const Eigen::ArrayX<Scalar> &v_squared,
-                                    Scalar f, Scalar f_prime,
+                                    const FComponents &fc,
                                     Eigen::Index k_origin,
                                     Eigen::Index k_neighbour) const {
 
         const Scalar delta_origin = -tau;
         const Scalar delta_neighbour = d_shifted(k_neighbour) - tau;
-        const Scalar delta_sq_origin = delta_origin * delta_origin;
+        const Scalar delta_sq_neighbour = delta_neighbour * delta_neighbour;
 
         const Scalar v_sq_origin = v_squared(k_origin);
-        const Scalar v_sq_neighbour = delta_neighbour * delta_neighbour *
-                                      (f_prime - v_sq_origin / delta_sq_origin);
-        const Scalar c = f - delta_neighbour * f_prime -
-                         (d_shifted(k_origin) - d_shifted(k_neighbour)) *
-                             v_sq_origin / delta_sq_origin;
+        const Scalar v_sq_neighbour =
+            v_squared(k_neighbour) +
+            delta_sq_neighbour * (fc.psi_prime + fc.phi_prime);
+        const Scalar c = fc.f - v_sq_origin / delta_origin -
+                         v_sq_neighbour / delta_neighbour;
 
         tau = solveForTwoPoles(c, v_sq_origin, v_sq_neighbour,
                                d_shifted(k_neighbour));
@@ -433,16 +457,18 @@ template <typename Scalar> class SecularEquationSolver {
     // Not for k = n - 1!
     void applyMiddleWayCorrection(Scalar &tau,
                                   const Eigen::ArrayX<Scalar> &d_shifted,
-                                  Scalar f, Scalar f_prime, Scalar psi_prime,
-                                  Scalar phi_prime, Eigen::Index k) const {
+                                  const Eigen::ArrayX<Scalar> &v_squared,
+                                  const FComponents &fc, Eigen::Index k) const {
 
         const Scalar delta_1 = tau - d_shifted(k);
         const Scalar delta_2 = tau - d_shifted(k + 1);
         const Scalar delta_prod = delta_1 * delta_2;
 
-        const Scalar a = (delta_1 + delta_2) * f - delta_prod * f_prime;
-        const Scalar b = delta_prod * f;
-        const Scalar c = f - delta_1 * psi_prime - delta_2 * phi_prime;
+        const Scalar a = (delta_1 + delta_2) * fc.f - delta_prod * fc.f_prime;
+        const Scalar b = delta_prod * fc.f;
+        const Scalar c = fc.f - delta_1 * fc.psi_prime -
+                         v_squared(k) / delta_1 - v_squared(k + 1) / delta_2 -
+                         delta_2 * fc.phi_prime;
         const Scalar disc = std::sqrt(std::fma(a, a, -4 * b * c));
 
         if (a <= 0) {
