@@ -109,7 +109,9 @@ template <typename Scalar> class SelectorFactory {
  * signatures automatically:
  * - No-args selectors (DualSetSelector, etc.)
  * - Selectors with optional eps parameter (SpectralSelectionSelector, etc.)
- * - Selectors with required c parameter (DominantSelector, RectMaxvolSelector)
+ * - Selectors with required c parameter (RectMaxvolSelector)
+ * - Selectors with required c and optional greedy_init/oversampling
+ *   (DominantSelector, VolumeAddRemoveSelector)
  *
  * Registered selectors:
  * - "derandomized volume" - DerandomizedVolumeSelector (optional "eps")
@@ -148,7 +150,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      */
     DefaultSelectorFactory() {
         registerEpsArgSelector<DerandomizedVolumeSelector>();
-        registerCArgSelector<DominantSelector>();
+        registerCArgWithGreedyInitSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
         registerSeedArgSelector<ForwardIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
@@ -160,7 +162,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerSeedArgSelector<ReverseIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
-        registerCArgSelector<VolumeAddRemoveSelector>();
+        registerCArgWithGreedyInitSelector<VolumeAddRemoveSelector>();
         registerNoArgsSelector<VolumeRemovalSelector>();
     }
 
@@ -218,7 +220,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * Creates a registration for selectors that require a "c" parameter
      * (c > 1). The JSON config must contain {"c": value}.
      *
-     * Applies to: DominantSelector, RectMaxvolSelector.
+     * Applies to: RectMaxvolSelector.
      *
      * @note Uses dummy value of 1.01 for registration only; actual instances
      * use the c value from config.
@@ -230,6 +232,35 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
             [](const nlohmann::json &config) {
                 return std::make_unique<Selector<Scalar>>(
                     config.at("c").get<Scalar>());
+            };
+        this->registerSelector(name, creator);
+    }
+
+    /*!
+     * @brief Registers a selector with required c and optional greedy_init
+     * and oversampling constructor arguments.
+     * @tparam Selector Template template parameter for the selector class.
+     *
+     * Creates a registration for selectors that require a "c" parameter
+     * and optionally accept "greedy_init" (bool) and "oversampling" (integer).
+     *
+     * Applies to: DominantSelector, VolumeAddRemoveSelector.
+     *
+     * @note Uses dummy value of 1.01 for registration only; actual instances
+     * use parameters from config.
+     */
+    template <template <typename> class Selector>
+    void registerCArgWithGreedyInitSelector() {
+        auto dummy = std::make_unique<Selector<Scalar>>(1.01);
+        std::string name = dummy->getAlgorithmName();
+        typename SelectorFactory<Scalar>::Creator creator =
+            [](const nlohmann::json &config) {
+                Scalar c = config.at("c").get<Scalar>();
+                bool greedy_init = config.value("greedy_init", false);
+                Eigen::Index oversampling =
+                    config.value("oversampling", static_cast<Eigen::Index>(0));
+                return std::make_unique<Selector<Scalar>>(c, greedy_init,
+                                                          oversampling);
             };
         this->registerSelector(name, creator);
     }

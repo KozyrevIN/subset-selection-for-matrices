@@ -1,7 +1,7 @@
 #ifndef MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 #define MAT_SUBSET_VOLUME_REMOVAL_SELECTOR_H
 
-#include <Eigen/SVD> // For Eigen::BDCSVD
+#include <Eigen/QR> // For Eigen::HouseholderQR
 
 #include "SelectorBase.h" // Base class
 
@@ -52,8 +52,10 @@ class VolumeRemovalSelector : public SelectorBase<Scalar> {
             cols[j] = j;
         }
 
-        Eigen::JacobiSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
+        Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
+        Eigen::MatrixX<Scalar> V =
+            (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
+                .transpose();
 
         Eigen::MatrixX<Scalar> V_dag = V;
         Eigen::ArrayX<Scalar> d =

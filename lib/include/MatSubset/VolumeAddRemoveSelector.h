@@ -39,11 +39,20 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
      * @param c The improvement threshold parameter. Must be greater than 1.
      * Algorithm stops when no add-remove pair improves squared volume by factor
      * c.
+     * @param greedy_init If true, use greedy selection/removal in
+     * `selectStartingSet` to initialize k columns instead of just m.
+     * @param oversampling The number of extra columns to greedily add before
+     * removing back down to k during initialization. Only used when
+     * `greedy_init` is true.
      */
-    explicit VolumeAddRemoveSelector(Scalar c) : c(c) {
+    explicit VolumeAddRemoveSelector(Scalar c, bool greedy_init = false,
+                                     Eigen::Index oversampling = 0)
+        : c(c), greedy_init(greedy_init), oversampling(oversampling) {
         assert(c > 1 &&
                "In the volume add-remove algorithm parameter c must be "
                "greater than 1.");
+        assert((greedy_init || (oversampling == 0)) &&
+               "oversampling must be 0 if greedy init is disabled");
     };
 
     /*!
@@ -64,8 +73,9 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
      * of the selected columns.
      */
-    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override {
+    std::vector<Eigen::Index>
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
+                     Eigen::Index k) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
@@ -73,78 +83,55 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         // Make a copy to permute in-place
         Eigen::MatrixX<Scalar> R = X;
 
-        // Permute columns so first m columns form a high-volume submatrix
+        // Permute columns so first m (or k) columns form a high-volume submatrix
         std::vector<Eigen::Index> indices =
-            VolumePivotingBase<Scalar>::selectStartingSet(R);
+            VolumePivotingBase<Scalar>::selectStartingSet(
+                R, greedy_init ? k : m, oversampling);
 
-        // Initialize necessary matrices
-        Eigen::MatrixX<Scalar> Y = Eigen::MatrixX<Scalar>::Identity(m, m);
-        Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(
-            R.leftCols(k).transpose());
-        Eigen::MatrixX<Scalar> L = qr.matrixQR()
-                                       .topRows(m)
-                                       .template triangularView<Eigen::Upper>()
-                                       .transpose();
-        Eigen::MatrixX<Scalar> C =
-            L.template triangularView<Eigen::Lower>().solve(R);
-        auto C_selected = C.leftCols(k);
-        auto C_remaining = C.rightCols(n - k);
+        // Initialize l and Y
+        Eigen::MatrixX<Scalar> Y =
+            (R.leftCols(k) * R.leftCols(k).transpose()).inverse();
+        Eigen::VectorX<Scalar> l = (X.transpose() * Y * X).diagonal();
 
-        // And arrays
-        Eigen::ArrayX<Scalar> l = C.colwise().squaredNorm();
-        auto l_selected = l.head(k);
-        auto l_remaining = l.tail(n - k);
-        Eigen::Index j_max;
-        Scalar l_j_max = l_remaining.maxCoeff(&j_max);
-        Eigen::VectorX<Scalar> v = C_remaining.col(j_max);
-        Eigen::ArrayX<Scalar> term_1 =
-            (v.transpose() * C_selected).array().square();
-        Eigen::ArrayX<Scalar> b = term_1 + (1 - l_selected) * (1 + l_j_max);
-        Eigen::Index i_max;
-
-        // Computing maximum possible number of swaps
-        Eigen::Index max_swap_count = static_cast<Eigen::Index>(
-            std::ceil(2 * m * std::log(k) / std::log(c)));
+        // Compute maximum possible number of swaps
+        Eigen::Index max_swap_count = std::numeric_limits<Eigen::Index>::max();
+        if (c > 1) {
+            max_swap_count = static_cast<Eigen::Index>(
+                std::ceil(2 * m * std::log(k) / std::log(c)));
+        }
         Eigen::Index swap_count = 0;
 
-        // Main loop
-        Eigen::ArrayX<Scalar> extra_row;
-        Eigen::VectorX<Scalar> Y_times_v;
-        while ((b.maxCoeff(&i_max) > c) && (swap_count <= max_swap_count)) {
-            // Recalculate l and Y upon column addition
-            v = C_remaining.col(j_max);
-            Y_times_v = Y * v;
-            Y -= Y_times_v * Y_times_v.transpose() / (1 + l_j_max);
-            extra_row = ((v.transpose() * Y) * C).array().square();
-            l -= extra_row * (1 + l_j_max);
+        // Main loop with column exchange
+        while (swap_count < max_swap_count) {
+            // Column selection
+            Eigen::Index s;
+            Scalar l_s = l.tail(n - k).maxCoeff(&s);
+            Eigen::VectorX<Scalar> Y_r_s = Y * R.col(s);
+            l -= (Y_r_s.transpose() * R).cwiseAbs2() / (1 + l_s);
+            Y -= Y_r_s * Y_r_s.transpose() / (1 + l_s);
 
-            // Swap newly added column and one destined to removal
-            std::swap(indices[static_cast<size_t>(i_max)],
-                      indices[static_cast<size_t>(k + j_max)]);
-            std::swap(l_selected(i_max), l_remaining(j_max));
-            C_selected.col(i_max).swap(C_remaining.col(j_max));
-            l_j_max = l_remaining(j_max);
+            // Column removal
+            Eigen::Index r;
+            Scalar l_r = l.head(k).minCoeff(&r);
+            if ((1 + l_s) * (1 - l_r) <= c) {
+                break;
+            }
+            Eigen::VectorX<Scalar> Y_r_r = Y * R.col(r);
+            l += (Y_r_r.transpose() * R).cwiseAbs2() / (1 + l_r);
+            Y -= Y_r_r * Y_r_r.transpose() / (1 + l_r);
+
+            // Update
+            std::swap(indices[static_cast<size_t>(r)],
+                      indices[static_cast<size_t>(s)]);
+            std::swap(l(r), l(s));
+            R.col(r).swap(R.col(s));
             swap_count++;
-
-            // Recalculate l and Y upon column removal
-            v = C_remaining.col(j_max);
-            Y_times_v = Y * v;
-            Y += Y_times_v * Y_times_v.transpose() / (1 - l_j_max);
-            extra_row = ((v.transpose() * Y) * C).array().square();
-            l += extra_row * (1 - l_j_max);
-
-            // Find new indices for replacement
-            l_j_max = l_remaining.maxCoeff(&j_max);
-            v = C_remaining.col(j_max);
-            term_1 = ((v.transpose() * Y) * C_selected).array().square();
-            b = term_1 + (1 - l_selected) * (1 + l_j_max);
         }
 
         // Warning if maximum swap count was reached
         if (swap_count > max_swap_count) {
             std::cerr
-                << "Warning: VolumeAddRemoveSelector reached maximum swap "
-                   "count ("
+                << "Warning: DominantSelector reached maximum swap count ("
                 << max_swap_count
                 << "). This is theoretically impossible and may indicate "
                    "numerical errors or invalid input matrix (e.g., "
@@ -201,6 +188,18 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
      * factor \f$ c \f$.
      */
     Scalar c;
+
+    /*!
+     * @brief If true, use greedy selection/removal to initialize k columns
+     * instead of just m.
+     */
+    bool greedy_init;
+
+    /*!
+     * @brief Number of extra columns to greedily add before removing back
+     * down to k during initialization.
+     */
+    Eigen::Index oversampling;
 };
 
 } // namespace MatSubset
