@@ -96,7 +96,8 @@ class ExperimentPlotter:
         # Load algorithm data
         algorithms_data = {}
         for algorithm_config in config['algorithms']:
-            algorithm_name = algorithm_config['name']
+            algorithm_name = algorithm_config.get('display_name',
+                                                   algorithm_config['name'])
             csv_filename = algorithm_name.replace(' ', '_') + '.csv'
             csv_path = experiment_path / csv_filename
 
@@ -257,7 +258,8 @@ class ExperimentPlotter:
             'frobenius_norm': 'pinv_frobenius_norm_ratio',
             'spectral_norm_orthonormal': 'X_S_dag_X_spectral_norm_inv',
             'frobenius_norm_orthonormal': 'X_S_dag_X_frobenius_norm_inv',
-            'wall_time': 'wall_time_ms'
+            'wall_time': 'wall_time_ms',
+            'swap_count': 'swap_count'
         }
 
         # Metric display names
@@ -266,7 +268,8 @@ class ExperimentPlotter:
             'frobenius_norm': r'$\Vert X^\dag \Vert_F / \Vert X_\mathcal{S}^\dag \Vert_F$',
             'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2$',
             'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F$',
-            'wall_time': 'Wall time (ms)'
+            'wall_time': 'Wall time (ms)',
+            'swap_count': 'Swap count'
         }
 
         # Metric display names for squared norms
@@ -275,7 +278,8 @@ class ExperimentPlotter:
             'frobenius_norm': r'$\Vert X^\dag \Vert_F^2 / \Vert X_\mathcal{S}^\dag \Vert_F^2$',
             'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2^2$',
             'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F^2$',
-            'wall_time': 'Wall time (ms)'
+            'wall_time': 'Wall time (ms)',
+            'swap_count': 'Swap count'
         }
 
         csv_column = metric_column_map.get(metric, metric)
@@ -338,21 +342,26 @@ class ExperimentPlotter:
                                           markerfacecolor='black',
                                           markeredgecolor='white', alpha=0.3,
                                           label='standard deviation', markersize=6))
-            # Choose dashed-line legend label based on metric
+            # Add dashed bound legend entry only for metrics that have bounds
             if square_norms:
                 bound_legend_labels = {
+                    'spectral_norm': 'theoretical bound',
+                    'frobenius_norm': 'theoretical bound',
                     'frobenius_norm_orthonormal': r'$\frac{k-m+1}{m(n-m+1)}$',
                     'spectral_norm_orthonormal': r'$\frac{k-m+1}{k-m+1+m(n-k)}$',
                 }
             else:
                 bound_legend_labels = {
+                    'spectral_norm': 'theoretical bound',
+                    'frobenius_norm': 'theoretical bound',
                     'frobenius_norm_orthonormal': r'$\sqrt{\frac{1}{m}\frac{k-m+1}{n-m+1}}$',
                     'spectral_norm_orthonormal': r'$\sqrt{\frac{k-m+1}{k-m+1+m(n-k)}}$',
                 }
-            bound_label = bound_legend_labels.get(metric, 'theoretical bound')
-            custom_legend.append(plt.Line2D([0], [0], linestyle='--',
-                                          label=bound_label, color='black',
-                                          linewidth=0.8, alpha=0.8))
+            bound_label = bound_legend_labels.get(metric)
+            if bound_label is not None:
+                custom_legend.append(plt.Line2D([0], [0], linestyle='--',
+                                              label=bound_label, color='black',
+                                              linewidth=0.8, alpha=0.8))
 
             leg = fig.legend(handles=custom_legend, framealpha=0.9,
                            loc='upper center', bbox_to_anchor=(0.5, 0.00),
@@ -401,7 +410,7 @@ def main():
         default='spectral_norm',
         choices=['spectral_norm', 'frobenius_norm',
                  'spectral_norm_orthonormal', 'frobenius_norm_orthonormal',
-                 'wall_time'],
+                 'wall_time', 'swap_count'],
         help='Metric to plot (default: spectral_norm)'
     )
     parser.add_argument(

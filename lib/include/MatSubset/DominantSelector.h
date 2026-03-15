@@ -39,19 +39,14 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
      * @brief Constructor for `DominantSelector`.
      * @param c The improvement threshold parameter. Must be >= 1.
      * Algorithm stops when no swap improves squared volume by factor c.
-     * @param greedy_init If true, use greedy selection/removal in
-     * `selectStartingSet` to initialize k columns instead of just m.
-     * @param oversampling The number of extra columns to greedily add before
-     * removing back down to k during initialization. Only used when
-     * `greedy_init` is true.
+     * @param init The initialization strategy. Defaults to
+     * `Initialization::Greedy`.
      */
-    explicit DominantSelector(Scalar c, bool greedy_init = false,
-                              Eigen::Index oversampling = 0)
-        : c(c), greedy_init(greedy_init), oversampling(oversampling) {
+    explicit DominantSelector(Scalar c,
+                              Initialization init = Initialization::Greedy)
+        : c(c), init(init) {
         assert(c >= 1 && "In the dominant algorithm parameter c must be "
-                         "greater or equal to 1.");
-        assert((greedy_init || (oversampling == 0)) &&
-               "oversampling must be 0 if greedy init is disabled");
+                         "greater then or equal to 1.");
     };
 
     /*!
@@ -70,9 +65,8 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
      * of the selected columns.
      */
-    std::vector<Eigen::Index>
-    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                     Eigen::Index k) override {
+    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
+                                               Eigen::Index k) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
@@ -80,10 +74,10 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         // Make a copy to permute in-place
         Eigen::MatrixX<Scalar> R = X;
 
-        // Permute columns so first m (or k) columns form a high-volume submatrix
+        // Permute columns so first m (or k) columns form a high-volume
+        // submatrix
         std::vector<Eigen::Index> indices =
-            VolumePivotingBase<Scalar>::selectStartingSet(
-                R, greedy_init ? k : m, oversampling);
+            VolumePivotingBase<Scalar>::selectStartingSet(R, k, init);
 
         // R is now permuted: first m columns are selected, rest are remaining
         // indices tracks the permutation
@@ -101,7 +95,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         Eigen::Index i_max, j_max;
         Scalar max_val;
         Eigen::MatrixX<Scalar> B;
-        if (k > m) {
+        if (true) {
             B = (1 - l_selected).matrix() *
                     (1 + l_remaining).matrix().transpose() +
                 C_remaining.array().abs2().matrix();
@@ -145,7 +139,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             C += C_remaining.col(j_max) * last_row * (1 + l_remaining(j_max));
 
             // Select indices to swap
-            if (k > m) {
+            if (true) {
                 B = (1 - l_selected).matrix() *
                         (1 + l_remaining).matrix().transpose() +
                     C_remaining.array().abs2().matrix();
@@ -167,6 +161,8 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
                    "rank-deficient)."
                 << std::endl;
         }
+
+        this->last_swap_count = swap_count;
 
         // Return only the first k indices (selected columns)
         indices.resize(k);
@@ -220,16 +216,9 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
     Scalar c;
 
     /*!
-     * @brief If true, use greedy selection/removal to initialize k columns
-     * instead of just m.
+     * @brief Initialization strategy for the starting set.
      */
-    bool greedy_init;
-
-    /*!
-     * @brief Number of extra columns to greedily add before removing back
-     * down to k during initialization.
-     */
-    Eigen::Index oversampling;
+    Initialization init;
 };
 
 } // namespace MatSubset

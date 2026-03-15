@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_TESTER_H
-#define MAT_SUBSET_BENCH_TESTER_H
+#ifndef MAT_SUBSET_EXPERIMENTS_TESTER_H
+#define MAT_SUBSET_EXPERIMENTS_TESTER_H
 
 #include <chrono>     // For timestamps
 #include <ctime>      // For std::ctime
@@ -27,7 +27,7 @@
 #include "SelectorFactory.h"        // For selector factory
 #include "Utils.h"                  // For add_underscores function
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 template <typename Scalar> class Tester {
   public:
@@ -83,13 +83,18 @@ template <typename Scalar> class Tester {
             return false;
         }
 
-        // Construct the vector of relevant selectors
+        // Construct the vector of relevant selectors and their display names
         std::vector<std::unique_ptr<SelectorBase<Scalar>>> selectors;
+        std::vector<std::string> selector_names;
         const auto &algorithms_json = experiment_config.at("algorithms");
 
         for (const auto &algorithm_config : algorithms_json) {
             auto selector_ptr = selector_factory.create(algorithm_config);
             selectors.push_back(std::move(selector_ptr));
+            // Use "display_name" if provided, otherwise fall back to "name"
+            selector_names.push_back(
+                algorithm_config.value("display_name",
+                    algorithm_config.at("name").get<std::string>()));
         }
 
         // Construct the matrix generator
@@ -146,17 +151,16 @@ template <typename Scalar> class Tester {
 
         std::vector<std::ofstream> output_files;
 
-        for (const auto &selector : selectors) {
-            std::string algorithm_name = selector->getAlgorithmName();
+        for (size_t i = 0; i < selectors.size(); ++i) {
             std::filesystem::path file_path =
                 experiment_folder /
-                (Utils::add_underscores(algorithm_name) + ".csv");
+                (Utils::add_underscores(selector_names[i]) + ".csv");
             output_files.emplace_back(file_path);
             output_files.back()
                 << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
                    "norm_ratio,X_S_dag_X_spectral_norm_inv,X_S_dag_X_"
-                   "frobenius_norm_inv,wall_time_ms,spectral_bound,"
-                   "frobenius_bound"
+                   "frobenius_norm_inv,wall_time_ms,swap_count,"
+                   "spectral_bound,frobenius_bound"
                 << std::endl;
         }
 
@@ -251,8 +255,10 @@ template <typename Scalar> class Tester {
                                 << pinv_frobenius_norm_ratio << ","
                                 << X_S_dag_X_spectral_norm_inv << ","
                                 << X_S_dag_X_frobenius_norm_inv << ","
-                                << wall_time_ms << "," << spectral_bounds[i]
-                                << "," << frobenius_bounds[i] << std::endl;
+                                << wall_time_ms << ","
+                                << selectors[i]->getLastSwapCount() << ","
+                                << spectral_bounds[i] << ","
+                                << frobenius_bounds[i] << std::endl;
                         }
                     }
                 });
@@ -284,6 +290,6 @@ template <typename Scalar> class Tester {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
 #endif // MAT_SUBSET_TESTER_H

@@ -1,0 +1,111 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Swap counts gaussian 50x1000",
+            "matrix": {
+                "type": "gaussian matrix",
+                "rows": 50,
+                "cols": 1000
+            },
+            "algorithms": [
+                {
+                    "c": 1.0,
+                    "display_name": "dominant CPQR",
+                    "initialization": "CPQR",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove CPQR",
+                    "initialization": "CPQR",
+                    "name": "volume add-remove"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "dominant greedy",
+                    "initialization": "greedy",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove greedy",
+                    "initialization": "greedy",
+                    "name": "volume add-remove"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "dominant advanced",
+                    "initialization": "advanced",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove advanced",
+                    "initialization": "advanced",
+                    "name": "volume add-remove"
+                }
+            ],
+            "k_values_range": {
+                "start": 50,
+                "stop": 150,
+                "step": 1
+            },
+            "trials_per_k": 64
+        }
+        ,
+        {
+            "name": "Frobenius norm graph incidence 50x1000",
+            "matrix": {
+                "type": "graph incidence matrix",
+                "rows": 50,
+                "cols": 1000
+            },
+            "algorithms": [
+                {
+                    "c": 1.0,
+                    "display_name": "dominant CPQR",
+                    "initialization": "CPQR",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove CPQR",
+                    "initialization": "CPQR",
+                    "name": "volume add-remove"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "dominant greedy",
+                    "initialization": "greedy",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove greedy",
+                    "initialization": "greedy",
+                    "name": "volume add-remove"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "dominant advanced",
+                    "initialization": "advanced",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.0,
+                    "display_name": "volume add-remove advanced",
+                    "initialization": "advanced",
+                    "name": "volume add-remove"
+                }
+            ],
+            "k_values_range": {
+                "start": 50,
+                "stop": 150,
+                "step": 1
+            },
+            "trials_per_k": 64
+        }
+    ]
+}

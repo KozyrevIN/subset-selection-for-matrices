@@ -1,12 +1,12 @@
-#ifndef MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H
-#define MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_SIGMA_MATRIX_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_SIGMA_MATRIX_GENERATOR_H
 
 #include <algorithm> // For std::min
 #include <cassert>   // For assert
 
 #include "OrthonormalVectorsMatrixGenerator.h" // Base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generates a random matrix with a predefined set of singular values.
@@ -91,6 +91,6 @@ class SigmaMatrixGenerator : public OrthonormalVectorsMatrixGenerator<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_SIGMA_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_SIGMA_MATRIX_GENERATOR_H

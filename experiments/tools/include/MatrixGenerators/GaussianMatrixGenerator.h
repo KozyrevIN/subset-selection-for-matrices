@@ -1,9 +1,9 @@
-#ifndef MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
-#define MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_GAUSSIAN_MATRIX_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_GAUSSIAN_MATRIX_GENERATOR_H
 
 #include "MatrixGeneratorBase.h" // For the base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generates a matrix with i.i.d. Gaussian (normal) entries.
@@ -90,6 +90,6 @@ class GaussianMatrixGenerator : public MatrixGeneratorBase<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_GAUSSIAN_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_GAUSSIAN_MATRIX_GENERATOR_H

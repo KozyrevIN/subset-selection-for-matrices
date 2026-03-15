@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
-#define MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
 
 #include <algorithm> // For std::shuffle
 #include <cassert>   // For assert
@@ -12,7 +12,7 @@
 
 #include "MatrixGeneratorBase.h" // For the base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generator of a matrix of right singular vectors of an oriented
@@ -205,6 +205,6 @@ class GraphIncidenceMatrixGenerator : public MatrixGeneratorBase<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_GRAPH_INCIDENCE_MATRIX_GENERATOR_H

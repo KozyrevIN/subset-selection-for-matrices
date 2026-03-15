@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_MATRIX_GENERATOR_BASE_H
-#define MAT_SUBSET_BENCH_MATRIX_GENERATOR_BASE_H
+#ifndef MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_BASE_H
+#define MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_BASE_H
 
 #include <mutex>   // For std::mutex, std::lock_guard
 #include <random>  // For std::mt19937, std::random_device
@@ -8,7 +8,7 @@
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Base class for generating random matrices.
@@ -112,6 +112,6 @@ template <typename Scalar> class MatrixGeneratorBase {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_MATRIX_GENERATOR_BASE_H
+#endif // MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_BASE_H

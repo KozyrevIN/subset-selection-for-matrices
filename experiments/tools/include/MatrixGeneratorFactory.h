@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_MATRIX_GENERATOR_FACTORY_H
-#define MAT_SUBSET_BENCH_MATRIX_GENERATOR_FACTORY_H
+#ifndef MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_FACTORY_H
+#define MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_FACTORY_H
 
 #include <functional> // For std::function
 #include <map>        // For std::map
@@ -14,7 +14,7 @@
 
 #include "MatrixGenerators.h" // For all matrix generator classes
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Factory for creating matrix generator instances from JSON
@@ -125,7 +125,7 @@ template <typename Scalar> class MatrixGeneratorFactory {
  * @tparam Scalar The underlying scalar type (e.g., float, double).
  *
  * This factory comes pre-populated with all 6 standard matrix generator types
- * from the MatSubset benchmarking suite, ready to use. It handles different
+ * from the MatSubset experiments suite, ready to use. It handles different
  * constructor signatures automatically:
  *     - Standard generators taking (m, n): Most generators
  *     - SigmaMatrixGenerator taking (m, n, sigma_values): Special case
@@ -274,6 +274,6 @@ class DefaultMatrixGeneratorFactory : public MatrixGeneratorFactory<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_MATRIX_GENERATOR_FACTORY_H
+#endif // MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_FACTORY_H

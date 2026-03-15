@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(MatSubsetBench LANGUAGES CXX)
+project(MatSubsetExperiments LANGUAGES CXX)
 
 # Fetch nlohmann_json using FetchContent
 include(FetchContent)
@@ -20,7 +20,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
-    OUTPUT_NAME "Bench"
+    OUTPUT_NAME "Tester"
 )
 
 # Add conditional compile flags for Debug and Release

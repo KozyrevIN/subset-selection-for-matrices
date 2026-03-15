@@ -1,10 +1,10 @@
-#ifndef MAT_SUBSET_BENCH_UTILS_H
-#define MAT_SUBSET_BENCH_UTILS_H
+#ifndef MAT_SUBSET_EXPERIMENTS_UTILS_H
+#define MAT_SUBSET_EXPERIMENTS_UTILS_H
 
 #include <algorithm> // For std::replace
 #include <string>    // For std::string
 
-namespace MatSubset::Bench::Utils {
+namespace MatSubset::Experiments::Utils {
 
 /**
  * @brief Replaces all spaces in a string with underscores.
@@ -36,6 +36,6 @@ std::string remove_underscores(const std::string &text) {
     return result;
 }
 
-} // namespace MatSubset::Bench::Utils
+} // namespace MatSubset::Experiments::Utils
 
-#endif // MAT_SUBSET_BENCH_UTILS_H
+#endif // MAT_SUBSET_EXPERIMENTS_UTILS_H

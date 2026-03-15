@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_SELECTOR_FACTORY_H
-#define MAT_SUBSET_BENCH_SELECTOR_FACTORY_H
+#ifndef MAT_SUBSET_EXPERIMENTS_SELECTOR_FACTORY_H
+#define MAT_SUBSET_EXPERIMENTS_SELECTOR_FACTORY_H
 
 #include <functional> // For std::function
 #include <map>        // For std::map
@@ -10,7 +10,7 @@
 #include <MatSubset/MatSubset.h> // For Selector classes
 #include <nlohmann/json.hpp>     // For nlohmann::json
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Factory for creating selector algorithm instances from JSON
@@ -110,7 +110,7 @@ template <typename Scalar> class SelectorFactory {
  * - No-args selectors (DualSetSelector, etc.)
  * - Selectors with optional eps parameter (SpectralSelectionSelector, etc.)
  * - Selectors with required c parameter (RectMaxvolSelector)
- * - Selectors with required c and optional greedy_init/oversampling
+ * - Selectors with required c and optional initialization strategy
  *   (DominantSelector, VolumeAddRemoveSelector)
  *
  * Registered selectors:
@@ -150,7 +150,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      */
     DefaultSelectorFactory() {
         registerEpsArgSelector<DerandomizedVolumeSelector>();
-        registerCArgWithGreedyInitSelector<DominantSelector>();
+        registerCArgWithInitSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
         registerSeedArgSelector<ForwardIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
@@ -162,7 +162,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerSeedArgSelector<ReverseIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<SpectralRemovalSelector>();
         registerEpsArgSelector<SpectralSelectionSelector>();
-        registerCArgWithGreedyInitSelector<VolumeAddRemoveSelector>();
+        registerCArgWithInitSelector<VolumeAddRemoveSelector>();
         registerNoArgsSelector<VolumeRemovalSelector>();
     }
 
@@ -237,12 +237,13 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
     }
 
     /*!
-     * @brief Registers a selector with required c and optional greedy_init
-     * and oversampling constructor arguments.
+     * @brief Registers a selector with required c and optional initialization
+     * strategy argument.
      * @tparam Selector Template template parameter for the selector class.
      *
      * Creates a registration for selectors that require a "c" parameter
-     * and optionally accept "greedy_init" (bool) and "oversampling" (integer).
+     * and optionally accept an "initialization" string ("CPQR", "greedy",
+     * or "advanced"). Defaults to "greedy".
      *
      * Applies to: DominantSelector, VolumeAddRemoveSelector.
      *
@@ -250,17 +251,22 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * use parameters from config.
      */
     template <template <typename> class Selector>
-    void registerCArgWithGreedyInitSelector() {
+    void registerCArgWithInitSelector() {
         auto dummy = std::make_unique<Selector<Scalar>>(1.01);
         std::string name = dummy->getAlgorithmName();
         typename SelectorFactory<Scalar>::Creator creator =
             [](const nlohmann::json &config) {
                 Scalar c = config.at("c").get<Scalar>();
-                bool greedy_init = config.value("greedy_init", false);
-                Eigen::Index oversampling =
-                    config.value("oversampling", static_cast<Eigen::Index>(0));
-                return std::make_unique<Selector<Scalar>>(c, greedy_init,
-                                                          oversampling);
+                std::string init_str = config.value("initialization", "greedy");
+                MatSubset::Initialization init;
+                if (init_str == "CPQR") {
+                    init = MatSubset::Initialization::CPQR;
+                } else if (init_str == "advanced") {
+                    init = MatSubset::Initialization::Advanced;
+                } else {
+                    init = MatSubset::Initialization::Greedy;
+                }
+                return std::make_unique<Selector<Scalar>>(c, init);
             };
         this->registerSelector(name, creator);
     }
@@ -293,6 +299,6 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_SELECTOR_FACTORY_H
+#endif // MAT_SUBSET_EXPERIMENTS_SELECTOR_FACTORY_H

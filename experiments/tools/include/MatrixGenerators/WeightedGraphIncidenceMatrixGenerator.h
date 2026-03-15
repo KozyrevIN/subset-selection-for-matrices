@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
-#define MAT_SUBSET_BENCH_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
 
 #include <cassert> // For assert
 
@@ -7,7 +7,7 @@
 
 #include "GraphIncidenceMatrixGenerator.h" // For the base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generator of a matrix of right singular vectors of an oriented
@@ -88,6 +88,6 @@ class WeightedGraphIncidenceMatrixGenerator
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_WEIGHTED_GRAPH_INCIDENCE_MATRIX_GENERATOR_H

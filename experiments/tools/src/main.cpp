@@ -57,11 +57,11 @@ int main(int argc, char *argv[]) {
         std::string scalar_string = config.value("scalar", "unspecified");
 
         if (scalar_string == "float") {
-            MatSubset::Bench::Tester<float> tester(experiments_config,
+            MatSubset::Experiments::Tester<float> tester(experiments_config,
                                                    full_output_path);
             tester.runAll();
         } else if (scalar_string == "double") {
-            MatSubset::Bench::Tester<double> tester(experiments_config,
+            MatSubset::Experiments::Tester<double> tester(experiments_config,
                                                     full_output_path);
             tester.runAll();
         } else {
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::cout << "Benchmarking finished successfully." << std::endl
+    std::cout << "Experiments finished successfully." << std::endl
               << std::endl;
     ;
     return 0;

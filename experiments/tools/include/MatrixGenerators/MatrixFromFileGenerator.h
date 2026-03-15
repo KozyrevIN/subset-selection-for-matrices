@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_MATRIX_FROM_FILE_GENERATOR_H
-#define MAT_SUBSET_BENCH_MATRIX_FROM_FILE_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_MATRIX_FROM_FILE_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_MATRIX_FROM_FILE_GENERATOR_H
 
 #include <algorithm>  // For std::find, std::remove_if
 #include <cctype>     // For std::isspace
@@ -12,7 +12,7 @@
 
 #include "MatrixGeneratorBase.h" // For the base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generates a matrix by reading data from a file.
@@ -334,6 +334,6 @@ class MatrixFromFileGenerator : public MatrixGeneratorBase<Scalar> {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_MATRIX_FROM_FILE_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_MATRIX_FROM_FILE_GENERATOR_H

@@ -37,6 +37,9 @@ build
 # Out folder
 out
 
+# Results folder
+results
+
 # Supplementary folder
 supplementary
 

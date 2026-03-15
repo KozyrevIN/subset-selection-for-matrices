@@ -20,7 +20,7 @@ A lightweight header-only C++ library implementing efficient approximation algor
 - Python 3
 - LaTeX with fonts (texlive-base, texlive-latex-extra, texlive-fonts-extra, texlive-fonts-recommended)
 
-**Optional (benchmarks, enabled with `-DBUILD_BENCH=ON`):**
+**Optional (experiments, enabled with `-DBUILD_EXPERIMENTS=ON`):**
 - [nlohmann/json 3.12.0](https://github.com/nlohmann/json) (fetched automatically)
 - [TBB](https://github.com/oneapi-src/oneTBB)
 - Python 3 with NumPy, pandas, Matplotlib (for plotter.py)
@@ -32,7 +32,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and, in future, benchmarks) are independent projects also reachable through superbuild by defining CMake variables (e.g., to additionally build documentation, pass ```-DBUILD_DOCS=ON```)
+This will install the library to default location. Superbuild forwards user defined variables to all subprojects, so custom installation is also possible through superbuild. All other components (examples, tests, documentation, and experiments) are independent projects also reachable through superbuild by defining CMake variables (e.g., to additionally build documentation, pass ```-DBUILD_DOCS=ON```)
 
 ## Quick Start
 

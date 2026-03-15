@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_PROGRESS_BAR_H
-#define MAT_SUBSET_BENCH_PROGRESS_BAR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_PROGRESS_BAR_H
+#define MAT_SUBSET_EXPERIMENTS_PROGRESS_BAR_H
 
 #include <chrono>
 #include <iomanip>
@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 class ProgressBar {
   public:
@@ -80,6 +80,6 @@ class ProgressBar {
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_PROGRESS_BAR_H
+#endif // MAT_SUBSET_EXPERIMENTS_PROGRESS_BAR_H

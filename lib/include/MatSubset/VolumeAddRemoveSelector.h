@@ -39,20 +39,14 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
      * @param c The improvement threshold parameter. Must be greater than 1.
      * Algorithm stops when no add-remove pair improves squared volume by factor
      * c.
-     * @param greedy_init If true, use greedy selection/removal in
-     * `selectStartingSet` to initialize k columns instead of just m.
-     * @param oversampling The number of extra columns to greedily add before
-     * removing back down to k during initialization. Only used when
-     * `greedy_init` is true.
+     * @param init The initialization strategy. Defaults to
+     * `Initialization::Greedy`.
      */
-    explicit VolumeAddRemoveSelector(Scalar c, bool greedy_init = false,
-                                     Eigen::Index oversampling = 0)
-        : c(c), greedy_init(greedy_init), oversampling(oversampling) {
-        assert(c > 1 &&
-               "In the volume add-remove algorithm parameter c must be "
-               "greater than 1.");
-        assert((greedy_init || (oversampling == 0)) &&
-               "oversampling must be 0 if greedy init is disabled");
+    explicit VolumeAddRemoveSelector(Scalar c,
+                                     Initialization init = Initialization::Greedy)
+        : c(c), init(init) {
+        assert(c >= 1 &&
+               "In the volume add-remove algorithm parameter c must be greater then or equal to 1.");
     };
 
     /*!
@@ -85,13 +79,12 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
 
         // Permute columns so first m (or k) columns form a high-volume submatrix
         std::vector<Eigen::Index> indices =
-            VolumePivotingBase<Scalar>::selectStartingSet(
-                R, greedy_init ? k : m, oversampling);
+            VolumePivotingBase<Scalar>::selectStartingSet(R, k, init);
 
         // Initialize l and Y
         Eigen::MatrixX<Scalar> Y =
             (R.leftCols(k) * R.leftCols(k).transpose()).inverse();
-        Eigen::VectorX<Scalar> l = (X.transpose() * Y * X).diagonal();
+        Eigen::VectorX<Scalar> l = (R.transpose() * Y * R).diagonal();
 
         // Compute maximum possible number of swaps
         Eigen::Index max_swap_count = std::numeric_limits<Eigen::Index>::max();
@@ -106,6 +99,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             // Column selection
             Eigen::Index s;
             Scalar l_s = l.tail(n - k).maxCoeff(&s);
+            s += k;
             Eigen::VectorX<Scalar> Y_r_s = Y * R.col(s);
             l -= (Y_r_s.transpose() * R).cwiseAbs2() / (1 + l_s);
             Y -= Y_r_s * Y_r_s.transpose() / (1 + l_s);
@@ -117,8 +111,8 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                 break;
             }
             Eigen::VectorX<Scalar> Y_r_r = Y * R.col(r);
-            l += (Y_r_r.transpose() * R).cwiseAbs2() / (1 + l_r);
-            Y -= Y_r_r * Y_r_r.transpose() / (1 + l_r);
+            l += (Y_r_r.transpose() * R).cwiseAbs2() / (1 - l_r);
+            Y += Y_r_r * Y_r_r.transpose() / (1 - l_r);
 
             // Update
             std::swap(indices[static_cast<size_t>(r)],
@@ -131,13 +125,16 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         // Warning if maximum swap count was reached
         if (swap_count > max_swap_count) {
             std::cerr
-                << "Warning: DominantSelector reached maximum swap count ("
+                << "Warning: VolumeAddRemoveSelector reached maximum swap "
+                   "count ("
                 << max_swap_count
                 << "). This is theoretically impossible and may indicate "
                    "numerical errors or invalid input matrix (e.g., "
                    "rank-deficient)."
                 << std::endl;
         }
+
+        this->last_swap_count = swap_count;
 
         indices.resize(k);
         return indices;
@@ -176,7 +173,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             return S_1 / (S_1 + core_mult);
         } else {
             Scalar S_m = static_cast<Scalar>(m);
-            return S_1 / (S_m + core_mult);
+            return S_m / (S_m + core_mult);
         }
     }
 
@@ -190,16 +187,9 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
     Scalar c;
 
     /*!
-     * @brief If true, use greedy selection/removal to initialize k columns
-     * instead of just m.
+     * @brief Initialization strategy for the starting set.
      */
-    bool greedy_init;
-
-    /*!
-     * @brief Number of extra columns to greedily add before removing back
-     * down to k during initialization.
-     */
-    Eigen::Index oversampling;
+    Initialization init;
 };
 
 } // namespace MatSubset

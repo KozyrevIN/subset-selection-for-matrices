@@ -59,6 +59,19 @@ template <typename S> class SelectorBase {
     [[nodiscard]] virtual std::string getAlgorithmName() const = 0;
 
     /*!
+     * @brief Returns the number of column swaps performed in the last call to
+     * `selectSubset`.
+     * @return The swap count, or -1 if the algorithm does not track swaps.
+     *
+     * Iterative algorithms (e.g., DominantSelector, VolumeAddRemoveSelector)
+     * set this value during `selectSubsetImpl`. Non-iterative algorithms
+     * return -1 by default.
+     */
+    [[nodiscard]] Eigen::Index getLastSwapCount() const {
+        return last_swap_count;
+    }
+
+    /*!
      * @brief Selects a subset of \f$ k \f$ columns from the input matrix \f$ X
      * \f$. (Public Interface)
      * @param X The input matrix (dimensions \f$ m \times n \f$) from which
@@ -208,6 +221,15 @@ template <typename S> class SelectorBase {
         // here as they are handled by the public bound methods.
         return static_cast<Scalar>(0);
     }
+
+    /*!
+     * @brief Stores the number of column swaps from the last `selectSubsetImpl`
+     * call.
+     *
+     * Derived classes that perform iterative swaps should set this value.
+     * Default value of -1 indicates the algorithm does not track swaps.
+     */
+    Eigen::Index last_swap_count = -1;
 };
 
 } // namespace MatSubset

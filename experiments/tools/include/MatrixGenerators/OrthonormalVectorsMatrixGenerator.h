@@ -1,5 +1,5 @@
-#ifndef MAT_SUBSET_BENCH_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
-#define MAT_SUBSET_BENCH_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
+#ifndef MAT_SUBSET_EXPERIMENTS_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
+#define MAT_SUBSET_EXPERIMENTS_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
 
 #include <cmath> // For std::abs
 
@@ -7,7 +7,7 @@
 
 #include "GaussianMatrixGenerator.h" // Base class
 
-namespace MatSubset::Bench {
+namespace MatSubset::Experiments {
 
 /*!
  * @brief Generates a random matrix with orthonormal columns or rows.
@@ -109,6 +109,6 @@ class OrthonormalVectorsMatrixGenerator
     }
 };
 
-} // namespace MatSubset::Bench
+} // namespace MatSubset::Experiments
 
-#endif // MAT_SUBSET_BENCH_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
+#endif // MAT_SUBSET_EXPERIMENTS_ORTHONORMAL_VECTORS_MATRIX_GENERATOR_H
