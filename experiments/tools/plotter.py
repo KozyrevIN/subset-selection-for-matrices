@@ -43,7 +43,8 @@ class ExperimentPlotter:
 
     def __init__(self, results_path: Path, output_path: Optional[Path] = None,
                  show_legend: bool = True, show_titles: bool = True,
-                 log_scale: bool = False):
+                 log_scale: bool = False,
+                 k_min: Optional[int] = None, k_max: Optional[int] = None):
         """
         Initialize the plotter.
 
@@ -53,12 +54,16 @@ class ExperimentPlotter:
             show_legend: Whether to show legend in plots
             show_titles: Whether to show subplot titles
             log_scale: Whether to use logarithmic y-axis scale
+            k_min: Minimum k value to include in plots (inclusive)
+            k_max: Maximum k value to include in plots (inclusive)
         """
         self.results_path = Path(results_path)
         self.output_path = Path(output_path) if output_path else self.results_path
         self.show_legend = show_legend
         self.show_titles = show_titles
         self.log_scale = log_scale
+        self.k_min = k_min
+        self.k_max = k_max
 
         # Apply plot configuration
         plt.rcParams.update(self.PLOT_CONFIG)
@@ -150,6 +155,12 @@ class ExperimentPlotter:
 
         for idx, (algorithm_name, df) in enumerate(data.items()):
             algorithm_names.append(algorithm_name)
+
+            # Apply k range filter if specified
+            if self.k_min is not None:
+                df = df[df['k'] >= self.k_min]
+            if self.k_max is not None:
+                df = df[df['k'] <= self.k_max]
 
             # Group by k values
             k_values = np.sort(df['k'].unique())
@@ -259,7 +270,8 @@ class ExperimentPlotter:
             'spectral_norm_orthonormal': 'X_S_dag_X_spectral_norm_inv',
             'frobenius_norm_orthonormal': 'X_S_dag_X_frobenius_norm_inv',
             'wall_time': 'wall_time_ms',
-            'swap_count': 'swap_count'
+            'swap_count': 'swap_count',
+            'volume': 'volume_ratio',
         }
 
         # Metric display names
@@ -269,7 +281,8 @@ class ExperimentPlotter:
             'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2$',
             'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F$',
             'wall_time': 'Wall time (ms)',
-            'swap_count': 'Swap count'
+            'swap_count': 'Swap count',
+            'volume': r'$\mathrm{vol}(X_\mathcal{S}) / \mathrm{vol}(X)$',
         }
 
         # Metric display names for squared norms
@@ -279,7 +292,8 @@ class ExperimentPlotter:
             'spectral_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_2^2$',
             'frobenius_norm_orthonormal': r'$1 / \Vert X_\mathcal{S}^\dag X \Vert_F^2$',
             'wall_time': 'Wall time (ms)',
-            'swap_count': 'Swap count'
+            'swap_count': 'Swap count',
+            'volume': r'$\mathrm{vol}(X_\mathcal{S}) / \mathrm{vol}(X)$',
         }
 
         csv_column = metric_column_map.get(metric, metric)
@@ -410,7 +424,7 @@ def main():
         default='spectral_norm',
         choices=['spectral_norm', 'frobenius_norm',
                  'spectral_norm_orthonormal', 'frobenius_norm_orthonormal',
-                 'wall_time', 'swap_count'],
+                 'wall_time', 'swap_count', 'volume'],
         help='Metric to plot (default: spectral_norm)'
     )
     parser.add_argument(
@@ -433,6 +447,18 @@ def main():
         action='store_true',
         help='Use logarithmic scale for y-axis'
     )
+    parser.add_argument(
+        '--k-min',
+        type=int,
+        default=None,
+        help='Minimum k value to include in plots (inclusive)'
+    )
+    parser.add_argument(
+        '--k-max',
+        type=int,
+        default=None,
+        help='Maximum k value to include in plots (inclusive)'
+    )
 
     args = parser.parse_args()
 
@@ -442,7 +468,9 @@ def main():
         output_path=args.output_path,
         show_legend=not args.no_legend,
         show_titles=not args.no_titles,
-        log_scale=args.log_scale
+        log_scale=args.log_scale,
+        k_min=args.k_min,
+        k_max=args.k_max
     )
 
     # Generate plots

@@ -1,14 +1,14 @@
 {
     "scalar": "double",
-    "output_path": "results",
+    "output_path": "results_small",
     "experiments": [
         {
             "name": "Gaussian matrices",
             "enabled": true,
             "matrix": {
                 "type": "gaussian matrix",
-                "rows": 100,
-                "cols": 5000,
+                "rows": 30,
+                "cols": 500,
                 "seed": 42
             },
             "algorithms": [
@@ -53,7 +53,7 @@
                     "name": "spectral removal"
                 }
             ],
-            "k_values_range": {"start": 100, "stop": 300, "step": 2},
+            "k_values_range": {"start": 30, "stop": 90, "step": 1},
             "trials_per_k": 64
         },
         {
@@ -61,8 +61,8 @@
             "enabled": true,
             "matrix": {
                 "type": "weighted graph incidence matrix",
-                "rows": 100,
-                "cols": 5000,
+                "rows": 30,
+                "cols": 500,
                 "seed": 42
             },
             "algorithms": [
@@ -107,7 +107,7 @@
                     "name": "spectral removal"
                 }
             ],
-            "k_values_range": {"start": 100, "stop": 300, "step": 2},
+            "k_values_range": {"start": 30, "stop": 90, "step": 1},
             "trials_per_k": 64
         }
     ]

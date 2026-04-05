@@ -101,7 +101,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             Scalar l_s = l.tail(n - k).maxCoeff(&s);
             s += k;
             Eigen::VectorX<Scalar> Y_r_s = Y * R.col(s);
-            l -= (Y_r_s.transpose() * R).cwiseAbs2() / (1 + l_s);
+            l -= (R.transpose() * Y_r_s).cwiseAbs2() / (1 + l_s);
             Y -= Y_r_s * Y_r_s.transpose() / (1 + l_s);
 
             // Column removal
@@ -111,7 +111,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                 break;
             }
             Eigen::VectorX<Scalar> Y_r_r = Y * R.col(r);
-            l += (Y_r_r.transpose() * R).cwiseAbs2() / (1 - l_r);
+            l += (R.transpose() * Y_r_r).cwiseAbs2() / (1 - l_r);
             Y += Y_r_r * Y_r_r.transpose() / (1 - l_r);
 
             // Update
@@ -123,7 +123,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         }
 
         // Warning if maximum swap count was reached
-        if (swap_count > max_swap_count) {
+        if (swap_count >= max_swap_count) {
             std::cerr
                 << "Warning: VolumeAddRemoveSelector reached maximum swap "
                    "count ("

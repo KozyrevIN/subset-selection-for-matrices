@@ -1,6 +1,7 @@
 #ifndef MAT_SUBSET_SELECTOR_BASE_H
 #define MAT_SUBSET_SELECTOR_BASE_H
 
+#include <atomic>  // For std::atomic
 #include <cassert> // For assert
 #include <string>  // For std::string
 #include <vector>  // For std::vector
@@ -229,7 +230,7 @@ template <typename S> class SelectorBase {
      * Derived classes that perform iterative swaps should set this value.
      * Default value of -1 indicates the algorithm does not track swaps.
      */
-    Eigen::Index last_swap_count = -1;
+    std::atomic<Eigen::Index> last_swap_count = -1;
 };
 
 } // namespace MatSubset

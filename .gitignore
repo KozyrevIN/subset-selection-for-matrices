@@ -37,8 +37,9 @@ build
 # Out folder
 out
 
-# Results folder
+# Results and figures
 results
+figures
 
 # Supplementary folder
 supplementary

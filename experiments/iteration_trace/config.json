@@ -1,0 +1,11 @@
+{
+    "output_path": "results",
+    "matrix": {
+        "type": "weighted graph incidence matrix",
+        "rows": 100,
+        "cols": 500,
+        "seed": 42
+    },
+    "k": 100,
+    "trials": 32
+}

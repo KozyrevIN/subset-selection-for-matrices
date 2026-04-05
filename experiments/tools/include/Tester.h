@@ -2,6 +2,7 @@
 #define MAT_SUBSET_EXPERIMENTS_TESTER_H
 
 #include <chrono>     // For timestamps
+#include <cmath>      // For std::log, std::exp
 #include <ctime>      // For std::ctime
 #include <execution>  // For std::execution::par
 #include <filesystem> // For std::filesystem::path
@@ -17,6 +18,7 @@
 
 #include <Eigen/Core> // For vectors and matrices
 #include <Eigen/QR>   // For Eigen::HouseholderQR
+#include <Eigen/SVD>  // For Eigen::BDCSVD
 
 #include <nlohmann/json.hpp> // For parsing .json files
 
@@ -103,16 +105,22 @@ template <typename Scalar> class Tester {
 
         // Determine k values
         std::vector<Eigen::Index> k_values;
+        auto append_range = [&](const nlohmann::json &range) {
+            Eigen::Index start = range.at("start").get<Eigen::Index>();
+            Eigen::Index stop  = range.at("stop").get<Eigen::Index>();
+            Eigen::Index step  = range.at("step").get<Eigen::Index>();
+            for (Eigen::Index k = start; k <= stop; k += step) {
+                k_values.push_back(k);
+            }
+        };
         if (experiment_config.contains("k_values")) {
             k_values = experiment_config.at("k_values")
                            .get<std::vector<Eigen::Index>>();
         } else if (experiment_config.contains("k_values_range")) {
-            const auto &range = experiment_config.at("k_values_range");
-            Eigen::Index start = range.at("start").get<Eigen::Index>();
-            Eigen::Index stop = range.at("stop").get<Eigen::Index>();
-            Eigen::Index step = range.at("step").get<Eigen::Index>();
-            for (Eigen::Index k = start; k <= stop; k += step) {
-                k_values.push_back(k);
+            append_range(experiment_config.at("k_values_range"));
+        } else if (experiment_config.contains("k_values_ranges")) {
+            for (const auto &range : experiment_config.at("k_values_ranges")) {
+                append_range(range);
             }
         }
 
@@ -128,10 +136,11 @@ template <typename Scalar> class Tester {
         // Save experiment configuration for reproducibility
         nlohmann::json saved_config = experiment_config;
 
-        // Replace k_values_range with the actual k_values array if it was a
-        // range
-        if (saved_config.contains("k_values_range")) {
-            saved_config.erase("k_values_range");
+        // Replace range specs with the resolved k_values array
+        for (const auto &key : {"k_values_range", "k_values_ranges"}) {
+            if (saved_config.contains(key)) {
+                saved_config.erase(key);
+            }
         }
         saved_config["k_values"] = k_values;
 
@@ -157,10 +166,10 @@ template <typename Scalar> class Tester {
                 (Utils::add_underscores(selector_names[i]) + ".csv");
             output_files.emplace_back(file_path);
             output_files.back()
-                << "k,pinv_spectral_norm_ratio,pinv_frobenius_"
-                   "norm_ratio,X_S_dag_X_spectral_norm_inv,X_S_dag_X_"
-                   "frobenius_norm_inv,wall_time_ms,swap_count,"
-                   "spectral_bound,frobenius_bound"
+                << "k,pinv_spectral_norm_ratio,pinv_frobenius_norm_ratio,"
+                   "X_S_dag_X_spectral_norm_inv,X_S_dag_X_frobenius_norm_inv,"
+                   "wall_time_ms,swap_count,spectral_bound,frobenius_bound,"
+                   "volume_ratio"
                 << std::endl;
         }
 
@@ -194,10 +203,16 @@ template <typename Scalar> class Tester {
                     Eigen::MatrixX<Scalar> X =
                         matrix_generator->generateMatrix();
 
+                    Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd_X(X);
+                    const auto &sv_X = svd_X.singularValues();
+
                     Scalar X_dag_spectral_norm =
-                        MatSubset::Utils::pinv_norm<Scalar, Norm::Spectral>(X);
+                        static_cast<Scalar>(1) / sv_X(sv_X.size() - 1);
                     Scalar X_dag_frobenius_norm =
-                        MatSubset::Utils::pinv_norm<Scalar, Norm::Frobenius>(X);
+                        std::sqrt(sv_X.array().inverse().square().sum());
+
+                    // log-volume of X: sum of log singular values
+                    Scalar log_vol_X = sv_X.array().log().sum();
 
                     // Compute Q from LQ decomposition of X (X = LQ)
                     const Eigen::Index m_x = X.rows();
@@ -245,6 +260,15 @@ template <typename Scalar> class Tester {
                             static_cast<Scalar>(1) / Q_S_dag_spectral_norm;
                         Scalar X_S_dag_X_frobenius_norm_inv =
                             static_cast<Scalar>(1) / Q_S_dag_frobenius_norm;
+
+                        // Volume ratio: vol(X_S) / vol(X)
+                        // vol = product of singular values; computed in
+                        // log-space for numerical stability.
+                        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd_X_S(X_S);
+                        Scalar log_vol_X_S =
+                            svd_X_S.singularValues().array().log().sum();
+                        Scalar volume_ratio =
+                            std::exp(log_vol_X_S - log_vol_X);
                         {
                             std::lock_guard<std::mutex> lock(output_mutex);
                             std::string label =
@@ -258,7 +282,8 @@ template <typename Scalar> class Tester {
                                 << wall_time_ms << ","
                                 << selectors[i]->getLastSwapCount() << ","
                                 << spectral_bounds[i] << ","
-                                << frobenius_bounds[i] << std::endl;
+                                << frobenius_bounds[i] << ","
+                                << volume_ratio << std::endl;
                         }
                     }
                 });

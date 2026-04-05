@@ -1,0 +1,72 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Volume vs Frobenius gaussian 20x200 k=20",
+            "matrix": {
+                "type": "gaussian matrix",
+                "rows": 20,
+                "cols": 200,
+                "seed": 42
+            },
+            "algorithms": [
+                {
+                    "name": "forward iterative volume sampling",
+                    "c": 1.01,
+                    "seed": 1
+                }
+            ],
+            "k_values_range": {
+                "start": 20,
+                "stop": 20,
+                "step": 1
+            },
+            "trials_per_k": 20000
+        },
+        {
+            "name": "Volume vs Frobenius gaussian 20x200 k=25",
+            "matrix": {
+                "type": "gaussian matrix",
+                "rows": 20,
+                "cols": 200,
+                "seed": 42
+            },
+            "algorithms": [
+                {
+                    "name": "forward iterative volume sampling",
+                    "c": 1.01,
+                    "seed": 1
+                }
+            ],
+            "k_values_range": {
+                "start": 25,
+                "stop": 25,
+                "step": 1
+            },
+            "trials_per_k": 20000
+        },
+        {
+            "name": "Volume vs Frobenius gaussian 20x200 k=30",
+            "matrix": {
+                "type": "gaussian matrix",
+                "rows": 20,
+                "cols": 200,
+                "seed": 42
+            },
+            "algorithms": [
+                {
+                    "name": "forward iterative volume sampling",
+                    "c": 1.01,
+                    "seed": 1
+                }
+            ],
+            "k_values_range": {
+                "start": 30,
+                "stop": 30,
+                "step": 1
+            },
+            "trials_per_k": 20000
+        }
+    ]
+}

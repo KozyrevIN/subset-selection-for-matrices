@@ -2,6 +2,7 @@
 #define MAT_SUBSET_VOLUME_PIVOTING_BASE_H
 
 #include <cassert> // For assert
+#include <cmath>   // For std::log, std::log2, std::sqrt, std::exp, std::ceil
 
 #include <Eigen/LU> // For Eigen::MatrixBase::inverse
 #include <Eigen/QR> // For Eigen::HouseholderQR
@@ -102,7 +103,7 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             X.col(i).swap(X.col(j_max));
             R.col(i).swap(R.col(j_max));
 
-            R -= R.col(i) * (R.col(i).transpose() * R) / gamma_max;
+            R -= (R.col(i) * (R.col(i).transpose() * R) / gamma_max).eval();
         }
 
         if (init == Initialization::CPQR) {
@@ -124,8 +125,9 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
         }
 
         // Exchange phase
-        exchangePhase(X, indices, l, Y, k,
-                      static_cast<Scalar>(4 * m - 1) / (2 * m));
+        exchangePhase(X, indices, l, Y, 2 * m - 1,
+                      std::min(static_cast<Scalar>(2.71828),
+                               static_cast<Scalar>(4 * m - 1) / (2 * m)));
 
         // Greedy removal/selection phase: adjust from 2m-1 columns to k
         if (k <= 2 * m - 1) {
@@ -161,13 +163,13 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             j_max += t;
             Eigen::VectorX<Scalar> Y_x_max = Y * X.col(j_max);
 
+            l -= (X.transpose() * Y_x_max).cwiseAbs2() / (1 + l_max);
+            Y -= Y_x_max * Y_x_max.transpose() / (1 + l_max);
+
             std::swap(indices[static_cast<size_t>(t)],
                       indices[static_cast<size_t>(j_max)]);
             std::swap(l(t), l(j_max));
             X.col(t).swap(X.col(j_max));
-
-            l -= (Y_x_max.transpose() * X).cwiseAbs2() / (1 + l_max);
-            Y -= Y_x_max * Y_x_max.transpose() / (1 + l_max);
         }
     }
 
@@ -192,13 +194,13 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             Scalar l_min = l.head(t).minCoeff(&j_min);
             Eigen::VectorX<Scalar> Y_x_min = Y * X.col(j_min);
 
+            l += (X.transpose() * Y_x_min).cwiseAbs2() / (1 - l_min);
+            Y += Y_x_min * Y_x_min.transpose() / (1 - l_min);
+
             std::swap(indices[static_cast<size_t>(t - 1)],
                       indices[static_cast<size_t>(j_min)]);
             std::swap(l(t - 1), l(j_min));
             X.col(t - 1).swap(X.col(j_min));
-
-            l += (Y_x_min.transpose() * X).cwiseAbs2() / (1 - l_min);
-            Y += Y_x_min * Y_x_min.transpose() / (1 - l_min);
         }
     }
 
@@ -219,38 +221,59 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
                        std::vector<Eigen::Index> &indices,
                        Eigen::VectorX<Scalar> &l, Eigen::MatrixX<Scalar> &Y,
                        Eigen::Index k, Scalar vol_bound) const {
+
         const Eigen::Index n = X.cols();
-        while (true) {
+        const Eigen::Index m = X.rows();
+        const Eigen::Index max_swap_count = static_cast<Eigen::Index>(std::ceil(
+            static_cast<Scalar>(m) *
+            (std::log(std::log(2 * std::sqrt(static_cast<Scalar>(2) *
+                                             static_cast<Scalar>(m)))) +
+             std::log2(std::exp(static_cast<Scalar>(1)) *
+                       static_cast<Scalar>(2 * m - 1) /
+                       static_cast<Scalar>(m)))));
+
+        Eigen::Index swap_count = 0;
+        while (swap_count < max_swap_count) {
             // Find the best candidate column to add (from outside the k-subset)
             Eigen::Index s;
             Scalar l_s = l.tail(n - k).maxCoeff(&s);
             s += k;
 
-            // Find the weakest column to remove (from within the k-subset)
+            // Apply rank-1 update for adding column s
+            Eigen::VectorX<Scalar> Y_x_s = Y * X.col(s);
+            Eigen::VectorX<Scalar> l_prime =
+                l - (X.transpose() * Y_x_s).cwiseAbs2() / (1 + l_s);
+            Eigen::MatrixX<Scalar> Y_prime =
+                Y - Y_x_s * Y_x_s.transpose() / (1 + l_s);
+
+            // Find the weakest column to remove (from within the k-subset),
+            // evaluated on the updated l_prime
             Eigen::Index r;
-            Scalar l_r = l.head(k).minCoeff(&r);
+            Scalar l_r = l_prime.head(k).minCoeff(&r);
 
             if ((1 + l_s) * (1 - l_r) <= vol_bound) {
                 break;
             }
 
-            // Apply rank-1 update for adding column s, then downdate for
-            // removing column r
-            Eigen::VectorX<Scalar> Y_x_s = Y * X.col(s);
-            Eigen::VectorX<Scalar> l_prime =
-                l - (Y_x_s.transpose() * X).cwiseAbs2() / (1 + l_s);
-            Eigen::MatrixX<Scalar> Y_prime =
-                Y - Y_x_s * Y_x_s.transpose() / (1 + l_s);
-
+            // Apply rank-1 downdate for removing column r
             Eigen::VectorX<Scalar> Y_prime_x_r = Y_prime * X.col(r);
-            l = l_prime +
-                (Y_prime_x_r.transpose() * X).cwiseAbs2() / (1 - l_r);
+            l = l_prime + (X.transpose() * Y_prime_x_r).cwiseAbs2() / (1 - l_r);
             Y = Y_prime + Y_prime_x_r * Y_prime_x_r.transpose() / (1 - l_r);
 
             std::swap(indices[static_cast<size_t>(r)],
                       indices[static_cast<size_t>(s)]);
             std::swap(l(r), l(s));
             X.col(r).swap(X.col(s));
+            swap_count++;
+        }
+
+        if (swap_count >= max_swap_count) {
+            std::cerr << "Warning: exchangePhase reached maximum swap count ("
+                      << max_swap_count
+                      << "). This is theoretically impossible and may indicate "
+                         "numerical errors or invalid input matrix (e.g., "
+                         "rank-deficient)."
+                      << std::endl;
         }
     }
 };
