@@ -1,0 +1,84 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Matrices with orthonormal rows",
+            "enabled": false,
+            "matrix": {
+                "type": "matrix with orthonormal rows or columns",
+                "rows": 100,
+                "cols": 5000,
+                "seed": 42
+            },
+            "algorithms": [
+                {
+                    "display_name": "spectral selection",
+                    "name": "spectral selection"
+                },
+                {
+                    "display_name": "spectral removal",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "dual set",
+                    "name": "dual set"
+                },
+                {
+                    "display_name": "leverage scores",
+                    "name": "leverage scores",
+                    "seed": 42
+                },
+                {
+                    "display_name": "random columns",
+                    "name": "random columns",
+                    "seed": 42
+                }
+            ],
+            "k_values_ranges": [
+                {"start": 100, "stop": 200, "step": 1},
+                {"start": 248, "stop": 5000, "step": 48}
+            ],
+            "trials_per_k": 32
+        },
+        {
+            "name": "Incidence matrices of a random graph",
+            "enabled": false,
+            "matrix": {
+                "type": "weighted graph incidence matrix",
+                "rows": 100,
+                "cols": 5000,
+                "seed": 42
+            },
+            "algorithms": [
+                {
+                    "display_name": "spectral selection",
+                    "name": "spectral selection"
+                },
+                {
+                    "display_name": "spectral removal",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "dual set",
+                    "name": "dual set"
+                },
+                {
+                    "display_name": "leverage scores",
+                    "name": "leverage scores",
+                    "seed": 42
+                },
+                {
+                    "display_name": "random columns",
+                    "name": "random columns",
+                    "seed": 42
+                }
+            ],
+            "k_values_ranges": [
+                {"start": 100, "stop": 200, "step": 1},
+                {"start": 248, "stop": 5000, "step": 48}
+            ],
+            "trials_per_k": 32
+        }
+    ]
+}

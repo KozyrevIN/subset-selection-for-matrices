@@ -4,6 +4,7 @@
 #include <chrono>     // For timestamps
 #include <cmath>      // For std::log, std::exp
 #include <ctime>      // For std::ctime
+#include <limits>     // For std::numeric_limits
 #include <execution>  // For std::execution::par
 #include <filesystem> // For std::filesystem::path
 #include <format>     // For std::format
@@ -160,6 +161,10 @@ template <typename Scalar> class Tester {
 
         std::vector<std::ofstream> output_files;
 
+        // Check once whether the generator provides a target vector
+        auto target_vector_opt = matrix_generator->getTargetVector();
+        bool has_target = target_vector_opt.has_value();
+
         for (size_t i = 0; i < selectors.size(); ++i) {
             std::filesystem::path file_path =
                 experiment_folder /
@@ -169,7 +174,7 @@ template <typename Scalar> class Tester {
                 << "k,pinv_spectral_norm_ratio,pinv_frobenius_norm_ratio,"
                    "X_S_dag_X_spectral_norm_inv,X_S_dag_X_frobenius_norm_inv,"
                    "wall_time_ms,swap_count,spectral_bound,frobenius_bound,"
-                   "volume_ratio"
+                   "volume_ratio,regression_mse"
                 << std::endl;
         }
 
@@ -227,8 +232,9 @@ template <typename Scalar> class Tester {
                     for (int i = 0; i < static_cast<int>(selectors.size());
                          ++i) {
                         auto t0 = std::chrono::steady_clock::now();
+                        Eigen::Index swap_count = -1;
                         std::vector<Eigen::Index> selected_indices =
-                            selectors[i]->selectSubset(X, k);
+                            selectors[i]->selectSubset(X, k, &swap_count);
                         auto t1 = std::chrono::steady_clock::now();
 
                         double wall_time_ms =
@@ -269,6 +275,35 @@ template <typename Scalar> class Tester {
                             svd_X_S.singularValues().array().log().sum();
                         Scalar volume_ratio =
                             std::exp(log_vol_X_S - log_vol_X);
+
+                        // Regression MSE: fit β on selected samples, evaluate
+                        // on all n samples.
+                        //
+                        // Model: y ≈ X^T β  (X is m×n, β ∈ ℝ^m, y ∈ ℝ^n)
+                        // Fit:   β = (X_S^T)^† y_S
+                        //          = X_S (X_S^T X_S)^{-1} y_S
+                        //   computed via QR of X_S^T (k×m, full column rank
+                        //   since k ≥ m is guaranteed by subset selection).
+                        // MSE:   ||X^T β - y||² / n
+                        Scalar regression_mse =
+                            std::numeric_limits<Scalar>::quiet_NaN();
+                        if (has_target) {
+                            const Eigen::VectorX<Scalar> &y = *target_vector_opt;
+                            Eigen::VectorX<Scalar> y_S =
+                                y(selected_indices);
+                            // Solve X_S^T β = y_S in the least-squares sense
+                            // (minimum-norm solution via column-pivoting QR)
+                            Eigen::VectorX<Scalar> beta =
+                                X_S.transpose()
+                                    .colPivHouseholderQr()
+                                    .solve(y_S);
+                            Eigen::VectorX<Scalar> residual =
+                                X.transpose() * beta - y;
+                            regression_mse =
+                                residual.squaredNorm() /
+                                static_cast<Scalar>(y.size());
+                        }
+
                         {
                             std::lock_guard<std::mutex> lock(output_mutex);
                             std::string label =
@@ -280,10 +315,11 @@ template <typename Scalar> class Tester {
                                 << X_S_dag_X_spectral_norm_inv << ","
                                 << X_S_dag_X_frobenius_norm_inv << ","
                                 << wall_time_ms << ","
-                                << selectors[i]->getLastSwapCount() << ","
+                                << swap_count << ","
                                 << spectral_bounds[i] << ","
                                 << frobenius_bounds[i] << ","
-                                << volume_ratio << std::endl;
+                                << volume_ratio << ","
+                                << regression_mse << std::endl;
                         }
                     }
                 });

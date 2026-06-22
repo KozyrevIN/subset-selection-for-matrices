@@ -58,7 +58,7 @@
         },
         {
             "name": "Graph related matrices",
-            "enabled": true,
+            "enabled": false,
             "matrix": {
                 "type": "weighted graph incidence matrix",
                 "rows": 100,

@@ -5,6 +5,7 @@
 #include <cctype>     // For std::isspace
 #include <filesystem> // For std::filesystem::path
 #include <fstream>    // For std::ifstream
+#include <optional>   // For std::optional
 #include <sstream>    // For std::stringstream
 #include <stdexcept>  // For std::runtime_error
 #include <string>     // For std::string
@@ -35,11 +36,16 @@ class MatrixFromFileGenerator : public MatrixGeneratorBase<Scalar> {
   private:
     Eigen::MatrixX<Scalar> cached_matrix; ///< Cached matrix data from file.
     std::string file_path; ///< Path to the source file.
+    std::optional<Eigen::VectorX<Scalar>> target_vector; ///< Optional target vector.
 
   public:
     /*!
      * @brief Constructor that loads matrix data from a file.
      * @param file_path Path to the data file (relative or absolute).
+     * @param target_file_path Optional path to a single-column CSV file
+     *        containing the target vector (one value per row). When provided,
+     *        getTargetVector() returns that vector so the tester can compute
+     *        regression MSE for each selected submatrix.
      *
      * The file format is automatically detected from the extension:
      * - .arff: ARFF format
@@ -52,7 +58,8 @@ class MatrixFromFileGenerator : public MatrixGeneratorBase<Scalar> {
      *
      * @throws std::runtime_error if the file cannot be read or parsed.
      */
-    MatrixFromFileGenerator(const std::string &file_path)
+    MatrixFromFileGenerator(const std::string &file_path,
+                            const std::string &target_file_path = "")
         : MatrixGeneratorBase<Scalar>(0, 0), file_path(file_path) {
         loadMatrixFromFile();
 
@@ -64,6 +71,18 @@ class MatrixFromFileGenerator : public MatrixGeneratorBase<Scalar> {
         // Update the matrixSize after loading and potential transpose
         const_cast<std::pair<Eigen::Index, Eigen::Index> &>(this->matrixSize) =
             {cached_matrix.rows(), cached_matrix.cols()};
+
+        if (!target_file_path.empty()) {
+            loadTargetVector(target_file_path);
+        }
+    }
+
+    /*!
+     * @brief Returns the target vector if one was loaded, otherwise nullopt.
+     */
+    [[nodiscard]] std::optional<Eigen::VectorX<Scalar>>
+    getTargetVector() const override {
+        return target_vector;
     }
 
     /*!
@@ -331,6 +350,46 @@ class MatrixFromFileGenerator : public MatrixGeneratorBase<Scalar> {
                 cached_matrix(i, j) = data[i][j];
             }
         }
+    }
+
+    /*!
+     * @brief Loads the target vector from a single-column CSV file.
+     * @param target_file_path Path to the CSV file (one numeric value per line,
+     *        no header). The number of rows must match the number of columns of
+     *        the (already transposed) cached_matrix, i.e. n samples.
+     * @throws std::runtime_error if the file cannot be opened or has wrong size.
+     */
+    void loadTargetVector(const std::string &target_file_path) {
+        std::ifstream file(target_file_path);
+        if (!file.is_open()) {
+            throw std::runtime_error("Cannot open target file: " +
+                                     target_file_path);
+        }
+
+        std::vector<Scalar> values;
+        std::string line;
+        while (std::getline(file, line)) {
+            line.erase(0, line.find_first_not_of(" \t\r\n"));
+            line.erase(line.find_last_not_of(" \t\r\n") + 1);
+            if (line.empty() || line[0] == '#') continue;
+            try {
+                values.push_back(static_cast<Scalar>(std::stod(line)));
+            } catch (const std::exception &) {
+                // Skip non-numeric lines (e.g. a header)
+            }
+        }
+        file.close();
+
+        // n = number of columns of the (potentially transposed) matrix
+        Eigen::Index n = cached_matrix.cols();
+        if (static_cast<Eigen::Index>(values.size()) != n) {
+            throw std::runtime_error(
+                "Target vector length (" + std::to_string(values.size()) +
+                ") does not match number of matrix columns (" +
+                std::to_string(n) + ")");
+        }
+
+        target_vector = Eigen::Map<Eigen::VectorX<Scalar>>(values.data(), n);
     }
 };
 

@@ -7,108 +7,40 @@
             "enabled": true,
             "matrix": {
                 "type": "gaussian matrix",
-                "rows": 30,
-                "cols": 500,
+                "rows": 200,
+                "cols": 1600,
                 "seed": 42
             },
             "algorithms": [
                 {
                     "c": 1.0,
-                    "display_name": "Dominant-CPQR",
-                    "initialization": "CPQR",
-                    "name": "dominant"
-                },
-                {
-                    "c": 1.0,
                     "display_name": "Dominant-greedy",
                     "initialization": "greedy",
                     "name": "dominant"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-advanced",
-                    "initialization": "advanced",
-                    "name": "dominant"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-CPQR",
-                    "initialization": "CPQR",
-                    "name": "volume add-remove"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-greedy",
-                    "initialization": "greedy",
-                    "name": "volume add-remove"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-advanced",
-                    "initialization": "advanced",
-                    "name": "volume add-remove"
-                },
-                {
-                    "display_name": "Frob-removal-orth",
-                    "name": "spectral removal"
                 }
             ],
-            "k_values_range": {"start": 30, "stop": 90, "step": 1},
-            "trials_per_k": 64
+            "k_values_range": {"start": 40, "stop": 120, "step": 1},
+            "trials_per_k": 8
         },
         {
             "name": "Graph related matrices",
             "enabled": true,
             "matrix": {
                 "type": "weighted graph incidence matrix",
-                "rows": 30,
-                "cols": 500,
+                "rows": 20,
+                "cols": 400,
                 "seed": 42
             },
             "algorithms": [
                 {
                     "c": 1.0,
-                    "display_name": "Dominant-CPQR",
-                    "initialization": "CPQR",
-                    "name": "dominant"
-                },
-                {
-                    "c": 1.0,
                     "display_name": "Dominant-greedy",
                     "initialization": "greedy",
                     "name": "dominant"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-advanced",
-                    "initialization": "advanced",
-                    "name": "dominant"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-CPQR",
-                    "initialization": "CPQR",
-                    "name": "volume add-remove"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-greedy",
-                    "initialization": "greedy",
-                    "name": "volume add-remove"
-                },
-                {
-                    "c": 1.0,
-                    "display_name": "Dominant-split-advanced",
-                    "initialization": "advanced",
-                    "name": "volume add-remove"
-                },
-                {
-                    "display_name": "Frob-removal-orth",
-                    "name": "spectral removal"
                 }
             ],
-            "k_values_range": {"start": 30, "stop": 90, "step": 1},
-            "trials_per_k": 64
+            "k_values_range": {"start": 40, "stop": 120, "step": 1},
+            "trials_per_k": 8
         }
     ]
 }

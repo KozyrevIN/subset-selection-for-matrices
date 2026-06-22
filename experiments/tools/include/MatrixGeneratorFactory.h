@@ -268,7 +268,10 @@ class DefaultMatrixGeneratorFactory : public MatrixGeneratorFactory<Scalar> {
         typename MatrixGeneratorFactory<Scalar>::Creator creator =
             [](const nlohmann::json &config) {
                 std::string file_path = config.at("file_path").get<std::string>();
-                return std::make_unique<MatrixFromFileGenerator<Scalar>>(file_path);
+                std::string target_file_path =
+                    config.value("target_file", std::string{});
+                return std::make_unique<MatrixFromFileGenerator<Scalar>>(
+                    file_path, target_file_path);
             };
         this->registerGenerator(type, creator);
     }

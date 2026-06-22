@@ -1,0 +1,37 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Abalone dataset",
+            "enabled": false,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/abalone.csv",
+                "target_file": "data/abalone_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "spectral selection",
+                    "name": "spectral selection"
+                },
+                {
+                    "display_name": "spectral removal",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "dual set",
+                    "name": "dual set"
+                }
+            ],
+            "k_values_ranges": [
+                {"start": 10, "stop": 100, "step": 1}
+            ],
+            "trials_per_k": 1
+        }
+    ]
+}

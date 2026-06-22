@@ -1,10 +1,11 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_BASE_H
 #define MAT_SUBSET_EXPERIMENTS_MATRIX_GENERATOR_BASE_H
 
-#include <mutex>   // For std::mutex, std::lock_guard
-#include <random>  // For std::mt19937, std::random_device
-#include <string>  // For std::string
-#include <utility> // For std::pair
+#include <mutex>    // For std::mutex, std::lock_guard
+#include <optional> // For std::optional
+#include <random>   // For std::mt19937, std::random_device
+#include <string>   // For std::string
+#include <utility>  // For std::pair
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
@@ -74,6 +75,16 @@ template <typename Scalar> class MatrixGeneratorBase {
      */
     [[nodiscard]] virtual std::string getMatrixType() const {
         return "zero matrix";
+    }
+
+    /*!
+     * @brief Returns the target vector associated with this generator, if any.
+     * @return std::nullopt by default. Override in derived classes that load
+     *         a target vector alongside the matrix (e.g. for regression MSE).
+     */
+    [[nodiscard]] virtual std::optional<Eigen::VectorX<Scalar>>
+    getTargetVector() const {
+        return std::nullopt;
     }
 
     /*!

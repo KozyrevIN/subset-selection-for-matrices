@@ -297,6 +297,8 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
             };
         this->registerSelector(name, creator);
     }
+
+
 };
 
 } // namespace MatSubset::Experiments
