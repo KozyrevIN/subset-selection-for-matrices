@@ -66,7 +66,8 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
      * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override {
+                                               Eigen::Index k,
+                                               Eigen::Index *swap_count) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
@@ -74,7 +75,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         // Make a copy to permute in-place
         Eigen::MatrixX<Scalar> R = X;
 
-        // Permute columns so first m (or k) columns form a high-volume
+        // Permute columns so first k columns form a high-volume
         // submatrix
         std::vector<Eigen::Index> indices =
             VolumePivotingBase<Scalar>::selectStartingSet(R, k, init);
@@ -112,11 +113,11 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             max_swap_count = static_cast<Eigen::Index>(
                 std::ceil(2 * m * std::log(k) / std::log(c)));
         }
-        Eigen::Index swap_count = 0;
+        Eigen::Index n_swaps = 0;
 
         // Main loop
         Eigen::MatrixX<Scalar> last_row(1, n);
-        while ((max_val > c) && (swap_count <= max_swap_count)) {
+        while ((max_val > c) && (n_swaps <= max_swap_count)) {
 
             // Add extra column
             last_row = C_remaining.col(j_max).transpose() * C /
@@ -132,7 +133,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
             C_selected.col(i_max).swap(C_remaining.col(j_max));
             std::swap(last_row(i_max), last_row(k + j_max));
             C.row(i_max).swap(last_row);
-            swap_count++;
+            n_swaps++;
 
             // Remove the column
             l += last_row.transpose().array().abs2() / (1 - l_remaining(j_max));
@@ -152,7 +153,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
         }
 
         // Warning if maximum swap count was reached
-        if (swap_count > max_swap_count) {
+        if (n_swaps > max_swap_count) {
             std::cerr
                 << "Warning: DominantSelector reached maximum swap count ("
                 << max_swap_count
@@ -162,7 +163,7 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
                 << std::endl;
         }
 
-        this->last_swap_count = swap_count;
+        if (swap_count) *swap_count = n_swaps;
 
         // Return only the first k indices (selected columns)
         indices.resize(k);

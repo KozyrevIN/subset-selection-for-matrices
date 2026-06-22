@@ -69,7 +69,8 @@ class RandomColumnsSelector : public RandomizedBase<Scalar> {
      * subset of k columns has equal probability).
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override {
+                                               Eigen::Index k,
+                                               Eigen::Index *swap_count) override {
         const Eigen::Index n = X.cols();
 
         // Create a vector of all column indices

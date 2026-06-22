@@ -1,7 +1,6 @@
 #ifndef MAT_SUBSET_SELECTOR_BASE_H
 #define MAT_SUBSET_SELECTOR_BASE_H
 
-#include <atomic>  // For std::atomic
 #include <cassert> // For assert
 #include <string>  // For std::string
 #include <vector>  // For std::vector
@@ -60,25 +59,15 @@ template <typename S> class SelectorBase {
     [[nodiscard]] virtual std::string getAlgorithmName() const = 0;
 
     /*!
-     * @brief Returns the number of column swaps performed in the last call to
-     * `selectSubset`.
-     * @return The swap count, or -1 if the algorithm does not track swaps.
-     *
-     * Iterative algorithms (e.g., DominantSelector, VolumeAddRemoveSelector)
-     * set this value during `selectSubsetImpl`. Non-iterative algorithms
-     * return -1 by default.
-     */
-    [[nodiscard]] Eigen::Index getLastSwapCount() const {
-        return last_swap_count;
-    }
-
-    /*!
      * @brief Selects a subset of \f$ k \f$ columns from the input matrix \f$ X
      * \f$. (Public Interface)
      * @param X The input matrix (dimensions \f$ m \times n \f$) from which
      * columns are to be selected. It is assumed that \f$ X \f$ is full rank
      * for theoretical guarantees.
      * @param k The number of columns to select.
+     * @param swap_count Optional output pointer filled with the number of column
+     * swaps performed. Set to -1 if the algorithm does not track swaps. Pass
+     * nullptr (default) to ignore.
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
      * of the selected columns.
      *
@@ -87,7 +76,8 @@ template <typename S> class SelectorBase {
      * m, k, n \ge 1 \f$ and \f$ m \le k \le n \f$.
      */
     [[nodiscard]] std::vector<Eigen::Index>
-    selectSubset(const Eigen::MatrixX<Scalar> &X, Eigen::Index k) {
+    selectSubset(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
+                 Eigen::Index *swap_count = nullptr) {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
@@ -101,6 +91,7 @@ template <typename S> class SelectorBase {
 
         // Handle edge case: if k = n, return all column indices
         if (k == n) {
+            if (swap_count) *swap_count = 0;
             std::vector<Eigen::Index> all_indices(n);
             for (Eigen::Index i = 0; i < n; ++i) {
                 all_indices[i] = i;
@@ -108,7 +99,8 @@ template <typename S> class SelectorBase {
             return all_indices;
         }
 
-        return selectSubsetImpl(X, k); // Call the virtual implementation
+        if (swap_count) *swap_count = -1;
+        return selectSubsetImpl(X, k, swap_count); // Call the virtual implementation
     }
 
     /*!
@@ -196,7 +188,8 @@ template <typename S> class SelectorBase {
      * selection logic.
      */
     virtual std::vector<Eigen::Index>
-    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k) = 0;
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
+                     Eigen::Index *swap_count) = 0;
 
     /*!
      * @brief Core implementation for calculating the bound.
@@ -223,14 +216,6 @@ template <typename S> class SelectorBase {
         return static_cast<Scalar>(0);
     }
 
-    /*!
-     * @brief Stores the number of column swaps from the last `selectSubsetImpl`
-     * call.
-     *
-     * Derived classes that perform iterative swaps should set this value.
-     * Default value of -1 indicates the algorithm does not track swaps.
-     */
-    std::atomic<Eigen::Index> last_swap_count = -1;
 };
 
 } // namespace MatSubset

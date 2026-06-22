@@ -124,10 +124,12 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             return indices;
         }
 
-        // Exchange phase
-        exchangePhase(X, indices, l, Y, 2 * m - 1,
-                      std::min(static_cast<Scalar>(2.71828),
-                               static_cast<Scalar>(4 * m - 1) / (2 * m)));
+        // Exchange phase (only if there are columns outside the 2m-1 subset)
+        if (n > 2 * m - 1) {
+            exchangePhase(X, indices, l, Y, 2 * m - 1,
+                          std::min(static_cast<Scalar>(2.71828),
+                                   static_cast<Scalar>(4 * m - 1) / (2 * m)));
+        }
 
         // Greedy removal/selection phase: adjust from 2m-1 columns to k
         if (k <= 2 * m - 1) {

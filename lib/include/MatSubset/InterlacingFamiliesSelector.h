@@ -54,7 +54,8 @@ class InterlacingFamiliesSelector : public SelectorBase<Scalar> {
      * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override {
+                                               Eigen::Index k,
+                                               Eigen::Index *swap_count) override {
 
         Eigen::Index m = X.rows();
         Eigen::Index n = X.cols();

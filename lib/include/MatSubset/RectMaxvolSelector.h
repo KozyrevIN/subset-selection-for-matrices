@@ -44,14 +44,15 @@ class RectMaxvolSelector : public DominantSelector<Scalar> {
      * of the selected columns.
      */
     std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k) override {
+                                               Eigen::Index k,
+                                               Eigen::Index *swap_count) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
         // Preparing starting sets of indices
         std::vector<Eigen::Index> selected_indices =
-            DominantSelector<Scalar>::selectSubsetImpl(X, m);
+            DominantSelector<Scalar>::selectSubsetImpl(X, m, nullptr);
         std::vector<Eigen::Index> remaining_indices;
         remaining_indices.reserve(n - m);
 

@@ -69,7 +69,8 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
      */
     std::vector<Eigen::Index>
     selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                     Eigen::Index k) override {
+                     Eigen::Index k,
+                     Eigen::Index *swap_count) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
@@ -92,10 +93,10 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             max_swap_count = static_cast<Eigen::Index>(
                 std::ceil(2 * m * std::log(k) / std::log(c)));
         }
-        Eigen::Index swap_count = 0;
+        Eigen::Index n_swaps = 0;
 
         // Main loop with column exchange
-        while (swap_count < max_swap_count) {
+        while (n_swaps < max_swap_count) {
             // Column selection
             Eigen::Index s;
             Scalar l_s = l.tail(n - k).maxCoeff(&s);
@@ -119,11 +120,11 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                       indices[static_cast<size_t>(s)]);
             std::swap(l(r), l(s));
             R.col(r).swap(R.col(s));
-            swap_count++;
+            n_swaps++;
         }
 
         // Warning if maximum swap count was reached
-        if (swap_count >= max_swap_count) {
+        if (n_swaps >= max_swap_count) {
             std::cerr
                 << "Warning: VolumeAddRemoveSelector reached maximum swap "
                    "count ("
@@ -134,7 +135,7 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
                 << std::endl;
         }
 
-        this->last_swap_count = swap_count;
+        if (swap_count) *swap_count = n_swaps;
 
         indices.resize(k);
         return indices;
