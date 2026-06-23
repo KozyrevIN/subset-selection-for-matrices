@@ -1,1 +1,0 @@
-/usr/bin/c++ -g -Wl,--dependency-file=CMakeFiles/DerandomizedVolumeOptimization.dir/link.d CMakeFiles/DerandomizedVolumeOptimization.dir/src/main.cpp.o -o bench

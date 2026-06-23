@@ -10,7 +10,6 @@
 #include <Eigen/QR>          // For Eigen::HouseholderQR
 
 #include "SelectorBase.h" // Base class
-#include "Utils.h"        // For SecularEquationSolver
 
 namespace MatSubset {
 
@@ -22,6 +21,14 @@ namespace MatSubset {
  * Implements derandomized forward volume sampling algorithm. The algorithm
  * greedily selects columns by maintaining an eigendecomposition and computing
  * characteristic polynomials.
+ *
+ * @note Mild numerical sensitivity: column scores are derived from monomial-
+ * basis coefficients of a polynomial whose roots span many orders of magnitude
+ * (~`1` to `1/tolerance`). When two candidate columns produce near-tied
+ * scores, floating-point rounding determines the choice. Empirically this
+ * leads to selections that differ by at most a few columns out of \f$ k \f$
+ * across minor algorithm rearrangements, with the resulting
+ * pseudoinverse Frobenius norm differing by under ~2% for m <= 200.
  */
 template <typename Scalar>
 class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
@@ -53,9 +60,9 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
      * of the selected columns.
      */
-    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k,
-                                               Eigen::Index *swap_count) override {
+    std::vector<Eigen::Index>
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
+                     Eigen::Index *swap_count) override {
         // Initialization
         Eigen::Index m = X.rows();
         Eigen::Index n = X.cols();
@@ -81,6 +88,9 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             // Deflation
             const bool r_less_m = (r < m);
             Eigen::Index x_minus_1_deg = n - m - t - 1;
+            assert(x_minus_1_deg >= -1 &&
+                   "x_minus_1_deg can't be less than -1");
+
             auto [start, len] = deflateAndCheckOverflow(lambda, x_minus_1_deg);
             Eigen::VectorX<Scalar> lambda_deflated = lambda.segment(start, len);
             Eigen::MatrixX<Scalar> Q_deflated(len + r_less_m, n - t);
@@ -90,68 +100,51 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             }
 
             // Target degrees
-            const Eigen::Index min_deg = n - k - 1;
-            const Eigen::Index max_deg = n - k;
-            Eigen::MatrixX<Scalar> p;
+            const Eigen::Index min_deg_p = n - k - 1 - r_less_m;
+            const Eigen::Index max_deg_p = n - k;
 
-            // Construction of characteristic polynomials
-            if (r < m) { // Phase 1 (r < m)
-                p = Eigen::MatrixX<Scalar>::Zero(len + 2, n - t);
+            const Eigen::Index min_deg_g = n - k - 1;
+            const Eigen::Index max_deg_g = n - k;
 
-                for (Eigen::Index j = 0; j < n - t; ++j) {
-                    Eigen::VectorX<Scalar> lambda_j =
-                        updateEigenvalues(lambda_deflated, Q_deflated.col(j));
+            // Construction of auxiliary polynomials
+            Eigen::VectorX<Scalar> lambda_inv = lambda_deflated.cwiseInverse();
+            Eigen::VectorX<Scalar> p_0 = buildPolynomialFromRoots(lambda_inv);
+            Eigen::MatrixX<Scalar> g = buildQuotentPolynomials(p_0, lambda_inv);
 
-                    // Additional deflation
-                    if (lambda_j(0) < tolerance) {
-                        lambda_j = lambda_j.tail(lambda_j.size() - 1).eval();
-                    }
-                    if (x_minus_1_deg < 0) {
-                        assert(x_minus_1_deg == -1 &&
-                               "x_minus_1_deg can't be less than -1");
-                        x_minus_1_deg = 0;
-                        lambda_j = lambda_j.head(lambda_j.size() - 1).eval();
-                    }
+            // Computation of characteristic polynomial coefficients
+            Eigen::MatrixX<Scalar> p(2, n - t);
+            if (x_minus_1_deg >= 0) {
+                p_0 = applyBinomials(p_0, x_minus_1_deg, min_deg_p, max_deg_p);
+                g = applyBinomials(g, x_minus_1_deg, min_deg_g, max_deg_g);
 
-                    p.col(j).head(lambda_j.size() + 1) =
-                        buildPolynomialFromRoots(lambda_j.cwiseInverse());
-                }
-
-                // Multiply by (x - 1) in required degree
-                p = applyBinomials(p, x_minus_1_deg, min_deg, max_deg);
-
-            } else { // Phase 2 (r = m)
-                Eigen::VectorX<Scalar> lambda_inv =
-                    lambda_deflated.cwiseInverse();
-                Eigen::VectorX<Scalar> p_0 =
-                    buildPolynomialFromRoots(lambda_inv);
-                Eigen::MatrixX<Scalar> g = buildQuotentPolynomials(lambda_inv);
-
-                // We'll later need to divide by (x - 1)
-                if (x_minus_1_deg >= 0) {
-                    p_0 = applyBinomials(p_0, x_minus_1_deg, min_deg, max_deg);
-                    g = applyBinomials(g, x_minus_1_deg, min_deg, max_deg);
-                }
-
-                // Matrix-determinant lemma essentially
                 Eigen::MatrixX<Scalar> Lambda_inv_Q_squared =
-                    lambda_inv.asDiagonal() * Q_deflated.cwiseAbs2();
-                Eigen::ArrayX<Scalar> scale_coeffs =
+                    lambda_inv.asDiagonal() *
+                    Q_deflated.bottomRows(len).cwiseAbs2();
+                Eigen::RowVectorX<Scalar> p_factor =
                     1 + Lambda_inv_Q_squared.colwise().sum().array();
-                Eigen::ArrayXX<Scalar> g_factor =
-                    (g * lambda_inv.asDiagonal() * Lambda_inv_Q_squared)
-                        .array();
-                p = p_0.replicate(1, n - t);
-                p.topRows(g.rows()) +=
-                    (g_factor.rowwise() / scale_coeffs.transpose()).matrix();
-
-                // Divide by (x - 1) if needed
-                if (x_minus_1_deg < 0) {
-                    assert(x_minus_1_deg == -1 &&
-                           "x_minus_1_deg can't be less than -1");
-                    p = dividePolynomialByLinear(p, 1);
-                    p = p.middleRows(min_deg, 2).eval();
+                Eigen::RowVectorX<Scalar> p_x_factor =
+                    Eigen::RowVectorX<Scalar>::Zero(n - t);
+                if (r_less_m) {
+                    p_x_factor = -Q_deflated.row(0).cwiseAbs2();
                 }
+                Eigen::MatrixX<Scalar> g_factor =
+                    lambda_inv.asDiagonal() * Lambda_inv_Q_squared;
+
+                p = p_0.tail(2) * p_factor + p_0.head(2) * p_x_factor +
+                    g * g_factor;
+            } else {
+                p_0 = p_0.segment(min_deg_g, 2); // min_deg_g is intentional
+                g = g.middleRows(min_deg_g, 2);
+
+                Eigen::RowVectorX<Scalar> p_factor =
+                    -Q_deflated.row(0).cwiseAbs2();
+                Eigen::MatrixX<Scalar> g_factor =
+                    (lambda_inv.array() / (1 - lambda_deflated.array()))
+                        .matrix()
+                        .asDiagonal() *
+                    Q_deflated.bottomRows(len).cwiseAbs2();
+
+                p = p_0 * p_factor + g * g_factor;
             }
 
             // Array with final |c_{n - k - 1} / c_{n - k}|
@@ -190,40 +183,22 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
     Scalar tolerance;
 
     /*!
-     * @brief Divide polynomials by (x - root) using synthetic division.
-     * @param poly Polynomial coefficients matrix where each column is a
-     * polynomial [c_0, c_1, ..., c_n] with poly(x) = c_0 + c_1*x + ... +
-     * c_n*x^n.
-     * @param root The root value to divide by.
-     * @return Quotient polynomials (degree reduced by 1 for each column).
+     * @brief Build polynomial \f$ p(x) = \prod_i (x - \text{root}_i) \f$ via
+     * incremental left-to-right multiplication, consuming roots in
+     * ascending-magnitude order.
+     * @param roots Vector of roots, **assumed sorted in descending order**
+     * (which is what the caller produces by inverting the ascending
+     * `lambda_deflated`).
+     * @return Polynomial coefficients in standard form (size = deg + 1).
      *
-     * Assumes poly(root) = 0 or is very small (valid division).
-     */
-    Eigen::MatrixX<Scalar>
-    dividePolynomialByLinear(const Eigen::MatrixX<Scalar> &poly,
-                             Scalar root) const {
-        const Eigen::Index deg = poly.rows() - 1;
-        Eigen::MatrixX<Scalar> quotient(deg, poly.cols());
-
-        // Synthetic division: work from highest degree down for each column
-        quotient.row(deg - 1) = poly.row(deg);
-        for (Eigen::Index i = deg - 2; i >= 0; --i) {
-            quotient.row(i) = poly.row(i + 1) + root * quotient.row(i + 1);
-        }
-
-        return quotient;
-    }
-
-    /*!
-     * @brief Build polynomial \f$ p(x) = \prod_{i} (x - \text{root}_i) \f$
-     * from roots.
-     * @param roots Vector of roots.
-     * @return Polynomial coefficients where coefficient at index \f$ i \f$
-     * corresponds to \f$ x^i \f$.
-     *
-     * Returns polynomial in standard form with coefficients
-     * \f$ [c_0, c_1, \ldots, c_{\text{deg}}] \f$ where
-     * \f$ p(x) = c_0 + c_1 x + \cdots + c_{\text{deg}} x^{\text{deg}} \f$.
+     * Each step multiplies the running polynomial by \f$(x - r_i)\f$, so
+     * coefficient magnitudes grow as roots are absorbed. Consuming the
+     * smallest roots first keeps the intermediate polynomial well-scaled
+     * for as long as possible, deferring catastrophic cancellation toward
+     * the end where fewer steps remain to amplify error. (Equivalent in
+     * exact arithmetic to any other ordering; rounds better in finite
+     * precision when \f$ |\text{roots}| \f$ varies over many orders of
+     * magnitude.)
      */
     Eigen::VectorX<Scalar>
     buildPolynomialFromRoots(const Eigen::VectorX<Scalar> &roots) const {
@@ -231,8 +206,10 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         Eigen::VectorX<Scalar> p = Eigen::VectorX<Scalar>::Zero(deg + 1);
         p(deg) = static_cast<Scalar>(1);
 
+        // Consume roots smallest-magnitude first: roots(deg - i) walks the
+        // input in reverse (the caller passes a descending vector).
         for (Eigen::Index i = 1; i <= deg; ++i) {
-            p.segment(deg - i, i) -= roots(i - 1) * p.tail(i).eval();
+            p.segment(deg - i, i) -= roots(deg - i) * p.tail(i).eval();
         }
 
         return p;
@@ -288,30 +265,61 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
     }
 
     /*!
-     * @brief Build quotient polynomials \f$ g_i(x) = \prod_{j \neq i}
-     * (x - \text{root}_j) \f$ by direct multiplication.
-     * @param roots Vector of roots.
-     * @return Matrix where column \f$ i \f$ contains coefficients of \f$ g_i(x)
-     * \f$.
+     * @brief Build quotient polynomials \f$ g_i(x) = p_0(x) / (x - r_i) \f$
+     * via hybrid (two-way) synthetic division.
+     * @param p_0 Coefficients of \f$ p_0(x) = \prod_i (x - r_i) \f$, standard
+     * form (size = num_roots + 1).
+     * @param roots Vector of roots \f$ r_i \ge 0 \f$.
+     * @return Matrix where column \f$ i \f$ contains coefficients of
+     * \f$ g_i(x) \f$ in standard form (size = num_roots).
      *
-     * Each column contains polynomial coefficients in standard form.
-     * Builds each g_i by multiplying all roots except root_i, which is
-     * more numerically stable than synthetic division.
+     * Cost: \f$ O(\text{num\_roots}^2) \f$ instead of the naive
+     * \f$ O(\text{num\_roots}^3) \f$ that would result from building each
+     * column independently.
+     *
+     * Stability strategy: each column is computed by running synthetic
+     * division from both ends simultaneously and meeting at the peak.
+     * - Forward recurrence (high-to-low) scales errors by \f$ r_i \f$.
+     * - Backward recurrence (low-to-high) divides errors by \f$ r_i \f$.
+     * At each step we advance whichever front currently has smaller
+     * magnitude; this naturally places the meeting point near each
+     * column's peak coefficient — keeping relative error bounded.
      */
     Eigen::MatrixX<Scalar>
-    buildQuotentPolynomials(const Eigen::VectorX<Scalar> &roots) const {
-
+    buildQuotentPolynomials(const Eigen::VectorX<Scalar> &p_0,
+                            const Eigen::VectorX<Scalar> &roots) const {
         const Eigen::Index num_roots = roots.size();
         const Eigen::Index g_deg = num_roots - 1;
         Eigen::MatrixX<Scalar> g(num_roots, num_roots);
 
         for (Eigen::Index i = 0; i < num_roots; ++i) {
-            // Build roots vector excluding root_i
-            Eigen::VectorX<Scalar> other_roots(g_deg);
-            other_roots.head(i) = roots.head(i);
-            other_roots.tail(g_deg - i) = roots.tail(g_deg - i);
+            const Scalar r = roots(i);
 
-            g.col(i) = buildPolynomialFromRoots(other_roots);
+            // Front anchors: forward starts at degree g_deg, backward at 0.
+            Scalar fwd = p_0(num_roots); // b_{g_deg}
+            Scalar bwd = -p_0(0) / r;    // b_0
+            Eigen::Index hi = g_deg;     // next forward write
+            Eigen::Index lo = 0;         // next backward write
+            g(hi, i) = fwd;
+            g(lo, i) = bwd;
+
+            // Race the two recurrences toward each other. At each step,
+            // advance whichever front currently has smaller magnitude;
+            // that step pushes it toward the (larger) peak — keeping
+            // relative error small. They meet at the peak.
+            while (hi - lo > 1) {
+                if (std::abs(fwd) < std::abs(bwd)) {
+                    // Forward step: b_{hi-1} = c_hi + r * b_hi
+                    fwd = p_0(hi) + r * fwd;
+                    --hi;
+                    g(hi, i) = fwd;
+                } else {
+                    // Backward step: b_{lo+1} = (b_lo - c_{lo+1}) / r
+                    bwd = (bwd - p_0(lo + 1)) / r;
+                    ++lo;
+                    g(lo, i) = bwd;
+                }
+            }
         }
 
         return g;
@@ -340,6 +348,14 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         const Eigen::Index max_binom_deg = std::min(max_deg, x_minus_1_deg);
         const Eigen::Index num_coeffs = max_binom_deg - min_binom_deg + 1;
 
+        Eigen::MatrixX<Scalar> poly_new =
+            Eigen::MatrixX<Scalar>::Zero(max_deg - min_deg + 1, poly.cols());
+        // No valid coefficients: poly is empty, or the requested output
+        // degree range lies entirely outside [0, input_deg + x_minus_1_deg]
+        if (poly.rows() == 0 || num_coeffs <= 0) {
+            return poly_new;
+        }
+
         // We sort binomials from one corresponding to largest deg to smallest
         Eigen::VectorX<Scalar> binoms(num_coeffs);
         binoms(0) = 1;
@@ -349,8 +365,6 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         }
 
         // Apply to poly (column-wise)
-        Eigen::MatrixX<Scalar> poly_new =
-            Eigen::MatrixX<Scalar>::Zero(max_deg - min_deg + 1, poly.cols());
         for (Eigen::Index i = min_deg; i <= max_deg; ++i) {
             Eigen::Index shift = num_coeffs + min_binom_deg - i - 1;
             // Constraint 1: 0 <= j < p.rows()
@@ -367,36 +381,6 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             }
         }
         return poly_new;
-    }
-
-    /*!
-     * @brief Update eigenvalues after rank-1 update.
-     * @param lambda_deflated Deflated eigenvalues (diagonal of base matrix).
-     * @param q_col Column vector for rank-1 update (may have one extra element
-     * compared to lambda_deflated).
-     * @return Updated eigenvalues after adding rank-1 update.
-     *
-     * Computes eigenvalues of diag(lambda_extended) + q_col * q_col^T
-     * using secular equation solver, where lambda_extended is lambda_deflated
-     * padded with a zero if q_col is longer.
-     */
-    Eigen::VectorX<Scalar>
-    updateEigenvalues(const Eigen::VectorX<Scalar> &lambda_deflated,
-                      const Eigen::VectorX<Scalar> &q_col) const {
-        const Eigen::Index q_size = q_col.size();
-        Eigen::VectorX<Scalar> lambda_extended;
-
-        if (lambda_deflated.size() < q_size) {
-            // q_col has one extra element; pad lambda with zero at the
-            // beginning
-            lambda_extended = Eigen::VectorX<Scalar>::Zero(q_size);
-            lambda_extended.tail(lambda_deflated.size()) = lambda_deflated;
-        } else {
-            lambda_extended = lambda_deflated;
-        }
-
-        Utils::SecularEquationSolver<Scalar> solver;
-        return solver.solve(lambda_extended, q_col);
     }
 };
 

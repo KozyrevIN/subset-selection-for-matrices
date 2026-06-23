@@ -1,3 +1,0 @@
-/root/subset-selection-for-matrices/experiments/derandomized_volume_optimization/build_dbg/CMakeFiles/DerandomizedVolumeOptimization.dir
-/root/subset-selection-for-matrices/experiments/derandomized_volume_optimization/build_dbg/CMakeFiles/edit_cache.dir
-/root/subset-selection-for-matrices/experiments/derandomized_volume_optimization/build_dbg/CMakeFiles/rebuild_cache.dir
