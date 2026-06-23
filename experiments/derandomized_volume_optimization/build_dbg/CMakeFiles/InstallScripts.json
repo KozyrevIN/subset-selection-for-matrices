@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/root/subset-selection-for-matrices/experiments/derandomized_volume_optimization/build_dbg/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
