@@ -88,10 +88,9 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             // Deflation
             const bool r_less_m = (r < m);
             Eigen::Index x_minus_1_deg = n - m - t - 1;
+            auto [start, len] = deflateAndCheckOverflow(lambda, x_minus_1_deg);
             assert(x_minus_1_deg >= -1 &&
                    "x_minus_1_deg can't be less than -1");
-
-            auto [start, len] = deflateAndCheckOverflow(lambda, x_minus_1_deg);
             Eigen::VectorX<Scalar> lambda_deflated = lambda.segment(start, len);
             Eigen::MatrixX<Scalar> Q_deflated(len + r_less_m, n - t);
             Q_deflated.bottomRows(len) = Q.middleRows(start, len);
