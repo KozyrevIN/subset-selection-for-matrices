@@ -36,6 +36,27 @@ TEST_CASE_TEMPLATE("TensorTrainCore basic shape accessors", Scalar, float, doubl
     CHECK(core.rightRank() == 4);
 }
 
+TEST_CASE_TEMPLATE("TensorTrainCore::modeSlice extracts G[:, i, :]", Scalar,
+                   float, double) {
+    const Eigen::Index r0 = 2, n = 3, r1 = 4;
+    TensorTrainCore<Scalar> core(r0, n, r1);
+    Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
+    core.setLeftUnfolding(A);
+
+    for (Eigen::Index i = 0; i < n; ++i) {
+        Eigen::MatrixX<Scalar> slice = core.modeSlice(i);
+        CHECK(slice.rows() == r0);
+        CHECK(slice.cols() == r1);
+
+        // Entry G[a, i, c] lives at row a + r0 * i, column c of the unfolding.
+        for (Eigen::Index a = 0; a < r0; ++a) {
+            for (Eigen::Index c = 0; c < r1; ++c) {
+                CHECK(slice(a, c) == A(a + r0 * i, c));
+            }
+        }
+    }
+}
+
 TEST_CASE_TEMPLATE("TensorTrainCore::leftOrth (no R) reconstructs and orthonormalizes",
                    Scalar, float, double) {
     const Eigen::Index r0 = 2, n = 3, r1 = 4;
@@ -43,8 +64,8 @@ TEST_CASE_TEMPLATE("TensorTrainCore::leftOrth (no R) reconstructs and orthonorma
     Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
     core.setLeftUnfolding(A);
 
-    Eigen::MatrixX<Scalar> carry = core.leftOrth(/*save_unfolding=*/true);
-    const Eigen::MatrixX<Scalar> &Q = core.leftOrthUnfolding();
+    Eigen::MatrixX<Scalar> carry = core.leftOrth();
+    const Eigen::MatrixX<Scalar> &Q = core.leftUnfolding();
 
     // Shapes: Q is (r0 * n) x r1, carry is r1 x r1.
     CHECK(Q.rows() == r0 * n);
@@ -59,65 +80,6 @@ TEST_CASE_TEMPLATE("TensorTrainCore::leftOrth (no R) reconstructs and orthonorma
 
     // Round-trip: A = Q * carry (with column pivoting properly un-permuted).
     CHECK((A - Q * carry).norm() < checkTol<Scalar>() * A.norm());
-}
-
-TEST_CASE_TEMPLATE("TensorTrainCore::leftOrth (with R) absorbs R and reconstructs",
-                   Scalar, float, double) {
-    const Eigen::Index r0 = 3, n = 2, r1 = 2;
-    TensorTrainCore<Scalar> core(r0, n, r1);
-    Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
-    core.setLeftUnfolding(A);
-
-    // Incoming R with rows == r0 (its own left rank after absorption is R.rows()).
-    Eigen::MatrixX<Scalar> R(r0, r0);
-    R << 2, 1, 0, 0, 3, 1, 0, 0, 4;
-
-    Eigen::MatrixX<Scalar> carry = core.leftOrth(R, /*save_unfolding=*/true);
-    const Eigen::MatrixX<Scalar> &Q = core.leftOrthUnfolding();
-
-    // The absorbed unfolding is (R.rows() * n) x r1; here R is square so shapes
-    // match A. Reconstruct the R-absorbed unfolding and compare to Q * carry.
-    // absorbLeft views A as r0 x (n*r1), left-multiplies R, re-views back.
-    Eigen::Map<Eigen::MatrixX<Scalar>> as_r0(A.data(), r0, n * r1);
-    Eigen::MatrixX<Scalar> flat = R * as_r0;
-    Eigen::Map<Eigen::MatrixX<Scalar>> absorbed(flat.data(), R.rows() * n, r1);
-    Eigen::MatrixX<Scalar> absorbed_dense = absorbed;
-
-    Eigen::MatrixX<Scalar> gram = Q.transpose() * Q;
-    CHECK((gram - Eigen::MatrixX<Scalar>::Identity(Q.cols(), Q.cols())).norm() <
-          checkTol<Scalar>());
-    CHECK((absorbed_dense - Q * carry).norm() <
-          checkTol<Scalar>() * absorbed_dense.norm());
-}
-
-TEST_CASE_TEMPLATE("TensorTrainCore::rightOrth absorbs R and reconstructs", Scalar, float,
-                   double) {
-    const Eigen::Index r0 = 2, n = 3, r1 = 2;
-    TensorTrainCore<Scalar> core(r0, n, r1);
-    Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
-    core.setLeftUnfolding(A);
-
-    // Incoming R with rows == r1.
-    Eigen::MatrixX<Scalar> R(r1, r1);
-    R << 2, 1, 0, 3;
-
-    Eigen::MatrixX<Scalar> carry = core.rightOrth(R, /*save_unfolding=*/true);
-    const Eigen::MatrixX<Scalar> &Qr = core.rightOrthUnfolding();
-
-    // Qr has orthonormal rows: Qr Qr^T = I.
-    Eigen::MatrixX<Scalar> gram = Qr * Qr.transpose();
-    CHECK((gram - Eigen::MatrixX<Scalar>::Identity(Qr.rows(), Qr.rows()))
-              .norm() < checkTol<Scalar>());
-
-    // Reconstruct the right unfolding with R absorbed into the r1 dimension.
-    Eigen::Map<Eigen::MatrixX<Scalar>> right_view(A.data(), r0, n * r1);
-    Eigen::MatrixX<Scalar> absorbed(r0, n * R.cols());
-    for (Eigen::Index i = 0; i < n; ++i) {
-        absorbed.middleCols(i * R.cols(), R.cols()) =
-            right_view.middleCols(i * r1, r1) * R;
-    }
-    // absorbed = carry * Qr (carry is r0 x r0, Qr is r0 x (n*R.cols())).
-    CHECK((absorbed - carry * Qr).norm() < checkTol<Scalar>() * absorbed.norm());
 }
 
 TEST_CASE_TEMPLATE("TensorTrainCore::leftSvd truncates rank and reconstructs", Scalar,
@@ -137,11 +99,9 @@ TEST_CASE_TEMPLATE("TensorTrainCore::leftSvd truncates rank and reconstructs", S
     A.col(3) = Scalar(2) * c0 - c1;
     core.setLeftUnfolding(A);
 
-    Eigen::MatrixX<Scalar> R = Eigen::MatrixX<Scalar>::Identity(r0, r0);
     Eigen::MatrixX<Scalar> carry =
-        core.leftSvd(R, /*atol=*/Scalar(1e-6), /*rtol=*/Scalar(1e-6),
-                     /*save_unfolding=*/true);
-    const Eigen::MatrixX<Scalar> &U = core.leftOrthUnfolding();
+        core.leftSvd(/*atol=*/Scalar(1e-6), /*rtol=*/Scalar(1e-6));
+    const Eigen::MatrixX<Scalar> &U = core.leftUnfolding();
 
     // Rank should be truncated to 2.
     CHECK(U.cols() == 2);
@@ -177,11 +137,13 @@ TEST_CASE_TEMPLATE("TensorTrainCore::rightSvd truncates rank and reconstructs", 
     }
     core.setLeftUnfolding(A);
 
-    Eigen::MatrixX<Scalar> R = Eigen::MatrixX<Scalar>::Identity(r1, r1);
     Eigen::MatrixX<Scalar> carry =
-        core.rightSvd(R, /*atol=*/Scalar(1e-6), /*rtol=*/Scalar(1e-6),
-                      /*save_unfolding=*/true);
-    const Eigen::MatrixX<Scalar> &Vt = core.rightOrthUnfolding();
+        core.rightSvd(/*atol=*/Scalar(1e-6), /*rtol=*/Scalar(1e-6));
+    // The core's unfolding now holds V^T, stored as (rank * n) x r1; view it as
+    // rank x (n * r1).
+    Eigen::Map<const Eigen::MatrixX<Scalar>> Vt(
+        core.leftUnfolding().data(), core.leftRank(),
+        core.modeSize() * core.rightRank());
 
     // Vt has orthonormal rows.
     Eigen::MatrixX<Scalar> gram = Vt * Vt.transpose();
@@ -204,53 +166,30 @@ TEST_CASE_TEMPLATE("TensorTrainCore::rightSvd truncates rank and reconstructs", 
     CHECK((core.leftUnfolding() - vt_as_left).norm() < checkTol<Scalar>());
 }
 
-// --- Boundary (no-R) overloads: must match the R-taking version with R = I. ---
-
-TEST_CASE_TEMPLATE("TensorTrainCore::rightOrth (no R) == rightOrth(I)", Scalar,
-                   float, double) {
+TEST_CASE_TEMPLATE("TensorTrainCore::rightOrth reconstructs and orthonormalizes",
+                   Scalar, float, double) {
     const Eigen::Index r0 = 2, n = 3, r1 = 2;
+    TensorTrainCore<Scalar> core(r0, n, r1);
     Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
+    core.setLeftUnfolding(A);
 
-    TensorTrainCore<Scalar> core_no_r(r0, n, r1);
-    core_no_r.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_no_r = core_no_r.rightOrth();
+    Eigen::MatrixX<Scalar> carry = core.rightOrth();
+    // The core's unfolding now holds the row-orthonormal factor, stored as
+    // (r0 * n) x r1; view it as r0 x (n * r1).
+    Eigen::Map<const Eigen::MatrixX<Scalar>> Qr(
+        core.leftUnfolding().data(), core.leftRank(),
+        core.modeSize() * core.rightRank());
 
-    TensorTrainCore<Scalar> core_id(r0, n, r1);
-    core_id.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_id =
-        core_id.rightOrth(Eigen::MatrixX<Scalar>::Identity(r1, r1));
-
-    CHECK((carry_no_r - carry_id).norm() < checkTol<Scalar>());
-    CHECK((core_no_r.rightOrthUnfolding() - core_id.rightOrthUnfolding())
-              .norm() < checkTol<Scalar>());
-
-    // Cached factor has orthonormal rows.
-    const Eigen::MatrixX<Scalar> &Qr = core_no_r.rightOrthUnfolding();
+    // Qr has orthonormal rows: Qr Qr^T = I.
     Eigen::MatrixX<Scalar> gram = Qr * Qr.transpose();
     CHECK((gram - Eigen::MatrixX<Scalar>::Identity(Qr.rows(), Qr.rows()))
               .norm() < checkTol<Scalar>());
-}
 
-TEST_CASE_TEMPLATE("TensorTrainCore::leftSvd (no R) == leftSvd(I)", Scalar,
-                   float, double) {
-    const Eigen::Index r0 = 2, n = 3, r1 = 4;
-    Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
-
-    TensorTrainCore<Scalar> core_no_r(r0, n, r1);
-    core_no_r.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_no_r =
-        core_no_r.leftSvd(Scalar(1e-6), Scalar(1e-6));
-
-    TensorTrainCore<Scalar> core_id(r0, n, r1);
-    core_id.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_id = core_id.leftSvd(
-        Eigen::MatrixX<Scalar>::Identity(r0, r0), Scalar(1e-6), Scalar(1e-6));
-
-    CHECK(core_no_r.leftRank() == core_id.leftRank());
-    CHECK(core_no_r.rightRank() == core_id.rightRank());
-    CHECK((carry_no_r - carry_id).norm() < checkTol<Scalar>());
-    CHECK((core_no_r.leftUnfolding() - core_id.leftUnfolding()).norm() <
-          checkTol<Scalar>());
+    // Round-trip: the original right unfolding = carry * Qr.
+    Eigen::Map<Eigen::MatrixX<Scalar>> right_view(A.data(), r0, n * r1);
+    Eigen::MatrixX<Scalar> right_unfolding = right_view;
+    CHECK((right_unfolding - carry * Qr).norm() <
+          checkTol<Scalar>() * right_unfolding.norm());
 }
 
 TEST_CASE_TEMPLATE("TensorTrainCore::absorbRightFactor folds trailing carry",
@@ -303,24 +242,3 @@ TEST_CASE_TEMPLATE("TensorTrainCore::absorbLeftFactor folds leading carry",
           checkTol<Scalar>() * expected.norm());
 }
 
-TEST_CASE_TEMPLATE("TensorTrainCore::rightSvd (no R) == rightSvd(I)", Scalar,
-                   float, double) {
-    const Eigen::Index r0 = 4, n = 3, r1 = 2;
-    Eigen::MatrixX<Scalar> A = makeUnfolding<Scalar>(r0, n, r1);
-
-    TensorTrainCore<Scalar> core_no_r(r0, n, r1);
-    core_no_r.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_no_r =
-        core_no_r.rightSvd(Scalar(1e-6), Scalar(1e-6));
-
-    TensorTrainCore<Scalar> core_id(r0, n, r1);
-    core_id.setLeftUnfolding(A);
-    Eigen::MatrixX<Scalar> carry_id = core_id.rightSvd(
-        Eigen::MatrixX<Scalar>::Identity(r1, r1), Scalar(1e-6), Scalar(1e-6));
-
-    CHECK(core_no_r.leftRank() == core_id.leftRank());
-    CHECK(core_no_r.rightRank() == core_id.rightRank());
-    CHECK((carry_no_r - carry_id).norm() < checkTol<Scalar>());
-    CHECK((core_no_r.leftUnfolding() - core_id.leftUnfolding()).norm() <
-          checkTol<Scalar>());
-}
