@@ -5,12 +5,15 @@
 
 #include <Eigen/Core>
 
-#include <MatSubset/RandomColumnsSelector.h>
+#include <MatSubset/DominantSelector.h>
 #include <MatSubset/SelectorBase.h>
 
+#include <TTCrossSolver/TensorFibers.h>
 #include <TTCrossSolver/TensorTrain.h>
 #include <TTCrossSolver/TensorTrainCore.h>
 
+using MatSubset::Experiments::FiberIndices;
+using MatSubset::Experiments::TensorFibers;
 using MatSubset::Experiments::TensorTrain;
 using MatSubset::Experiments::TensorTrainCore;
 
@@ -165,27 +168,127 @@ TEST_CASE_TEMPLATE("TensorTrain compress truncates a rank-inflated tensor",
     CHECK(tt.ranks()[1] == 1); // the inflated bond collapsed to 1
 }
 
-TEST_CASE_TEMPLATE("TensorTrain selectIndices returns nested index sets of the "
-                   "right shape",
+TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
+                   "and returns self-consistent fibers",
                    Scalar, float, double) {
-    auto tt = makeTrain<Scalar>(4, 4, 4, 2, 2);
+    auto tt = makeTrain<Scalar>(3, 4, 2, 2, 3);
+    tt.leftOrthogonalize(); // selectIndices assumes a left-orthogonal train
+    Eigen::MatrixX<Scalar> dense = tt.toDense();
 
     std::unique_ptr<MatSubset::SelectorBase<Scalar>> selector =
-        std::make_unique<MatSubset::RandomColumnsSelector<Scalar>>(/*seed=*/42);
+        std::make_unique<MatSubset::DominantSelector<Scalar>>(Scalar(1));
 
-    auto [left_indices, right_indices] = tt.selectIndices(selector);
+    TensorFibers<Scalar> fibers =
+        tt.selectIndices(selector, /*atol=*/Scalar(0),
+                         /*rtol=*/checkTol<Scalar>());
 
-    // One index set per interior bond (d - 1 of them).
-    CHECK(left_indices.size() == tt.order() - 1);
-    CHECK(right_indices.size() == tt.order() - 1);
+    // The TT-SVD half of the sweep preserves the tensor (bond 1 truncates from
+    // 3 to the maximal possible rank 2 without loss).
+    CHECK((tt.toDense() - dense).norm() <
+          Scalar(100) * checkTol<Scalar>() * dense.norm());
 
-    // Left bond k selects r_{k+1} row-indices of core k's unfolding.
+    // Skeleton: one selection level per interior bond, sized by the truncated
+    // bond ranks (no oversampling).
+    const auto &skeleton = *fibers.skeleton();
     auto r = tt.ranks();
+    REQUIRE(skeleton.order() == tt.order());
     for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
-        CHECK(static_cast<Eigen::Index>(left_indices[k].size()) == r[k + 1]);
+        CHECK(static_cast<Eigen::Index>(skeleton.leftLevel(k).size()) ==
+              r[k + 1]);
+        CHECK(static_cast<Eigen::Index>(skeleton.rightLevel(k).size()) ==
+              r[k + 1]);
     }
-    // Right bond stored at index k selects r_{k+1} column-indices of core k+1.
+
+    // Slabs have the fiber shapes (leftFiberCount(k) * n_k) x rightFiberCount.
+    for (std::size_t k = 0; k < tt.order(); ++k) {
+        CHECK(fibers.slab(k).rows() ==
+              static_cast<Eigen::Index>(skeleton.leftFiberCount(k)) *
+                  tt.core(k).modeSize());
+        CHECK(fibers.slab(k).cols() ==
+              static_cast<Eigen::Index>(skeleton.rightFiberCount(k)));
+    }
+
+    // Self-consistency: reconstructing a train from the returned fibers
+    // reproduces the tensor.
+    TensorTrain<Scalar> rebuilt(fibers);
+    CHECK((rebuilt.toDense() - dense).norm() <
+          Scalar(100) * checkTol<Scalar>() * dense.norm());
+}
+
+TEST_CASE_TEMPLATE("TensorTrain(fibers) reconstructs a low-rank tensor in "
+                   "left-orthogonal form",
+                   Scalar, float, double) {
+    using Level = FiberIndices::Level;
+
+    // Ground truth: rank-(1,2,2,1) train with modes (3, 4, 2).
+    const Eigen::Index n0 = 3, n1 = 4, n2 = 2;
+    auto truth = makeTrain<Scalar>(n0, n1, n2, 2, 2);
+    Eigen::MatrixX<Scalar> dense = truth.toDense();
+    auto T = [&](Eigen::Index i0, Eigen::Index i1, Eigen::Index i2) {
+        return dense(i0 + n0 * i1 + n0 * n1 * i2, 0);
+    };
+
+    // Nested left multi-indices: L0 = {(0), (2)},
+    // L1 = {(0, 1), (2, 3)} (each node = parent's tuple + appended mode).
+    std::vector<Eigen::Index> L0 = {0, 2};
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> L1 = {{0, 1}, {2, 3}};
+
+    // Right multi-index sets: bond 0 gets (i1, i2) pairs, bond 1 gets (i2).
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> R0 = {{0, 0}, {2, 1}};
+    std::vector<Eigen::Index> R1 = {0, 1};
+
+    std::vector<Level> left(3), right(3);
+    left[0] = Level({0, 2}, {-1, -1});
+    left[1] = Level({1, 3}, {0, 1});
+    left[2] = Level({0}, {0}); // unused by the construction
+    right[0] = Level({0, 2}, {0, 1});
+    right[1] = Level({0, 1}, {-1, -1});
+    right[2] = Level({0}, {-1});
+    auto skeleton = std::make_shared<const FiberIndices>(std::move(left),
+                                                         std::move(right));
+
+    // Sample the slabs from the dense tensor on the skeleton's fibers.
+    std::vector<Eigen::MatrixX<Scalar>> slabs(3);
+    slabs[0].resize(n0, 2);
+    for (Eigen::Index i = 0; i < n0; ++i) {
+        for (Eigen::Index c = 0; c < 2; ++c) {
+            slabs[0](i, c) = T(i, R0[c].first, R0[c].second);
+        }
+    }
+    slabs[1].resize(2 * n1, 2);
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n1; ++i) {
+            for (Eigen::Index c = 0; c < 2; ++c) {
+                slabs[1](p + 2 * i, c) = T(L0[p], i, R1[c]);
+            }
+        }
+    }
+    slabs[2].resize(2 * n2, 1);
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n2; ++i) {
+            slabs[2](p + 2 * i, 0) = T(L1[p].first, L1[p].second, i);
+        }
+    }
+
+    TensorFibers<Scalar> fibers(std::move(slabs), skeleton);
+    TensorTrain<Scalar> tt(fibers);
+
+    // Shapes and boundary ranks.
+    CHECK(tt.order() == 3);
+    auto r = tt.ranks();
+    CHECK(r == std::vector<Eigen::Index>{1, 2, 2, 1});
+
+    // Left-orthogonal by construction: cores 0..d-2 have orthonormal left
+    // unfoldings.
     for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
-        CHECK(static_cast<Eigen::Index>(right_indices[k].size()) == r[k + 1]);
+        const Eigen::MatrixX<Scalar> &U = tt.core(k).leftUnfolding();
+        Eigen::MatrixX<Scalar> gram = U.transpose() * U;
+        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(),
+                                                       gram.cols()))
+                  .norm() < checkTol<Scalar>());
     }
+
+    // Cross interpolation is exact for a tensor of matching TT-rank.
+    CHECK((tt.toDense() - dense).norm() <
+          Scalar(100) * checkTol<Scalar>() * dense.norm());
 }
