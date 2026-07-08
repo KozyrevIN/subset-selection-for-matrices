@@ -133,7 +133,15 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
                     g * g_factor;
             } else {
                 p_0 = p_0.segment(min_deg_g, 2); // min_deg_g is intentional
-                g = g.middleRows(min_deg_g, 2);
+                Eigen::MatrixX<Scalar> g_trimmed =
+                    Eigen::MatrixX<Scalar>::Zero(2, g.cols());
+                Eigen::Index rows_to_copy =
+                    std::min(g.rows() - min_deg_g, static_cast<Eigen::Index>(2));
+                if (rows_to_copy > 0) {
+                    g_trimmed.topRows(rows_to_copy) =
+                        g.middleRows(min_deg_g, rows_to_copy);
+                }
+                g = g_trimmed;
 
                 Eigen::RowVectorX<Scalar> p_factor =
                     -Q_deflated.row(0).cwiseAbs2();
