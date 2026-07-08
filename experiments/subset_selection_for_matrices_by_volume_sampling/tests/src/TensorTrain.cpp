@@ -208,6 +208,17 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
               static_cast<Eigen::Index>(skeleton.rightFiberCount(k)));
     }
 
+    // On exit the train is left-orthogonal again (sweep 2 orthonormalizes each
+    // core before the selector runs on it): cores 0..d-2 have orthonormal left
+    // unfoldings.
+    for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
+        const Eigen::MatrixX<Scalar> &U = tt.core(k).leftUnfolding();
+        Eigen::MatrixX<Scalar> gram = U.transpose() * U;
+        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(),
+                                                       gram.cols()))
+                  .norm() < Scalar(100) * checkTol<Scalar>());
+    }
+
     // Self-consistency: reconstructing a train from the returned fibers
     // reproduces the tensor.
     TensorTrain<Scalar> rebuilt(fibers);
@@ -240,9 +251,9 @@ TEST_CASE_TEMPLATE("TensorTrain(fibers) reconstructs a low-rank tensor in "
     std::vector<Level> left(3), right(3);
     left[0] = Level({0, 2}, {-1, -1});
     left[1] = Level({1, 3}, {0, 1});
-    left[2] = Level({0}, {0}); // unused by the construction
+    // left[2] stays empty: no left set at the last bond.
     right[0] = Level({0, 2}, {0, 1});
-    right[1] = Level({0, 1}, {-1, -1});
+    right[1] = Level({0, 1}, {0, 0}); // parents point to the root at right[2]
     right[2] = Level({0}, {-1});
     auto skeleton = std::make_shared<const FiberIndices>(std::move(left),
                                                          std::move(right));

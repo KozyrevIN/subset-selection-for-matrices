@@ -12,21 +12,21 @@ using MatSubset::Experiments::TensorFibers;
 
 namespace {
 
-// A 3-core skeleton: root levels have one node; interior levels have two.
+// A 3-core skeleton, indexed by bond on both sides.
 std::shared_ptr<const FiberIndices> makeSkeleton() {
     using Level = FiberIndices::Level;
     std::vector<Level> left(3), right(3);
 
-    // Left grows left-to-right: left[0] root (1 node), left[1] extends it (2).
+    // left[k] is the bond-k left set; parents point into left[k-1], with -1
+    // at left[0]. left[2] stays empty (no left set at the last bond).
     left[0] = Level({0}, {-1});
     left[1] = Level({0, 1}, {0, 0});
-    left[2] = Level({0}, {0});
 
-    // Right grows right-to-left: right[0] root for the last mode (1 node),
-    // right[1] extends it (2 nodes).
-    right[0] = Level({0}, {-1});
+    // right[k] is the bond-k right set; parents point into right[k+1], with
+    // the single-node root (the empty boundary index) at right[2].
+    right[2] = Level({0}, {-1});
     right[1] = Level({0, 1}, {0, 0});
-    right[2] = Level({0}, {0});
+    right[0] = Level({0}, {0});
 
     return std::make_shared<const FiberIndices>(std::move(left),
                                                 std::move(right));
@@ -67,7 +67,9 @@ TEST_CASE("FiberIndices::Level exposes mode and parent") {
     CHECK(lvl.size() == 2);
     CHECK(lvl.mode(1) == 1);
     CHECK(lvl.parentOf(0) == 0);
-    CHECK(idx->leftLevel(0).parentOf(0) == -1); // root
+    CHECK(idx->leftLevel(0).parentOf(0) == -1);  // left boundary
+    CHECK(idx->rightLevel(2).parentOf(0) == -1); // right root at right[d-1]
+    CHECK(idx->rightLevel(1).parentOf(0) == 0);  // extends the right root
 }
 
 TEST_CASE_TEMPLATE("TensorFibers operator+ and hadamardProduct are slab-wise",
