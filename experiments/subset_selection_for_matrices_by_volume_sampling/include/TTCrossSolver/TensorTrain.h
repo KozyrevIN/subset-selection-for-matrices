@@ -176,8 +176,12 @@ template <typename Scalar> class TensorTrain {
      *    selection should run on — is sampled by `rightSelectIndices` with the
      *    partial evaluation \f$ V_{k+1} \f$ of the already-processed cores
      *    absorbed. Selected columns decode into nested (mode, parent) nodes.
-     * 2. Left-to-right, non-mutating: `leftSelectIndices` threads the partial
-     *    left evaluations \f$ W_k \f$; selected rows decode likewise.
+     * 2. Left-to-right, mutating: each core absorbs the QR carry and is made
+     *    left-orthonormal by `leftOrth` — so its left unfolding is the
+     *    orthonormal basis selection should run on — before `leftSelectIndices`
+     *    samples its rows with the partial evaluation \f$ W_{k-1} \f$ of the
+     *    already-processed cores absorbed. Selected rows decode into nested
+     *    (mode, parent) nodes.
      *
      * The saved partial evaluations refer to each core after its final
      * mutation, so the returned fibers are exact evaluations of the train as
@@ -185,8 +189,8 @@ template <typename Scalar> class TensorTrain {
      *
      * @note Assumes the train is left-orthogonal on entry (as produced by the
      * fibers constructor, `leftOrthogonalize()`, or `compress()`); the TT-SVD
-     * truncation relies on it. On exit the train is right-orthogonal with the
-     * orthogonality center at the first core.
+     * truncation relies on it. On exit the train is left-orthogonal again, its
+     * orthogonality center at the last core.
      */
     TensorFibers<Scalar>
     selectIndices(std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
@@ -234,8 +238,30 @@ template <typename Scalar> class TensorTrain {
         std::vector<Eigen::MatrixX<Scalar>> left_partial(d);
         left_partial[0] = Eigen::MatrixX<Scalar>::Identity(1, 1);
 
-        // Sweep 2: left-to-right index selection (does not mutate the cores).
+        // Sweep 2: left-to-right QR orthogonalization + left index selection,
+        // forming each slab in the same iteration. Mirrors sweep 1: each core
+        // is made left-orthonormal *before* the selector runs on it, so
+        // selection acts on an orthonormal basis (the condition DEIM/volume
+        // sampling relies on) rather than on the right-orthogonal cores left by
+        // sweep 1. The QR carry is folded into the next core, so the train
+        // stays equal to the tensor and ends up left-orthogonal.
+        //
+        // The slab for bond k is formed here, not after the sweep: at iteration
+        // k the left and right orthogonalizations meet at core k. Its
+        // left_partial[k] and freshly orthogonalized cores[k] are final, while
+        // right_partial[k] still evaluates cores k+1..d-1 as sweep 1 left them
+        // (untouched so far). A later iteration folds the carry into core k+1
+        // and so invalidates right_partial[k] for that core, so the slab must
+        // be captured now, while all three factors describe the same train.
+        std::vector<Eigen::MatrixX<Scalar>> slabs(d);
+        Eigen::MatrixX<Scalar> qr_carry;
         for (std::size_t k = 0; k + 1 < d; ++k) {
+            if (k > 0) {
+                cores[k].absorbLeftFactor(qr_carry);
+            }
+            slabs[k] = formSlab(cores[k], left_partial[k], right_partial[k]);
+            qr_carry = cores[k].leftOrth();
+
             const Eigen::Index l_prev = left_partial[k].rows();
             auto [indices, submatrix] = cores[k].leftSelectIndices(
                 left_partial[k], selector, oversampling);
@@ -250,28 +276,141 @@ template <typename Scalar> class TensorTrain {
             }
             left_levels[k] =
                 FiberIndices::Level(std::move(modes), std::move(parents));
+
             left_partial[k + 1] = std::move(submatrix);
+        }
+        if (d > 1) {
+            cores[d - 1].absorbLeftFactor(qr_carry);
         }
         // left_levels[d-1] stays empty: no left set is selected at the last
         // bond (it would enumerate full multi-indices).
+
+        // The last core is not visited by the sweep; its slab is formed now,
+        // after it absorbs the trailing carry (right_partial[d-1] is identity).
+        slabs[d - 1] =
+            formSlab(cores[d - 1], left_partial[d - 1], right_partial[d - 1]);
+
+        auto skeleton = std::make_shared<const FiberIndices>(
+            std::move(left_levels), std::move(right_levels));
+        return TensorFibers<Scalar>(std::move(slabs), std::move(skeleton));
+    }
+
+    /*!
+     * @brief Evaluates the train on a fixed nested cross skeleton.
+     * @param skeleton The `FiberIndices` to sample on; its levels are read as
+     * the (mode, parent) nodes, not re-selected. Its order must equal the
+     * train's, and every mode value must be in range for its core.
+     * @return `TensorFibers` sharing `skeleton`, whose slab `k` holds
+     * \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$ stacked over the mode as a left
+     * unfolding \f$ (\ell_{k-1} \, n_k) \times \rho_k \f$ — the train's fibers
+     * on the skeleton, exactly the object `selectIndices` returns.
+     *
+     * Read-only counterpart of `selectIndices`: it does not select or mutate
+     * the cores; the indices are given. Same two passes, but each just
+     * contracts the neighbouring cores at the skeleton's nodes rather than
+     * sampling them:
+     * 1. Right-to-left: builds \f$ V_{k+1} \f$ (`right_partial[k]`, shape
+     *    \f$ r_k \times \rho_k \f$), the cores k+1..d-1 evaluated at the bond-k
+     *    right multi-indices. Column j of `right_partial[k-1]` prepends mode
+     *    \f$ i \f$ to parent p of `right_partial[k]`:
+     *    \f$ G_k(i) \, V_{k+1}(:, p) \f$.
+     * 2. Left-to-right: builds \f$ W_{k-1} \f$ (`left_partial[k]`, shape
+     *    \f$ \ell_{k-1} \times r_{k-1} \f$) symmetrically, then forms the
+     * slabs.
+     */
+    [[nodiscard]] TensorFibers<Scalar>
+    atFibers(const std::shared_ptr<const FiberIndices> &skeleton) const {
+        const std::size_t d = cores.size();
+        assert(skeleton && "atFibers: null skeleton.");
+        assert(skeleton->order() == d &&
+               "atFibers: skeleton order must equal the tensor order.");
+
+        // right_partial[k]: cores k+1..d-1 evaluated at the bond-k right
+        // multi-indices (r_k x rho_k); identity at the right boundary.
+        std::vector<Eigen::MatrixX<Scalar>> right_partial(d);
+        right_partial[d - 1] = Eigen::MatrixX<Scalar>::Identity(1, 1);
+
+        // Pass 1: right-to-left contraction at the skeleton's right nodes.
+        for (std::size_t k = d - 1; k >= 1; --k) {
+            const FiberIndices::Level &level = skeleton->rightLevel(k - 1);
+            Eigen::MatrixX<Scalar> next(cores[k].leftRank(), level.size());
+            for (std::size_t j = 0; j < level.size(); ++j) {
+                const Eigen::Index i = level.mode(j);
+                const Eigen::Index p = level.parentOf(j);
+                assert(p >= 0 && p < right_partial[k].cols() &&
+                       "atFibers: right parent index out of range.");
+                next.col(static_cast<Eigen::Index>(j)) =
+                    cores[k].modeSlice(i) * right_partial[k].col(p);
+            }
+            right_partial[k - 1] = std::move(next);
+        }
+
+        // left_partial[k]: cores 0..k-1 evaluated at the bond-(k-1) left
+        // multi-indices (l_{k-1} x r_{k-1}); identity at the left boundary.
+        std::vector<Eigen::MatrixX<Scalar>> left_partial(d);
+        left_partial[0] = Eigen::MatrixX<Scalar>::Identity(1, 1);
+
+        // Pass 2: left-to-right contraction at the skeleton's left nodes.
+        for (std::size_t k = 0; k + 1 < d; ++k) {
+            const FiberIndices::Level &level = skeleton->leftLevel(k);
+            Eigen::MatrixX<Scalar> next(level.size(), cores[k].rightRank());
+            for (std::size_t j = 0; j < level.size(); ++j) {
+                const Eigen::Index i = level.mode(j);
+                // The first level extends the empty boundary index (root -1).
+                const Eigen::Index p = (k == 0) ? 0 : level.parentOf(j);
+                assert(p >= 0 && p < left_partial[k].rows() &&
+                       "atFibers: left parent index out of range.");
+                next.row(static_cast<Eigen::Index>(j)) =
+                    left_partial[k].row(p) * cores[k].modeSlice(i);
+            }
+            left_partial[k + 1] = std::move(next);
+        }
 
         // Slab k = W_{k-1} * G_k(i) * V_{k+1}, stacked over the mode as a left
         // unfolding (l_{k-1} * n_k) x rho_k: the train's fibers.
         std::vector<Eigen::MatrixX<Scalar>> slabs(d);
         for (std::size_t k = 0; k < d; ++k) {
-            const Eigen::Index l_prev = left_partial[k].rows();
-            const Eigen::Index n = cores[k].modeSize();
-            const Eigen::Index rho = right_partial[k].cols();
-            slabs[k].resize(l_prev * n, rho);
-            for (Eigen::Index i = 0; i < n; ++i) {
-                slabs[k].middleRows(i * l_prev, l_prev) =
-                    left_partial[k] * cores[k].modeSlice(i) * right_partial[k];
-            }
+            slabs[k] = formSlab(cores[k], left_partial[k], right_partial[k]);
         }
 
-        auto skeleton = std::make_shared<const FiberIndices>(
-            std::move(left_levels), std::move(right_levels));
-        return TensorFibers<Scalar>(std::move(slabs), std::move(skeleton));
+        return TensorFibers<Scalar>(std::move(slabs), skeleton);
+    }
+
+    /*!
+     * @brief Applies this train, read as a TT operator, to a TT tensor by
+     * contracting the shared physical mode of every core ("zips" them).
+     * @param tensor The TT tensor \f$ B \f$ the operator acts on; must have the
+     * same order, and core `k`'s mode size must equal `in_sizes[k]`.
+     * @param out_sizes Per-core operator output mode sizes \f$ m_k \f$.
+     * @param in_sizes Per-core operator input mode sizes \f$ n_k \f$ (the modes
+     * contracted with `tensor`). For each core `out_sizes[k] * in_sizes[k]`
+     * must equal this core's mode size, folded row-major as
+     * \f$ \text{out} \cdot n_k + \text{in} \f$.
+     * @return The result TT of order \f$ d \f$ with mode sizes `out_sizes`; its
+     * bond ranks are the products of the two operands' bond ranks (boundary
+     * ranks stay 1). Contracting it to dense equals the operator matrix times
+     * the tensor's dense vector.
+     *
+     * Per core this is `TensorTrainCore::zip`; the products of adjacent bond
+     * ranks line up because both operands' bonds use the same Kronecker
+     * ordering (operator rank outer), so the result is a valid train.
+     */
+    [[nodiscard]] TensorTrain
+    zip(const TensorTrain &tensor, const std::vector<Eigen::Index> &out_sizes,
+        const std::vector<Eigen::Index> &in_sizes) const {
+        const std::size_t d = cores.size();
+        assert(tensor.cores.size() == d &&
+               "zip: operands must have the same order.");
+        assert(out_sizes.size() == d && in_sizes.size() == d &&
+               "zip: out_sizes and in_sizes must have one entry per core.");
+
+        std::vector<TensorTrainCore<Scalar>> out_cores;
+        out_cores.reserve(d);
+        for (std::size_t k = 0; k < d; ++k) {
+            out_cores.push_back(
+                cores[k].zip(tensor.cores[k], out_sizes[k], in_sizes[k]));
+        }
+        return TensorTrain(std::move(out_cores));
     }
 
     /*!
@@ -292,9 +431,10 @@ template <typename Scalar> class TensorTrain {
 
             // View G as r_{k-1} x (n_k * r_k). Column-major, the column index
             // splits as (i_k, c_out) with i_k fastest, so the slice for a fixed
-            // mode value i_k = j is the strided set of columns {j, j + n_k, ...}.
+            // mode value i_k = j is the strided set of columns {j, j + n_k,
+            // ...}.
             Eigen::Map<const Eigen::MatrixX<Scalar>> g_right(G.data(), rk,
-                                                            nk * rk1);
+                                                             nk * rk1);
             // Flatten column-major with i_k slower than the existing modes, to
             // match the tensor entry order i_0 + n_0 i_1 + ... (first-mode
             // fastest).
@@ -313,6 +453,30 @@ template <typename Scalar> class TensorTrain {
 
   private:
     std::vector<TensorTrainCore<Scalar>> cores;
+
+    /*!
+     * @brief Forms one fiber slab \f$ W_{k-1} \, G_k(i) \, V_{k+1} \f$.
+     * @param core The core \f$ G_k \f$.
+     * @param left_partial \f$ W_{k-1} \f$, shape \f$ \ell_{k-1} \times r_{k-1}
+     * \f$.
+     * @param right_partial \f$ V_{k+1} \f$, shape \f$ r_k \times \rho_k \f$.
+     * @return The slab as a left unfolding \f$ (\ell_{k-1} \, n_k) \times
+     * \rho_k \f$, the mode stacked with the left index fastest.
+     */
+    static Eigen::MatrixX<Scalar>
+    formSlab(const TensorTrainCore<Scalar> &core,
+             const Eigen::MatrixX<Scalar> &left_partial,
+             const Eigen::MatrixX<Scalar> &right_partial) {
+        const Eigen::Index l_prev = left_partial.rows();
+        const Eigen::Index n = core.modeSize();
+        const Eigen::Index rho = right_partial.cols();
+        Eigen::MatrixX<Scalar> slab(l_prev * n, rho);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            slab.middleRows(i * l_prev, l_prev) =
+                left_partial * core.modeSlice(i) * right_partial;
+        }
+        return slab;
+    }
 
     /*!
      * @brief Builds left-orthogonal cores from sampled fibers (stabilized
@@ -376,9 +540,10 @@ template <typename Scalar> class TensorTrain {
 
             // The stable inversion: pseudo-inverse of DEIM-selected rows of an
             // orthonormal basis (square inverse when not oversampled).
-            carry = Eigen::CompleteOrthogonalDecomposition<
-                        Eigen::MatrixX<Scalar>>(next_hat_Q)
-                        .pseudoInverse();
+            carry =
+                Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixX<Scalar>>(
+                    next_hat_Q)
+                    .pseudoInverse();
             hat_Q = std::move(next_hat_Q);
             result.push_back(std::move(core));
         }

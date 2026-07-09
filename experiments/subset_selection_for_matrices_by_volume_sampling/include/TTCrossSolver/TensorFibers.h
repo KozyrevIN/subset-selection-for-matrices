@@ -18,16 +18,22 @@ namespace MatSubset::Experiments {
  * At bond \f$ k \f$ the left index set is a collection of multi-indices
  * \f$ (i_1, \dots, i_k) \f$ and the right index set a collection of
  * \f$ (i_{k+1}, \dots, i_d) \f$. The sets are *nested*: every left multi-index
- * at level \f$ k \f$ extends exactly one left multi-index at level \f$ k-1 \f$
- * by appending a mode value \f$ i_k \f$. Rather than store the full tuples,
- * each node records only its appended mode value and a `parent` pointer into
- * the previous level, so a multi-index is recovered by walking parents to the
+ * at bond \f$ k \f$ extends exactly one left multi-index at bond \f$ k-1 \f$
+ * by appending a mode value \f$ i_k \f$, and every right multi-index at bond
+ * \f$ k \f$ extends exactly one right multi-index at bond \f$ k+1 \f$ by
+ * prepending a mode value \f$ i_{k+1} \f$. Rather than store the full tuples,
+ * each node records only its added mode value and a `parent` pointer into the
+ * level it extends, so a multi-index is recovered by walking parents to the
  * root.
  *
- * Levels are indexed by core: `left[k]` (k = 0 .. d-1) grows the left sets
- * left-to-right; `right[k]` (k = 0 .. d-1) grows the right sets right-to-left,
- * with `right[0]` corresponding to the last mode. The root level of each side
- * holds a single node with `parent == -1` (the empty boundary multi-index).
+ * Both sides are indexed by bond: `left[k]` and `right[k]` (k = 0 .. d-1) are
+ * the bond-k index sets, so `left[k]` parents point into `left[k-1]` and
+ * `right[k]` parents point into `right[k+1]`. At the boundaries, `left[0]`
+ * nodes carry `parent == -1` (each extends the empty left boundary index),
+ * `right[d-1]` is the right root — a single node with `parent == -1` standing
+ * for the empty right boundary index (its mode value is unused) — and
+ * `left[d-1]` is conventionally empty (a left set at the last bond would
+ * enumerate full multi-indices).
  */
 class FiberIndices {
   public:
@@ -75,8 +81,10 @@ class FiberIndices {
 
     /*!
      * @brief Constructs a skeleton from its left and right level lists.
-     * @param left `left[k]`, k = 0 .. d-1 (root at `left[0]`).
-     * @param right `right[k]`, k = 0 .. d-1 (root at `right[0]`).
+     * @param left `left[k]`, k = 0 .. d-1: the bond-k left sets (parent -1 at
+     * `left[0]`).
+     * @param right `right[k]`, k = 0 .. d-1: the bond-k right sets (root at
+     * `right[d-1]`).
      */
     FiberIndices(std::vector<Level> left, std::vector<Level> right)
         : left(std::move(left)), right(std::move(right)) {
@@ -93,7 +101,7 @@ class FiberIndices {
         return left[k];
     }
 
-    /*! @brief The right level at bond `k` (`right[0]` is the last mode). */
+    /*! @brief The right level at bond `k` (root at `right[d-1]`). */
     [[nodiscard]] const Level &rightLevel(std::size_t k) const {
         assert(k < right.size() && "FiberIndices: right level index OOR.");
         return right[k];
@@ -122,8 +130,8 @@ class FiberIndices {
     }
 
   private:
-    std::vector<Level> left;  // left[k], k = 0 .. d-1 (root at left[0])
-    std::vector<Level> right; // right[k], k = 0 .. d-1 (root at right[0])
+    std::vector<Level> left;  // Bond-k left sets; parents into left[k-1].
+    std::vector<Level> right; // Bond-k right sets; parents into right[k+1].
 };
 
 /*!

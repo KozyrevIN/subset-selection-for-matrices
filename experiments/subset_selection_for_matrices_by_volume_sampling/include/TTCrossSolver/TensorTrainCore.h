@@ -75,7 +75,8 @@ template <typename Scalar> class TensorTrainCore {
      * shape r0 x r1.
      * @param i The mode index, in [0, n).
      *
-     * In the left unfolding (r0 * n) x r1, entry \f$ G[a, i, c] \f$ lives at row
+     * In the left unfolding (r0 * n) x r1, entry \f$ G[a, i, c] \f$ lives at
+     * row
      * \f$ a + r_0 i \f$, so the slice is the contiguous row block
      * \f$ [i r_0, (i + 1) r_0) \f$. Useful for evaluating the train at fibers:
      * fixing every mode index reduces each core to one such matrix and the
@@ -85,6 +86,73 @@ template <typename Scalar> class TensorTrainCore {
         assert(i >= 0 && i < mode &&
                "modeSlice: mode index out of range [0, n).");
         return left_unfolding.middleRows(i * left_rank, left_rank);
+    }
+
+    /*!
+     * @brief Sets the mode-`i` slice \f$ G[:, i, :] \f$, shape r0 x r1.
+     * @param i The mode index, in [0, n).
+     * @param slice The r0 x r1 matrix to write into the contiguous row block.
+     */
+    void setModeSlice(Eigen::Index i, const Eigen::MatrixX<Scalar> &slice) {
+        assert(i >= 0 && i < mode &&
+               "setModeSlice: mode index out of range [0, n).");
+        assert(slice.rows() == left_rank && slice.cols() == right_rank &&
+               "setModeSlice: slice shape must be r0 x r1.");
+        left_unfolding.middleRows(i * left_rank, left_rank) = slice;
+    }
+
+    /*!
+     * @brief Contracts this operator core with a tensor core over a shared
+     * mode ("zips" them).
+     * @param tensor The tensor core \f$ B \f$, of shape
+     * \f$ s_0 \times n \times s_1 \f$; its mode size \f$ n \f$ is the operator's
+     * input size and is summed over.
+     * @param out_size The operator's output mode size \f$ m \f$.
+     * @param in_size The operator's input mode size \f$ n \f$; must equal
+     * `tensor.modeSize()`. `out_size * in_size` must equal this core's mode
+     * size, which is read row-major as \f$ \text{mode} = \text{out} \cdot n +
+     * \text{in} \f$ (output index slower).
+     * @return The contracted core of shape
+     * \f$ (r_0 s_0) \times m \times (r_1 s_1) \f$: at output value
+     * \f$ o \f$ its slice is \f$ \sum_{\text{in}} A[:, o, \text{in}, :] \otimes
+     * B[:, \text{in}, :] \f$, with the operator rank the outer (slower) factor
+     * of each Kronecker bond (bond index \f$ = a \, s + b \f$).
+     *
+     * This is the per-core step of a TT operator applied to a TT tensor: the
+     * bond ranks multiply and the shared physical mode is contracted.
+     */
+    [[nodiscard]] TensorTrainCore
+    zip(const TensorTrainCore &tensor, Eigen::Index out_size,
+        Eigen::Index in_size) const {
+        assert(out_size * in_size == mode &&
+               "zip: out_size * in_size must equal the operator mode size.");
+        assert(in_size == tensor.mode &&
+               "zip: in_size must equal the tensor core's mode size.");
+
+        const Eigen::Index s0 = tensor.left_rank;
+        const Eigen::Index s1 = tensor.right_rank;
+        const Eigen::Index out_r0 = left_rank * s0;
+        const Eigen::Index out_r1 = right_rank * s1;
+
+        TensorTrainCore result(out_r0, out_size, out_r1);
+        for (Eigen::Index o = 0; o < out_size; ++o) {
+            // Slice of the result core at output mode o: (r0*s0) x (r1*s1).
+            Eigen::MatrixX<Scalar> slice =
+                Eigen::MatrixX<Scalar>::Zero(out_r0, out_r1);
+            for (Eigen::Index in = 0; in < in_size; ++in) {
+                const Eigen::MatrixX<Scalar> A =
+                    modeSlice(o * in_size + in);  // r0 x r1
+                const Eigen::MatrixX<Scalar> B = tensor.modeSlice(in); // s0 x s1
+                // kron(A, B): block (a, c) is A(a, c) * B, operator rank outer.
+                for (Eigen::Index a = 0; a < left_rank; ++a) {
+                    for (Eigen::Index c = 0; c < right_rank; ++c) {
+                        slice.block(a * s0, c * s1, s0, s1) += A(a, c) * B;
+                    }
+                }
+            }
+            result.setModeSlice(o, slice);
+        }
+        return result;
     }
 
     /*!
@@ -107,11 +175,10 @@ template <typename Scalar> class TensorTrainCore {
         // With column pivoting, A * P = Q * R, so the carry that satisfies
         // A = Q * carry is R * P^T (shape q x r1). The relevant part of the
         // (upper-trapezoidal) R is its first q rows.
-        Eigen::MatrixX<Scalar> R =
-            qr.matrixR()
-                .topLeftCorner(q, right_rank)
-                .template triangularView<Eigen::Upper>()
-                .toDenseMatrix();
+        Eigen::MatrixX<Scalar> R = qr.matrixR()
+                                       .topLeftCorner(q, right_rank)
+                                       .template triangularView<Eigen::Upper>()
+                                       .toDenseMatrix();
         Eigen::MatrixX<Scalar> carry = R * qr.colsPermutation().transpose();
 
         // The core is now left-orthogonal: its unfolding becomes Q.
@@ -164,8 +231,8 @@ template <typename Scalar> class TensorTrainCore {
      *
      * Truncation keeps the largest singular values and drops the smallest ones
      * as long as the Frobenius norm of the dropped tail stays within the
-     * tolerance (standard TT-SVD rule). The unfolding becomes the orthonormal U.
-     * Any incoming factor should be folded in first via `absorbLeftFactor`.
+     * tolerance (standard TT-SVD rule). The unfolding becomes the orthonormal
+     * U. Any incoming factor should be folded in first via `absorbLeftFactor`.
      * @param atol Absolute Frobenius tolerance on the discarded singular
      * values.
      * @param rtol Relative tolerance; the effective threshold is
@@ -339,17 +406,19 @@ template <typename Scalar> class TensorTrainCore {
     }
 
     /*!
-     * @brief Right-multiplies R into the r1 dimension and returns the resulting
-     * right unfolding, shape r0 x (n * R.cols()).
+     * @brief Right-multiplies R into the r1 dimension, shape r0 x (n *
+     * R.cols()).
+     *
+     * Column \f$ i \cdot \rho + p \f$ of the result is
+     * \f$ G(i) \, R(:, p) \f$: mode-major with the R column fastest. Note this
+     * differs from the raw right-unfolding view of the stored buffer, whose
+     * columns are mode-fastest (\f$ j = i + n c \f$); the mode-`i` slice there
+     * is strided, not contiguous, so it is taken via `modeSlice`.
      */
     Eigen::MatrixX<Scalar> absorbRight(const Eigen::MatrixX<Scalar> &R) const {
-        Eigen::Map<const Eigen::MatrixX<Scalar>> right_view(
-            left_unfolding.data(), left_rank, mode * right_rank);
-
         Eigen::MatrixX<Scalar> absorbed(left_rank, mode * R.cols());
         for (Eigen::Index i = 0; i < mode; ++i) {
-            absorbed.middleCols(i * R.cols(), R.cols()) =
-                right_view.middleCols(i * right_rank, right_rank) * R;
+            absorbed.middleCols(i * R.cols(), R.cols()) = modeSlice(i) * R;
         }
         return absorbed;
     }
