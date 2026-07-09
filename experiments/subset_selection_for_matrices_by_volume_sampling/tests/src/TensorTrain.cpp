@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -374,4 +375,94 @@ TEST_CASE_TEMPLATE("TensorTrain::atFibers evaluates the train on a skeleton",
         }
     }
     CHECK((fibers.slab(2) - slab2).norm() < checkTol<Scalar>());
+}
+
+TEST_CASE_TEMPLATE("TensorTrainCore::zip contracts one operator/tensor core",
+                   Scalar, float, double) {
+    // Single-core operator (rank 1): its zip with a rank-1 tensor core is just
+    // the m x n matrix times the length-n vector.
+    const Eigen::Index m = 3, n = 4;
+    // Operator core 1 x (m*n) x 1, mode folded as out*n + in.
+    Eigen::MatrixX<Scalar> a(m * n, 1);
+    Eigen::MatrixX<Scalar> M(m, n);
+    for (Eigen::Index out = 0; out < m; ++out) {
+        for (Eigen::Index in = 0; in < n; ++in) {
+            const Scalar val = static_cast<Scalar>(1 + (out * 5 + in * 3) % 7);
+            M(out, in) = val;
+            a(out * n + in, 0) = val;
+        }
+    }
+    TensorTrainCore<Scalar> op(a, m * n);
+
+    // Tensor core 1 x n x 1 = a length-n vector.
+    Eigen::MatrixX<Scalar> b(n, 1);
+    Eigen::VectorX<Scalar> v(n);
+    for (Eigen::Index in = 0; in < n; ++in) {
+        b(in, 0) = static_cast<Scalar>(1 + (in * 2 + 1) % 5);
+        v(in) = b(in, 0);
+    }
+    TensorTrainCore<Scalar> vec(b, n);
+
+    TensorTrainCore<Scalar> res = op.zip(vec, /*out_size=*/m, /*in_size=*/n);
+    CHECK(res.leftRank() == 1);
+    CHECK(res.rightRank() == 1);
+    CHECK(res.modeSize() == m);
+
+    Eigen::VectorX<Scalar> expected = M * v;
+    for (Eigen::Index out = 0; out < m; ++out) {
+        CHECK(std::abs(res.modeSlice(out)(0, 0) - expected(out)) <
+              checkTol<Scalar>());
+    }
+}
+
+TEST_CASE_TEMPLATE("TensorTrain::zip applies a TT operator to a TT tensor",
+                   Scalar, float, double) {
+    // A 2-core operator with output sizes (m0, m1) and input sizes (n0, n1),
+    // and a matching 2-core tensor with mode sizes (n0, n1).
+    const Eigen::Index m0 = 2, n0 = 3, m1 = 3, n1 = 2;
+    const Eigen::Index opr = 2; // operator middle bond rank
+    const Eigen::Index tsr = 2; // tensor middle bond rank
+
+    std::vector<TensorTrainCore<Scalar>> op_cores;
+    op_cores.emplace_back(makeUnfolding<Scalar>(1, m0 * n0, opr, 7), m0 * n0);
+    op_cores.emplace_back(makeUnfolding<Scalar>(opr, m1 * n1, 1, 8), m1 * n1);
+    TensorTrain<Scalar> op(std::move(op_cores));
+
+    std::vector<TensorTrainCore<Scalar>> vec_cores;
+    vec_cores.emplace_back(makeUnfolding<Scalar>(1, n0, tsr, 9), n0);
+    vec_cores.emplace_back(makeUnfolding<Scalar>(tsr, n1, 1, 10), n1);
+    TensorTrain<Scalar> vec(std::move(vec_cores));
+
+    TensorTrain<Scalar> res =
+        op.zip(vec, /*out_sizes=*/{m0, m1}, /*in_sizes=*/{n0, n1});
+
+    // Shapes: mode sizes are the output sizes, bond ranks are the products.
+    CHECK(res.modeSizes() == std::vector<Eigen::Index>{m0, m1});
+    CHECK(res.ranks() == std::vector<Eigen::Index>{1, opr * tsr, 1});
+
+    // Ground truth: build the operator's dense matrix M (row = output multi-
+    // index, col = input multi-index) and vector, and compare M*v to the
+    // zipped train contracted to dense. All multi-indices are first-mode-fast.
+    Eigen::MatrixX<Scalar> op_dense = op.toDense(); // length (m0*n0)*(m1*n1)
+    Eigen::MatrixX<Scalar> v = vec.toDense();       // length n0*n1
+
+    Eigen::MatrixX<Scalar> M(m0 * m1, n0 * n1);
+    for (Eigen::Index o0 = 0; o0 < m0; ++o0) {
+        for (Eigen::Index o1 = 0; o1 < m1; ++o1) {
+            for (Eigen::Index i0 = 0; i0 < n0; ++i0) {
+                for (Eigen::Index i1 = 0; i1 < n1; ++i1) {
+                    const Eigen::Index j0 = o0 * n0 + i0; // core-0 folded mode
+                    const Eigen::Index j1 = o1 * n1 + i1; // core-1 folded mode
+                    const Eigen::Index flat = j0 + (m0 * n0) * j1;
+                    M(o0 + m0 * o1, i0 + n0 * i1) = op_dense(flat, 0);
+                }
+            }
+        }
+    }
+
+    Eigen::MatrixX<Scalar> expected = M * v;
+    Eigen::MatrixX<Scalar> got = res.toDense();
+    REQUIRE(got.rows() == expected.rows());
+    CHECK((got - expected).norm() <
+          Scalar(100) * checkTol<Scalar>() * expected.norm());
 }
