@@ -91,8 +91,8 @@ TEST_CASE_TEMPLATE("TensorTrain::operator() agrees with atFibers evaluation",
     const Eigen::Index n0 = 3, n1 = 4, n2 = 2;
     auto tt = makeTrain<Scalar>(n0, n1, n2, 2, 2);
 
-    // A nested skeleton (same layout as the atFibers test). Each slab entry is a
-    // train evaluation at a fully determined multi-index, so operator() must
+    // A nested skeleton (same layout as the atFibers test). Each slab entry is
+    // a train evaluation at a fully determined multi-index, so operator() must
     // reproduce it.
     std::vector<Eigen::Index> L0 = {0, 2};
     std::vector<std::pair<Eigen::Index, Eigen::Index>> L1 = {{0, 1}, {2, 3}};

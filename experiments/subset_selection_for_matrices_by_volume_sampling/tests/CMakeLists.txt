@@ -7,6 +7,7 @@ project(TTCrossSolverTests
 # Required packages
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(MatSubset 0.0 REQUIRED)
+find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOXML)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -29,7 +30,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} doctest::doctest
                                       Eigen3::Eigen
-                                      MatSubset::MatSubset)
+                                      MatSubset::MatSubset
+                                      VTK::CommonCore
+                                      VTK::CommonDataModel
+                                      VTK::IOXML)
+vtk_module_autoinit(TARGETS ${PROJECT_NAME}
+                    MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
 
 # Enable compiler warnings
 if(NOT TEST_INSTALLED_VERSION)
