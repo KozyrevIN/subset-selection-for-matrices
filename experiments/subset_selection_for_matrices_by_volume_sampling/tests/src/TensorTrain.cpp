@@ -78,13 +78,14 @@ TEST_CASE_TEMPLATE("TensorTrain leftOrthogonalize preserves the tensor", Scalar,
     for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
         const Eigen::MatrixX<Scalar> &U = tt.core(k).leftUnfolding();
         Eigen::MatrixX<Scalar> gram = U.transpose() * U;
-        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
-                  .norm() < checkTol<Scalar>());
+        CHECK(
+            (gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
+                .norm() < checkTol<Scalar>());
     }
 }
 
-TEST_CASE_TEMPLATE("TensorTrain rightOrthogonalize preserves the tensor", Scalar,
-                   float, double) {
+TEST_CASE_TEMPLATE("TensorTrain rightOrthogonalize preserves the tensor",
+                   Scalar, float, double) {
     auto tt = makeTrain<Scalar>(3, 4, 2, 2, 3);
     Eigen::MatrixX<Scalar> before = tt.toDense();
 
@@ -101,13 +102,14 @@ TEST_CASE_TEMPLATE("TensorTrain rightOrthogonalize preserves the tensor", Scalar
             core.leftUnfolding().data(), core.leftRank(),
             core.modeSize() * core.rightRank());
         Eigen::MatrixX<Scalar> gram = R * R.transpose();
-        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
-                  .norm() < checkTol<Scalar>());
+        CHECK(
+            (gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
+                .norm() < checkTol<Scalar>());
     }
 }
 
-TEST_CASE_TEMPLATE("TensorTrain repeated sweep is a no-op on the tensor", Scalar,
-                   float, double) {
+TEST_CASE_TEMPLATE("TensorTrain repeated sweep is a no-op on the tensor",
+                   Scalar, float, double) {
     auto tt = makeTrain<Scalar>(3, 4, 2, 2, 3);
     tt.leftOrthogonalize();
     Eigen::MatrixX<Scalar> once = tt.toDense();
@@ -116,9 +118,10 @@ TEST_CASE_TEMPLATE("TensorTrain repeated sweep is a no-op on the tensor", Scalar
     CHECK((once - twice).norm() < checkTol<Scalar>() * once.norm());
 }
 
-TEST_CASE_TEMPLATE("TensorTrain compress preserves a low-rank tensor and reduces "
-                   "the rank",
-                   Scalar, float, double) {
+TEST_CASE_TEMPLATE(
+    "TensorTrain compress preserves a low-rank tensor and reduces "
+    "the rank",
+    Scalar, float, double) {
     // Construct a train whose bond ranks are inflated beyond the true rank by
     // padding with linearly dependent columns/rows, so SVD truncation should
     // recover the smaller rank while preserving the tensor.
@@ -178,9 +181,8 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
     std::unique_ptr<MatSubset::SelectorBase<Scalar>> selector =
         std::make_unique<MatSubset::DominantSelector<Scalar>>(Scalar(1));
 
-    TensorFibers<Scalar> fibers =
-        tt.selectIndices(selector, /*atol=*/Scalar(0),
-                         /*rtol=*/checkTol<Scalar>());
+    TensorFibers<Scalar> fibers = tt.selectIndices(selector, /*atol=*/Scalar(0),
+                                                   /*rtol=*/checkTol<Scalar>());
 
     // The TT-SVD half of the sweep preserves the tensor (bond 1 truncates from
     // 3 to the maximal possible rank 2 without loss).
@@ -208,15 +210,25 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
               static_cast<Eigen::Index>(skeleton.rightFiberCount(k)));
     }
 
+    // atFibers re-evaluates the (mutated) train on the selected skeleton and
+    // reproduces selectIndices' slabs exactly.
+    {
+        TensorFibers<Scalar> reeval = tt.atFibers(fibers.skeleton());
+        for (std::size_t k = 0; k < tt.order(); ++k) {
+            CHECK((reeval.slab(k) - fibers.slab(k)).norm() <
+                  Scalar(100) * checkTol<Scalar>());
+        }
+    }
+
     // On exit the train is left-orthogonal again (sweep 2 orthonormalizes each
     // core before the selector runs on it): cores 0..d-2 have orthonormal left
     // unfoldings.
     for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
         const Eigen::MatrixX<Scalar> &U = tt.core(k).leftUnfolding();
         Eigen::MatrixX<Scalar> gram = U.transpose() * U;
-        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(),
-                                                       gram.cols()))
-                  .norm() < Scalar(100) * checkTol<Scalar>());
+        CHECK(
+            (gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
+                .norm() < Scalar(100) * checkTol<Scalar>());
     }
 
     // Self-consistency: reconstructing a train from the returned fibers
@@ -255,8 +267,8 @@ TEST_CASE_TEMPLATE("TensorTrain(fibers) reconstructs a low-rank tensor in "
     right[0] = Level({0, 2}, {0, 1});
     right[1] = Level({0, 1}, {0, 0}); // parents point to the root at right[2]
     right[2] = Level({0}, {-1});
-    auto skeleton = std::make_shared<const FiberIndices>(std::move(left),
-                                                         std::move(right));
+    auto skeleton =
+        std::make_shared<const FiberIndices>(std::move(left), std::move(right));
 
     // Sample the slabs from the dense tensor on the skeleton's fibers.
     std::vector<Eigen::MatrixX<Scalar>> slabs(3);
@@ -294,12 +306,72 @@ TEST_CASE_TEMPLATE("TensorTrain(fibers) reconstructs a low-rank tensor in "
     for (std::size_t k = 0; k + 1 < tt.order(); ++k) {
         const Eigen::MatrixX<Scalar> &U = tt.core(k).leftUnfolding();
         Eigen::MatrixX<Scalar> gram = U.transpose() * U;
-        CHECK((gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(),
-                                                       gram.cols()))
-                  .norm() < checkTol<Scalar>());
+        CHECK(
+            (gram - Eigen::MatrixX<Scalar>::Identity(gram.rows(), gram.cols()))
+                .norm() < checkTol<Scalar>());
     }
 
     // Cross interpolation is exact for a tensor of matching TT-rank.
     CHECK((tt.toDense() - dense).norm() <
           Scalar(100) * checkTol<Scalar>() * dense.norm());
+}
+
+TEST_CASE_TEMPLATE("TensorTrain::atFibers evaluates the train on a skeleton",
+                   Scalar, float, double) {
+    using Level = FiberIndices::Level;
+
+    const Eigen::Index n0 = 3, n1 = 4, n2 = 2;
+    auto tt = makeTrain<Scalar>(n0, n1, n2, 2, 2);
+    Eigen::MatrixX<Scalar> dense = tt.toDense();
+    auto T = [&](Eigen::Index i0, Eigen::Index i1, Eigen::Index i2) {
+        return dense(i0 + n0 * i1 + n0 * n1 * i2, 0);
+    };
+
+    // A nested skeleton (same layout as the reconstruction test above).
+    std::vector<Eigen::Index> L0 = {0, 2};
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> L1 = {{0, 1}, {2, 3}};
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> R0 = {{0, 0}, {2, 1}};
+    std::vector<Eigen::Index> R1 = {0, 1};
+
+    std::vector<Level> left(3), right(3);
+    left[0] = Level({0, 2}, {-1, -1});
+    left[1] = Level({1, 3}, {0, 1});
+    right[0] = Level({0, 2}, {0, 1});
+    right[1] = Level({0, 1}, {0, 0});
+    right[2] = Level({0}, {-1});
+    auto skeleton =
+        std::make_shared<const FiberIndices>(std::move(left), std::move(right));
+
+    TensorFibers<Scalar> fibers = tt.atFibers(skeleton);
+
+    // atFibers does not mutate: contracting the train still gives `dense`.
+    CHECK((tt.toDense() - dense).norm() < checkTol<Scalar>() * dense.norm());
+    CHECK(fibers.skeleton() == skeleton); // shares the passed-in skeleton
+
+    // Slabs match the tensor entries at the skeleton's fibers, sampled by hand.
+    Eigen::MatrixX<Scalar> slab0(n0, 2);
+    for (Eigen::Index i = 0; i < n0; ++i) {
+        for (Eigen::Index c = 0; c < 2; ++c) {
+            slab0(i, c) = T(i, R0[c].first, R0[c].second);
+        }
+    }
+    CHECK((fibers.slab(0) - slab0).norm() < checkTol<Scalar>());
+
+    Eigen::MatrixX<Scalar> slab1(2 * n1, 2);
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n1; ++i) {
+            for (Eigen::Index c = 0; c < 2; ++c) {
+                slab1(p + 2 * i, c) = T(L0[p], i, R1[c]);
+            }
+        }
+    }
+    CHECK((fibers.slab(1) - slab1).norm() < checkTol<Scalar>());
+
+    Eigen::MatrixX<Scalar> slab2(2 * n2, 1);
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n2; ++i) {
+            slab2(p + 2 * i, 0) = T(L1[p].first, L1[p].second, i);
+        }
+    }
+    CHECK((fibers.slab(2) - slab2).norm() < checkTol<Scalar>());
 }
