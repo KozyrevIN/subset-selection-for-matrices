@@ -84,6 +84,31 @@ template <typename Scalar> class TensorTrain {
         return cores[k];
     }
 
+    /*!
+     * @brief Evaluates the train at a single multi-index \f$ (i_1, \dots, i_d)
+     * \f$.
+     * @param index The mode value for each core, in order; its length must equal
+     * the tensor order and each entry must be in range for its core.
+     * @return The scalar tensor entry
+     * \f$ G_1(i_1) \, G_2(i_2) \cdots G_d(i_d) \f$.
+     *
+     * Fixing every mode reduces each core to its `modeSlice`, a
+     * \f$ r_{k-1} \times r_k \f$ matrix; their product is the \f$ 1 \times 1 \f$
+     * entry. Cheap per call, but forms no dense tensor.
+     */
+    [[nodiscard]] Scalar
+    operator()(const std::vector<Eigen::Index> &index) const {
+        assert(index.size() == cores.size() &&
+               "operator(): index length must equal the tensor order.");
+        Eigen::MatrixX<Scalar> acc = cores.front().modeSlice(index.front());
+        for (std::size_t k = 1; k < cores.size(); ++k) {
+            acc = acc * cores[k].modeSlice(index[k]);
+        }
+        assert(acc.rows() == 1 && acc.cols() == 1 &&
+               "operator(): boundary ranks must be 1.");
+        return acc(0, 0);
+    }
+
     /*! @brief The mode sizes \f$ (n_1, \dots, n_d) \f$. */
     [[nodiscard]] std::vector<Eigen::Index> modeSizes() const {
         std::vector<Eigen::Index> sizes(cores.size());

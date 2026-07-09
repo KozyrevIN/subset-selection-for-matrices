@@ -65,6 +65,83 @@ TEST_CASE_TEMPLATE("TensorTrain basic accessors", Scalar, float, double) {
     CHECK(tt.toDense().cols() == 1);
 }
 
+TEST_CASE_TEMPLATE("TensorTrain::operator() matches the dense tensor entry",
+                   Scalar, float, double) {
+    const Eigen::Index n0 = 3, n1 = 4, n2 = 2;
+    auto tt = makeTrain<Scalar>(n0, n1, n2, 2, 3);
+    Eigen::MatrixX<Scalar> dense = tt.toDense();
+
+    // Evaluating at every multi-index reproduces the dense entry (first-mode-
+    // fastest flattening, matching toDense).
+    for (Eigen::Index i0 = 0; i0 < n0; ++i0) {
+        for (Eigen::Index i1 = 0; i1 < n1; ++i1) {
+            for (Eigen::Index i2 = 0; i2 < n2; ++i2) {
+                const Scalar entry = tt(std::vector<Eigen::Index>{i0, i1, i2});
+                const Scalar ref = dense(i0 + n0 * i1 + n0 * n1 * i2, 0);
+                CHECK(std::abs(entry - ref) < checkTol<Scalar>());
+            }
+        }
+    }
+}
+
+TEST_CASE_TEMPLATE("TensorTrain::operator() agrees with atFibers evaluation",
+                   Scalar, float, double) {
+    using Level = FiberIndices::Level;
+
+    const Eigen::Index n0 = 3, n1 = 4, n2 = 2;
+    auto tt = makeTrain<Scalar>(n0, n1, n2, 2, 2);
+
+    // A nested skeleton (same layout as the atFibers test). Each slab entry is a
+    // train evaluation at a fully determined multi-index, so operator() must
+    // reproduce it.
+    std::vector<Eigen::Index> L0 = {0, 2};
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> L1 = {{0, 1}, {2, 3}};
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> R0 = {{0, 0}, {2, 1}};
+    std::vector<Eigen::Index> R1 = {0, 1};
+
+    std::vector<Level> left(3), right(3);
+    left[0] = Level({0, 2}, {-1, -1});
+    left[1] = Level({1, 3}, {0, 1});
+    right[0] = Level({0, 2}, {0, 1});
+    right[1] = Level({0, 1}, {0, 0});
+    right[2] = Level({0}, {-1});
+    auto skeleton =
+        std::make_shared<const FiberIndices>(std::move(left), std::move(right));
+
+    TensorFibers<Scalar> fibers = tt.atFibers(skeleton);
+
+    // Slab 0: left index is just (i0), right index is the (i1, i2) pair R0[c].
+    for (Eigen::Index i = 0; i < n0; ++i) {
+        for (Eigen::Index c = 0; c < 2; ++c) {
+            const Scalar entry =
+                tt(std::vector<Eigen::Index>{i, R0[c].first, R0[c].second});
+            CHECK(std::abs(fibers.slab(0)(i, c) - entry) < checkTol<Scalar>());
+        }
+    }
+
+    // Slab 1: left index L0[p], mode i1, right index R1[c].
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n1; ++i) {
+            for (Eigen::Index c = 0; c < 2; ++c) {
+                const Scalar entry =
+                    tt(std::vector<Eigen::Index>{L0[p], i, R1[c]});
+                CHECK(std::abs(fibers.slab(1)(p + 2 * i, c) - entry) <
+                      checkTol<Scalar>());
+            }
+        }
+    }
+
+    // Slab 2: left index is the (i0, i1) pair L1[p], mode i2, no right index.
+    for (Eigen::Index p = 0; p < 2; ++p) {
+        for (Eigen::Index i = 0; i < n2; ++i) {
+            const Scalar entry =
+                tt(std::vector<Eigen::Index>{L1[p].first, L1[p].second, i});
+            CHECK(std::abs(fibers.slab(2)(p + 2 * i, 0) - entry) <
+                  checkTol<Scalar>());
+        }
+    }
+}
+
 TEST_CASE_TEMPLATE("TensorTrain leftOrthogonalize preserves the tensor", Scalar,
                    float, double) {
     auto tt = makeTrain<Scalar>(3, 4, 2, 2, 3);

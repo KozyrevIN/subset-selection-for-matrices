@@ -94,3 +94,21 @@ TEST_CASE_TEMPLATE("TensorFibers operator+ and hadamardProduct are slab-wise",
         CHECK((prod.slab(k).array() == Scalar(10)).all());
     }
 }
+
+TEST_CASE_TEMPLATE("TensorFibers operator* scales every slab", Scalar, float,
+                   double) {
+    auto idx = makeSkeleton();
+    std::vector<Eigen::Index> modes{3, 4, 2};
+
+    TensorFibers<Scalar> a = makeFibers<Scalar>(idx, modes, Scalar(2));
+    TensorFibers<Scalar> scaled = Scalar(3) * a;
+
+    REQUIRE(scaled.order() == a.order());
+    CHECK(scaled.skeleton() == idx); // shares the skeleton
+
+    for (std::size_t k = 0; k < a.order(); ++k) {
+        CHECK(scaled.slab(k).rows() == a.slab(k).rows());
+        CHECK(scaled.slab(k).cols() == a.slab(k).cols());
+        CHECK((scaled.slab(k).array() == Scalar(6)).all());
+    }
+}

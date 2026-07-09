@@ -201,6 +201,21 @@ template <typename Scalar> class TensorFibers {
     }
 
     /*!
+     * @brief Scales every slab of a `TensorFibers` by a scalar.
+     *
+     * The pointwise product of the sampled fiber tensor with `scalar`, entry by
+     * entry on the fiber set; the skeleton is shared unchanged.
+     */
+    friend TensorFibers operator*(Scalar scalar, const TensorFibers &a) {
+        std::vector<Eigen::MatrixX<Scalar>> out;
+        out.reserve(a.slabs.size());
+        for (const auto &slab : a.slabs) {
+            out.push_back(scalar * slab);
+        }
+        return TensorFibers(std::move(out), a.indices);
+    }
+
+    /*!
      * @brief Slab-wise elementwise (Hadamard) product of two `TensorFibers`
      * sampled on the same skeleton.
      */
