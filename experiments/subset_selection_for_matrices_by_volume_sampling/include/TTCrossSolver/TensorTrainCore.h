@@ -306,7 +306,10 @@ template <typename Scalar> class TensorTrainCore {
      * @param selector Column-subset selector applied to the transpose of the
      * unfolding (columns of the transpose correspond to row-indices of the
      * unfolding).
-     * @param oversampling Number of extra indices to select beyond \f$ r_1 \f$.
+     * @param count Number of indices to select, clamped to
+     * \f$ [r_1, \text{candidate rows}] \f$ (interpolating the core itself
+     * needs at least the rank; a selector requires \f$ k \le n \f$, so once
+     * the rank saturates the unfolding there is nothing left to oversample).
      * @return `{indices, submatrix}` where `submatrix` is the selected rows of
      * the unfolding (shape selected x r1), to be absorbed as the factor R into
      * the next core's `leftSelectIndices` call.
@@ -314,12 +317,12 @@ template <typename Scalar> class TensorTrainCore {
     std::pair<std::vector<Eigen::Index>, Eigen::MatrixX<Scalar>>
     leftSelectIndices(const Eigen::MatrixX<Scalar> &R,
                       std::unique_ptr<SelectorBase<Scalar>> &selector,
-                      Eigen::Index oversampling = 0) const {
+                      Eigen::Index count) const {
 
         // Transpose so columns correspond to row-indices of the unfolding.
         Eigen::MatrixX<Scalar> X = absorbLeft(R).transpose();
-        std::vector<Eigen::Index> indices =
-            selector->selectSubset(X, right_rank + oversampling);
+        count = std::min(std::max(count, right_rank), X.cols());
+        std::vector<Eigen::Index> indices = selector->selectSubset(X, count);
         return std::make_pair(indices, X(Eigen::all, indices).transpose());
     }
 
@@ -331,7 +334,10 @@ template <typename Scalar> class TensorTrainCore {
      * \f$ r_0 \times (n \cdot R_{\text{cols}}) \f$.
      * @param selector Column-subset selector applied directly to the right
      * unfolding (its columns are the (mode, right-rank) index pairs).
-     * @param oversampling Number of extra indices to select beyond \f$ r_0 \f$.
+     * @param count Number of indices to select, clamped to
+     * \f$ [r_0, \text{candidate columns}] \f$ (interpolating the core itself
+     * needs at least the rank; a selector requires \f$ k \le n \f$, so once
+     * the rank saturates the unfolding there is nothing left to oversample).
      * @return `{indices, submatrix}` where `submatrix` is the selected columns
      * of the right unfolding (shape r0 x selected), to be absorbed as the
      * factor R into the previous core's `rightSelectIndices` call.
@@ -339,13 +345,13 @@ template <typename Scalar> class TensorTrainCore {
     std::pair<std::vector<Eigen::Index>, Eigen::MatrixX<Scalar>>
     rightSelectIndices(const Eigen::MatrixX<Scalar> &R,
                        std::unique_ptr<SelectorBase<Scalar>> &selector,
-                       Eigen::Index oversampling = 0) const {
+                       Eigen::Index count) const {
 
         // Right unfolding: r0 x (n * R.cols()). Columns are the (mode, r1)
-        // index pairs; we select left_rank + oversampling of them.
+        // index pairs.
         Eigen::MatrixX<Scalar> X = absorbRight(R);
-        std::vector<Eigen::Index> indices =
-            selector->selectSubset(X, left_rank + oversampling);
+        count = std::min(std::max(count, left_rank), X.cols());
+        std::vector<Eigen::Index> indices = selector->selectSubset(X, count);
         return std::make_pair(indices, X(Eigen::all, indices));
     }
 

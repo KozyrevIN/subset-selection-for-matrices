@@ -1,11 +1,14 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_TENSOR_TRAIN_H
 #define MAT_SUBSET_EXPERIMENTS_TENSOR_TRAIN_H
 
-#include <cassert> // For assert
-#include <cstddef> // For std::size_t
-#include <memory>  // For std::unique_ptr
-#include <utility> // For std::move, std::pair
-#include <vector>  // For std::vector
+#include <cassert>    // For assert
+#include <cmath>      // For std::sqrt
+#include <cstddef>    // For std::size_t
+#include <functional> // For std::function
+#include <limits>     // For std::numeric_limits
+#include <memory>     // For std::unique_ptr
+#include <utility>    // For std::move, std::pair
+#include <vector>     // For std::vector
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 #include <Eigen/QR>   // For Eigen::CompleteOrthogonalDecomposition
@@ -58,23 +61,39 @@ template <typename Scalar> class TensorTrain {
      * interpolation, directly in left-orthogonal form.
      * @param fibers The tensor evaluated on a nested cross skeleton (one slab
      * per core plus the `FiberIndices` it was sampled on).
+     * @param atol Absolute Frobenius tolerance of the per-slab rank
+     * truncation.
+     * @param rtol Relative tolerance of the per-slab rank truncation; the
+     * default \f$ \sqrt{\varepsilon} \f$ discards directions with no numerical
+     * support in the data.
      *
      * The naive interpolant multiplies each slab by the inverse of the cross
      * matrix \f$ Y(\mathcal{I}^{\le k}, \mathcal{I}^{>k}) \f$, which can be
-     * ill-conditioned. Instead, this sweep QR-factorizes each carry-absorbed
-     * slab, keeps the orthonormal factor \f$ Q_k \f$ as the core (so the train
-     * is left-orthogonal by construction, at no extra cost), discards
-     * \f$ R_k \f$ (it cancels against the cross matrix), and carries the
-     * pseudo-inverse of \f$ \hat{Q}_k \f$ into the next slab, where
-     * \f$ \hat{Q}_k \f$ collects the rows of the cumulative orthonormal basis
-     * \f$ U_{\le k} \f$ at the selected multi-indices, built by the nesting
-     * recursion \f$ \hat{Q}_k(j, :) = \hat{Q}_{k-1}(p_j, :) \, Q_k(i_j) \f$
+     * ill-conditioned. Instead, this sweep SVD-factorizes each carry-absorbed
+     * slab at (`atol`, `rtol`), keeps the truncated orthonormal factor
+     * \f$ Q_k \f$ as the core (so the train is left-orthogonal by
+     * construction), discards the rest (it cancels against the cross matrix),
+     * and carries the pseudo-inverse of \f$ \hat{Q}_k \f$ into the next slab,
+     * where \f$ \hat{Q}_k \f$ collects the rows of the cumulative orthonormal
+     * basis \f$ U_{\le k} \f$ at the selected multi-indices, built by the
+     * nesting recursion
+     * \f$ \hat{Q}_k(j, :) = \hat{Q}_{k-1}(p_j, :) \, Q_k(i_j) \f$
      * over the skeleton's (parent, mode) nodes. These DEIM-selected rows of an
      * orthonormal basis are far better conditioned than the raw cross values.
      * The trailing carry is folded into the last core.
+     *
+     * The truncation is what keeps an *oversampled* skeleton stable: a slab of
+     * numerical rank \f$ r \f$ sampled on a wider skeleton would otherwise
+     * hand \f$ \hat{Q}_k \f$ arbitrary null-space directions, whose rows at
+     * the skeleton (e.g. the tails of a localized field) can be near zero —
+     * the pseudo-inverse then amplifies noise catastrophically. Truncating
+     * first turns the rebuild into a well-posed least-squares fit of rank
+     * \f$ r \f$.
      */
-    explicit TensorTrain(const TensorFibers<Scalar> &fibers)
-        : TensorTrain(coresFromFibers(fibers)) {}
+    explicit TensorTrain(const TensorFibers<Scalar> &fibers,
+                         Scalar atol = Scalar(0),
+                         Scalar rtol = defaultFiberRtol())
+        : TensorTrain(coresFromFibers(fibers, atol, rtol)) {}
 
     /*! @brief The number of cores (tensor order) \f$ d \f$. */
     [[nodiscard]] std::size_t order() const { return cores.size(); }
@@ -187,8 +206,17 @@ template <typename Scalar> class TensorTrain {
      * sweeps.
      * @param atol Absolute Frobenius tolerance for the TT-SVD truncation.
      * @param rtol Relative tolerance for the TT-SVD truncation.
-     * @param oversampling Extra indices selected at each bond beyond the bond
-     * rank.
+     * @param num_samples Skeleton width policy: called per bond as
+     * `num_samples(rank, candidates)` with the post-truncation bond rank and
+     * the number of candidate indices at that bond, returns how many indices
+     * to select. The result is clamped to \f$ [\text{rank},
+     * \text{candidates}] \f$. Null selects exactly the bond rank — right for
+     * sampling the train itself; give slack (e.g. `ceil(1.1 * rank) + 4`)
+     * when the fibers will carry a *combination* whose numerical rank exceeds
+     * the train's, such as a time-step update
+     * \f$ \sum_m \alpha_m y_{n-m} + \gamma \, \Delta t^p F(y_n) \f$ — a
+     * skeleton narrower than that combination's numerical rank makes the
+     * rebuild a lossy projection with no tolerance control.
      * @return The train's fibers on the selected skeleton: `TensorFibers` whose
      * slab `k` holds \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$ stacked over the
      * mode, with the `FiberIndices` skeleton embedded (`skeleton()`). Feeding
@@ -219,7 +247,14 @@ template <typename Scalar> class TensorTrain {
      */
     TensorFibers<Scalar>
     selectIndices(std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
-                  Scalar rtol, Eigen::Index oversampling = 0) {
+                  Scalar rtol,
+                  const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+                      &num_samples = nullptr) {
+        // Width policy: the bond rank when no policy is given.
+        const auto width = [&num_samples](Eigen::Index rank,
+                                          Eigen::Index candidates) {
+            return num_samples ? num_samples(rank, candidates) : rank;
+        };
         const std::size_t d = cores.size();
 
         std::vector<FiberIndices::Level> left_levels(d);
@@ -241,7 +276,8 @@ template <typename Scalar> class TensorTrain {
 
             const Eigen::Index rho = right_partial[k].cols();
             auto [indices, submatrix] = cores[k].rightSelectIndices(
-                right_partial[k], selector, oversampling);
+                right_partial[k], selector,
+                width(cores[k].leftRank(), cores[k].modeSize() * rho));
 
             // Column idx = mode * rho + child in the absorbed right unfolding.
             std::vector<Eigen::Index> modes(indices.size());
@@ -289,7 +325,8 @@ template <typename Scalar> class TensorTrain {
 
             const Eigen::Index l_prev = left_partial[k].rows();
             auto [indices, submatrix] = cores[k].leftSelectIndices(
-                left_partial[k], selector, oversampling);
+                left_partial[k], selector,
+                width(cores[k].rightRank(), l_prev * cores[k].modeSize()));
 
             // Row idx = parent + l_prev * mode in the absorbed left unfolding.
             std::vector<Eigen::Index> modes(indices.size());
@@ -479,6 +516,12 @@ template <typename Scalar> class TensorTrain {
   private:
     std::vector<TensorTrainCore<Scalar>> cores;
 
+    /*! @brief Default relative truncation of the fibers rebuild:
+     * \f$ \sqrt{\varepsilon} \f$ of the scalar type. */
+    static Scalar defaultFiberRtol() {
+        return std::sqrt(std::numeric_limits<Scalar>::epsilon());
+    }
+
     /*!
      * @brief Forms one fiber slab \f$ W_{k-1} \, G_k(i) \, V_{k+1} \f$.
      * @param core The core \f$ G_k \f$.
@@ -505,10 +548,12 @@ template <typename Scalar> class TensorTrain {
 
     /*!
      * @brief Builds left-orthogonal cores from sampled fibers (stabilized
-     * TT-cross interpolation); see the fibers constructor for the math.
+     * TT-cross interpolation); see the fibers constructor for the math and
+     * the role of the (`atol`, `rtol`) slab truncation.
      */
     static std::vector<TensorTrainCore<Scalar>>
-    coresFromFibers(const TensorFibers<Scalar> &fibers) {
+    coresFromFibers(const TensorFibers<Scalar> &fibers, Scalar atol,
+                    Scalar rtol) {
         const FiberIndices &skeleton = *fibers.skeleton();
         const std::size_t d = fibers.order();
 
@@ -543,9 +588,12 @@ template <typename Scalar> class TensorTrain {
                 break;
             }
 
-            // Keep the orthonormal factor as the core; R is never needed (it
-            // cancels against the cross matrix in the stabilized formula).
-            core.leftOrth();
+            // Keep the truncated orthonormal factor as the core; the carry is
+            // never needed (it cancels against the cross matrix in the
+            // stabilized formula). Truncating instead of a plain QR is what
+            // keeps oversampled skeletons stable: null-space directions of a
+            // rank-deficient slab must not reach the pseudo-inverse below.
+            core.leftSvd(atol, rtol);
 
             // hat_Q_k(j, :) = hat_Q_{k-1}(p_j, :) * Q_k(i_j) over the level's
             // (parent, mode) nodes: the selected rows of U_{<=k}.

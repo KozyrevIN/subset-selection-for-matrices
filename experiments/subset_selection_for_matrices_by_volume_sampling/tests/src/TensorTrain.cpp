@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 
 #include <MatSubset/DominantSelector.h>
+#include <MatSubset/ForwardIterativeVolumeSamplingSelector.h>
 #include <MatSubset/SelectorBase.h>
 
 #include <TTCrossSolver/TensorFibers.h>
@@ -542,4 +543,61 @@ TEST_CASE_TEMPLATE("TensorTrain::zip applies a TT operator to a TT tensor",
     REQUIRE(got.rows() == expected.rows());
     CHECK((got - expected).norm() <
           Scalar(100) * checkTol<Scalar>() * expected.norm());
+}
+
+TEST_CASE_TEMPLATE(
+    "TensorTrain(fibers) is stable on an oversampled skeleton of a localized "
+    "tensor",
+    Scalar, float, double) {
+    // Regression test: a sharply localized field whose fibers vanish at most
+    // grid points, sampled on a skeleton much wider than its rank. The naive
+    // rebuild (full QR of the rank-deficient slabs) hands the pseudo-inverse
+    // arbitrary null-space directions with near-zero rows and amplifies noise
+    // catastrophically; the truncating rebuild must stay exact and collapse
+    // the ranks to the content rank.
+    const Eigen::Index n = 32;
+    // Width policy: rank + 12 - far wider than the content rank of 2.
+    const auto num_samples = [](Eigen::Index rank, Eigen::Index) {
+        return rank + 12;
+    };
+
+    // Rank-1 Gaussian bumps, two cells wide, centered off-node.
+    const auto gaussian = [n](Scalar center, Scalar sigma) {
+        Eigen::MatrixX<Scalar> g(n, 1);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            const Scalar d = static_cast<Scalar>(i) - center;
+            g(i, 0) = std::exp(-d * d / (Scalar(2) * sigma * sigma));
+        }
+        return g;
+    };
+    const auto bump = [&](Scalar center, Scalar sigma) {
+        std::vector<TensorTrainCore<Scalar>> cores;
+        cores.emplace_back(gaussian(center, sigma), n);
+        cores.emplace_back(gaussian(center, sigma), n);
+        cores.emplace_back(gaussian(center, sigma), n);
+        return TensorTrain<Scalar>(std::move(cores));
+    };
+
+    TensorTrain<Scalar> y = bump(Scalar(15.5), Scalar(2));
+    TensorTrain<Scalar> z = bump(Scalar(19.5), Scalar(3));
+    Eigen::MatrixX<Scalar> target = y.toDense() + z.toDense();
+
+    // Skeleton from y alone (as the solver does), then fibers of y + z.
+    std::unique_ptr<MatSubset::SelectorBase<Scalar>> selector =
+        std::make_unique<
+            MatSubset::ForwardIterativeVolumeSamplingSelector<Scalar>>(12345);
+    y.leftOrthogonalize();
+    TensorFibers<Scalar> fy =
+        y.selectIndices(selector, Scalar(0), checkTol<Scalar>(), num_samples);
+    TensorFibers<Scalar> combo = fy + Scalar(1) * z.atFibers(fy.skeleton());
+    TensorTrain<Scalar> rebuilt(combo);
+
+    CHECK((rebuilt.toDense() - target).norm() <
+          Scalar(100) * checkTol<Scalar>() * target.norm());
+
+    // The rebuild must not inflate the ranks to the skeleton width: the
+    // content rank of y + z is 2 per bond.
+    for (const Eigen::Index r : rebuilt.ranks()) {
+        CHECK(r <= 3);
+    }
 }

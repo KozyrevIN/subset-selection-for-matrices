@@ -366,7 +366,7 @@ TEST_CASE_TEMPLATE("MaskBoundaryCondition damps the state once per step",
     Solver<Scalar> solver(
         std::move(init), std::make_unique<ZeroRhs<Scalar>>(),
         Scheme<Scalar>::forwardEuler(), Scalar(0.1), makeSelector<Scalar>(),
-        Scalar(0), checkTol<Scalar>(), /*oversampling=*/0,
+        Scalar(0), checkTol<Scalar>(), /*num_samples=*/nullptr,
         std::make_unique<MaskBoundaryCondition<Scalar>>(
             makeCerjanMask<Scalar>(sizes, width, strength)));
 

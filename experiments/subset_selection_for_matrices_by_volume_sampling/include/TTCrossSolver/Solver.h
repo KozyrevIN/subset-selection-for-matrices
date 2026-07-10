@@ -1,13 +1,14 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_SOLVER_H
 #define MAT_SUBSET_EXPERIMENTS_SOLVER_H
 
-#include <cassert>  // For assert
-#include <cstddef>  // For std::size_t
-#include <deque>    // For std::deque
-#include <memory>   // For std::unique_ptr
-#include <optional> // For std::optional
-#include <utility>  // For std::move
-#include <vector>   // For std::vector
+#include <cassert>    // For assert
+#include <cstddef>    // For std::size_t
+#include <deque>      // For std::deque
+#include <functional> // For std::function
+#include <memory>     // For std::unique_ptr
+#include <optional>   // For std::optional
+#include <utility>    // For std::move
+#include <vector>     // For std::vector
 
 #include <Eigen/Core> // For Eigen::Index
 
@@ -162,7 +163,7 @@ template <typename Scalar> struct Scheme {
  * Each `step()`:
  * 1. Runs `selectIndices` on the current state \f$ y_n \f$ — truncating it at
  *    (`atol`, `rtol`), re-orthogonalizing it, and fixing the step's skeleton
- *    of width (bond rank + `oversampling`).
+ *    of the width `num_samples(rank, candidates)` prescribes per bond.
  * 2. Evaluates the older history states on that skeleton via `atFibers`.
  * 3. Runs the scheme's stage recursion: each stage combines history fibers
  *    and the rhs fibers with the fiber algebra and cross-interpolates the
@@ -173,10 +174,18 @@ template <typename Scalar> struct Scheme {
  *    cheapest possible spot, no extra sampling or rebuild.
  * 5. Rotates the history and advances the time.
  *
- * Rank adaptation: within a step every stage's ranks are capped by the
- * skeleton width, so across steps the ranks can grow by at most
- * `oversampling` per bond per step (and truncation can shrink them);
- * `oversampling = 0` freezes the rank profile.
+ * Skeleton width vs. stage rank: the stage combo
+ * \f$ \sum_m \alpha_m y_{n-m} + \gamma \, \Delta t^p F \f$ has numerical rank
+ * above the state's — how far above depends on the operators in \f$ F \f$,
+ * the history depth, and how many of the new directions exceed `rtol` (which
+ * grows with resolution). A skeleton narrower than that rank makes the
+ * rebuild a lossy projection whose error is *not* controlled by (`atol`,
+ * `rtol`) — it re-enters the state as spurious rank and compounds across
+ * steps. `num_samples` sets the width budget; rank-proportional slack (e.g.
+ * `ceil(1.1 * rank) + 4`) scales with the problem where a constant offset
+ * hides a resolution cliff. The rebuild's per-slab truncation shrinks the
+ * state back to its true rank, so a generous width costs fiber evaluations
+ * but never inflates the state.
  */
 template <typename Scalar> class Solver {
   public:
@@ -193,20 +202,23 @@ template <typename Scalar> class Solver {
      * @param atol Absolute Frobenius tolerance of the per-step TT-SVD
      * truncation.
      * @param rtol Relative tolerance of the per-step truncation.
-     * @param oversampling Extra skeleton indices per bond beyond the bond
-     * rank; the per-step rank growth budget.
+     * @param num_samples Per-bond skeleton width policy
+     * `num_samples(rank, candidates)` (see the class docs); null selects
+     * exactly the bond rank, freezing the rank profile.
      * @param boundary_condition Optional transform of the new state's fibers
      * at the end of every step (e.g. an absorbing mask); null for none.
      */
     Solver(std::vector<TensorTrain<Scalar>> initial_history,
            std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme,
            Scalar dt, std::unique_ptr<SelectorBase<Scalar>> selector,
-           Scalar atol, Scalar rtol, Eigen::Index oversampling = 0,
+           Scalar atol, Scalar rtol,
+           std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+               num_samples = nullptr,
            std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition =
                nullptr)
         : rhs(std::move(rhs)), scheme(std::move(scheme)), dt(dt),
           selector(std::move(selector)), atol(atol), rtol(rtol),
-          oversampling(oversampling),
+          num_samples(std::move(num_samples)),
           boundary_condition(std::move(boundary_condition)) {
         assert(this->rhs && "Solver: null rhs.");
         assert(this->selector && "Solver: null selector.");
@@ -245,7 +257,7 @@ template <typename Scalar> class Solver {
         // step - every TensorFibers below shares it, as the fiber algebra
         // requires.
         TensorFibers<Scalar> fibers_n =
-            history.front().selectIndices(selector, atol, rtol, oversampling);
+            history.front().selectIndices(selector, atol, rtol, num_samples);
 
         // Phase 2: evaluate the older history states on this skeleton. This
         // is what makes multistep schemes work: y_{n-1} was built on the
@@ -292,8 +304,10 @@ template <typename Scalar> class Solver {
             }
 
             // Cross-interpolate the fibers back into a train
-            // (left-orthogonal by construction).
-            next.emplace(combo);
+            // (left-orthogonal by construction). The solver's tolerances
+            // regularize the rebuild: slab directions below them carry no
+            // reliable data and must not survive into the state.
+            next.emplace(combo, atol, rtol);
             if (j + 1 < scheme.stages.size()) {
                 stage_fibers = next->atFibers(fibers_n.skeleton());
                 stage_state = &*next;
@@ -325,7 +339,7 @@ template <typename Scalar> class Solver {
     std::unique_ptr<SelectorBase<Scalar>> selector;
     Scalar atol;
     Scalar rtol;
-    Eigen::Index oversampling;
+    std::function<Eigen::Index(Eigen::Index, Eigen::Index)> num_samples;
     std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition;
 };
 

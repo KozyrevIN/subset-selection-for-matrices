@@ -339,7 +339,7 @@ TEST_CASE_TEMPLATE(
         std::move(init), std::make_unique<ScaleRhs<Scalar>>(Scalar(0)),
         Scheme<Scalar>::lowStorageRK({Scalar(0.5), Scalar(1)}), dt,
         makeSelector<Scalar>(), Scalar(0), checkTol<Scalar>(),
-        /*oversampling=*/0,
+        /*num_samples=*/nullptr,
         std::make_unique<ScaleBc<Scalar>>(Scalar(0.5), bc_times));
 
     Scalar factor = Scalar(1);
