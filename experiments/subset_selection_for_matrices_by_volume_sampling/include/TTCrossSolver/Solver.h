@@ -43,6 +43,33 @@ template <typename Scalar> class RhsBase {
 };
 
 /*!
+ * @brief Base class for boundary conditions applied to the assembled new
+ * state at the end of every step, in the fiber format.
+ * @tparam Scalar The underlying scalar type (e.g. `float`, `double`).
+ *
+ * Distinct from the rhs on purpose: anything inside \f$ F \f$ is scaled by
+ * \f$ \Delta t^p \f$ and added to the unmodified history, whereas a boundary
+ * condition of this kind transforms the *whole* update \f$ y_{n+1} \f$ — e.g.
+ * the absorbing sponge \f$ D \odot p^{\text{next}} \f$ of Liu & Sacchi
+ * (GeoConvention 2025, Algorithm 1), a pointwise mask that damps the wavefield
+ * in a boundary strip after every step.
+ */
+template <typename Scalar> class BoundaryConditionBase {
+  public:
+    virtual ~BoundaryConditionBase() = default;
+
+    /*!
+     * @brief Transforms the end-of-step state fibers.
+     * @param state_fibers The new state \f$ y_{n+1} \f$ evaluated on the
+     * step's skeleton, before the cross rebuild.
+     * @param t The new time \f$ t_{n+1} \f$.
+     * @return The transformed fibers; must share `state_fibers.skeleton()`.
+     */
+    [[nodiscard]] virtual TensorFibers<Scalar>
+    apply(const TensorFibers<Scalar> &state_fibers, Scalar t) const = 0;
+};
+
+/*!
  * @brief A time-stepping scheme in the unified stage form
  * \f[ Y^{(j)} = \sum_m \alpha_{j,m} \, y_{n-m}
  *     + \gamma_j \, \Delta t^p \, F\big(Y^{(j-1)}, t_n + \theta_j \Delta
@@ -141,7 +168,10 @@ template <typename Scalar> struct Scheme {
  *    and the rhs fibers with the fiber algebra and cross-interpolates the
  *    result back into a (left-orthogonal) train; intermediate stages are
  *    re-sampled on the same skeleton to feed the next rhs evaluation.
- * 4. Rotates the history and advances the time.
+ * 4. If a boundary condition is set, it transforms the final stage's fibers
+ *    (the new state \f$ y_{n+1} \f$) right before the cross rebuild — the
+ *    cheapest possible spot, no extra sampling or rebuild.
+ * 5. Rotates the history and advances the time.
  *
  * Rank adaptation: within a step every stage's ranks are capped by the
  * skeleton width, so across steps the ranks can grow by at most
@@ -165,14 +195,19 @@ template <typename Scalar> class Solver {
      * @param rtol Relative tolerance of the per-step truncation.
      * @param oversampling Extra skeleton indices per bond beyond the bond
      * rank; the per-step rank growth budget.
+     * @param boundary_condition Optional transform of the new state's fibers
+     * at the end of every step (e.g. an absorbing mask); null for none.
      */
     Solver(std::vector<TensorTrain<Scalar>> initial_history,
            std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme,
            Scalar dt, std::unique_ptr<SelectorBase<Scalar>> selector,
-           Scalar atol, Scalar rtol, Eigen::Index oversampling = 0)
+           Scalar atol, Scalar rtol, Eigen::Index oversampling = 0,
+           std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition =
+               nullptr)
         : rhs(std::move(rhs)), scheme(std::move(scheme)), dt(dt),
           selector(std::move(selector)), atol(atol), rtol(rtol),
-          oversampling(oversampling) {
+          oversampling(oversampling),
+          boundary_condition(std::move(boundary_condition)) {
         assert(this->rhs && "Solver: null rhs.");
         assert(this->selector && "Solver: null selector.");
         assert(!this->scheme.stages.empty() &&
@@ -246,6 +281,16 @@ template <typename Scalar> class Solver {
                 combo = combo + stage.history_weights[m] * hist_fibers[m];
             }
 
+            // Phase 4: the boundary condition transforms the completed step's
+            // fibers (the new state y_{n+1}), not intermediate stages, before
+            // the cross rebuild.
+            if (j + 1 == scheme.stages.size() && boundary_condition) {
+                combo = boundary_condition->apply(combo, t + dt);
+                assert(combo.skeleton() == fibers_n.skeleton() &&
+                       "Solver: the boundary condition must return fibers on "
+                       "the state's skeleton.");
+            }
+
             // Cross-interpolate the fibers back into a train
             // (left-orthogonal by construction).
             next.emplace(combo);
@@ -255,7 +300,7 @@ template <typename Scalar> class Solver {
             }
         }
 
-        // Phase 4: rotate the history and advance the time.
+        // Phase 5: rotate the history and advance the time.
         history.push_front(std::move(*next));
         while (history.size() > scheme.history) {
             history.pop_back();
@@ -281,6 +326,7 @@ template <typename Scalar> class Solver {
     Scalar atol;
     Scalar rtol;
     Eigen::Index oversampling;
+    std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition;
 };
 
 } // namespace MatSubset::Experiments

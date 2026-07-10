@@ -24,7 +24,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
                       CXX_STANDARD 20
                       OUTPUT_NAME "Tests")
 
-# The TT-cross headers live in the experiment's include/ directory.
+# The TT-cross headers live in the experiment's include/ directory; the
+# acoustic-equation rhs in its own subproject's include/.
 target_include_directories(${PROJECT_NAME} PRIVATE
                            "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 

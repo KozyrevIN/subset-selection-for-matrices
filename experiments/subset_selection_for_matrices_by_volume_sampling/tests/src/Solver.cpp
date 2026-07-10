@@ -15,6 +15,7 @@
 #include <TTCrossSolver/TensorTrain.h>
 #include <TTCrossSolver/TensorTrainCore.h>
 
+using MatSubset::Experiments::BoundaryConditionBase;
 using MatSubset::Experiments::RhsBase;
 using MatSubset::Experiments::Scheme;
 using MatSubset::Experiments::Solver;
@@ -71,6 +72,24 @@ template <typename Scalar> class ScaleRhs : public RhsBase<Scalar> {
 
   private:
     Scalar lambda;
+};
+
+// A boundary condition that scales the new state by a constant and records
+// the times it is applied at.
+template <typename Scalar> class ScaleBc : public BoundaryConditionBase<Scalar> {
+  public:
+    ScaleBc(Scalar factor, std::vector<Scalar> &log)
+        : factor(factor), log(&log) {}
+
+    [[nodiscard]] TensorFibers<Scalar>
+    apply(const TensorFibers<Scalar> &state_fibers, Scalar t) const override {
+        log->push_back(t);
+        return factor * state_fibers;
+    }
+
+  private:
+    Scalar factor;
+    std::vector<Scalar> *log;
 };
 
 // F = 0, but records every stage time it is called with.
@@ -299,5 +318,43 @@ TEST_CASE_TEMPLATE("Solver passes the stage times to the rhs", Scalar, float,
 
     // A zero rhs leaves the state unchanged.
     CHECK((solver.getState().toDense() - dense0).norm() <
+          Scalar(100) * checkTol<Scalar>() * dense0.norm());
+}
+
+TEST_CASE_TEMPLATE(
+    "Solver applies the boundary condition once per step at the new time",
+    Scalar, float, double) {
+    const Scalar dt = Scalar(0.25);
+    const int n_steps = 3;
+
+    std::vector<Scalar> bc_times;
+    auto y0 = makeTrain<Scalar>(3, 4, 2, 2, 2);
+    Eigen::MatrixX<Scalar> dense0 = y0.toDense();
+
+    std::vector<TensorTrain<Scalar>> init;
+    init.push_back(std::move(y0));
+    // Zero rhs + halving boundary condition: y_n = y_0 / 2^n exactly. The
+    // two-stage scheme checks the hook fires on the final stage only.
+    Solver<Scalar> solver(
+        std::move(init), std::make_unique<ScaleRhs<Scalar>>(Scalar(0)),
+        Scheme<Scalar>::lowStorageRK({Scalar(0.5), Scalar(1)}), dt,
+        makeSelector<Scalar>(), Scalar(0), checkTol<Scalar>(),
+        /*oversampling=*/0,
+        std::make_unique<ScaleBc<Scalar>>(Scalar(0.5), bc_times));
+
+    Scalar factor = Scalar(1);
+    for (int n = 0; n < n_steps; ++n) {
+        solver.step();
+        factor *= Scalar(0.5);
+    }
+
+    // Once per step (not per stage), at the new time t_{n+1}.
+    REQUIRE(bc_times.size() == static_cast<std::size_t>(n_steps));
+    for (int n = 0; n < n_steps; ++n) {
+        CHECK(static_cast<double>(bc_times[static_cast<std::size_t>(n)]) ==
+              doctest::Approx((n + 1) * static_cast<double>(dt)));
+    }
+
+    CHECK((solver.getState().toDense() - factor * dense0).norm() <
           Scalar(100) * checkTol<Scalar>() * dense0.norm());
 }
