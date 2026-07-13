@@ -54,7 +54,7 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
 
         // LQ decomposition
         Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
-        Eien::MatrixX<Scalar> V =
+        Eigen::MatrixX<Scalar> V =
             (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
                 .transpose();
 
