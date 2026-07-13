@@ -41,6 +41,27 @@ template <typename Scalar> class RhsBase {
     [[nodiscard]] virtual TensorFibers<Scalar>
     evaluate(const TensorTrain<Scalar> &state,
              const TensorFibers<Scalar> &state_fibers, Scalar t) const = 0;
+
+    /*!
+     * @brief Evaluates \f$ F(y, t) \f$ exactly, as a train, using full TT
+     * arithmetic — no skeleton, no sampling.
+     * @param state The stage state.
+     * @param t The stage time.
+     * @return The rhs train (ranks may be much larger than the state's; the
+     * caller truncates).
+     *
+     * Only required when the solver runs warm-up steps; the default asserts.
+     * Warm-up exists because the fiber path bootstraps its skeleton from the
+     * current state: a structureless initial state (zero, or symmetric noise)
+     * gives the selector nothing to work with, so the first steps are taken
+     * in exact TT arithmetic until the state carries real structure.
+     */
+    [[nodiscard]] virtual TensorTrain<Scalar>
+    evaluateTrain(const TensorTrain<Scalar> &state, Scalar /*t*/) const {
+        assert(false && "RhsBase::evaluateTrain: not implemented by this rhs; "
+                        "required for warm-up steps.");
+        return state;
+    }
 };
 
 /*!
@@ -68,6 +89,20 @@ template <typename Scalar> class BoundaryConditionBase {
      */
     [[nodiscard]] virtual TensorFibers<Scalar>
     apply(const TensorFibers<Scalar> &state_fibers, Scalar t) const = 0;
+
+    /*!
+     * @brief Transforms the end-of-step state exactly, as a train (the
+     * warm-up counterpart of `apply`; see `RhsBase::evaluateTrain`).
+     *
+     * Only required when the solver runs warm-up steps; the default asserts.
+     */
+    [[nodiscard]] virtual TensorTrain<Scalar>
+    applyTrain(const TensorTrain<Scalar> &state, Scalar /*t*/) const {
+        assert(false &&
+               "BoundaryConditionBase::applyTrain: not implemented by this "
+               "boundary condition; required for warm-up steps.");
+        return state;
+    }
 };
 
 /*!
@@ -207,19 +242,29 @@ template <typename Scalar> class Solver {
      * exactly the bond rank, freezing the rank profile.
      * @param boundary_condition Optional transform of the new state's fibers
      * at the end of every step (e.g. an absorbing mask); null for none.
+     * @param warmup_steps Number of leading steps taken in exact TT
+     * arithmetic (`RhsBase::evaluateTrain`, train addition/scaling, then
+     * `compress`) instead of fiber sampling. The fiber path bootstraps its
+     * skeleton from the current state, so a structureless initial state
+     * (e.g. a wavefield at rest) gives the selector nothing to work with —
+     * warm up until the state carries enough structure to select on.
      */
     Solver(std::vector<TensorTrain<Scalar>> initial_history,
            std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme,
            Scalar dt, std::unique_ptr<SelectorBase<Scalar>> selector,
            Scalar atol, Scalar rtol,
-           std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
-               num_samples = nullptr,
+           std::function<Eigen::Index(Eigen::Index, Eigen::Index)> num_samples =
+               nullptr,
            std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition =
-               nullptr)
+               nullptr,
+           int warmup_steps = 0)
         : rhs(std::move(rhs)), scheme(std::move(scheme)), dt(dt),
           selector(std::move(selector)), atol(atol), rtol(rtol),
           num_samples(std::move(num_samples)),
-          boundary_condition(std::move(boundary_condition)) {
+          boundary_condition(std::move(boundary_condition)),
+          warmup_remaining(warmup_steps) {
+        assert(warmup_steps >= 0 &&
+               "Solver: warmup_steps must be non-negative.");
         assert(this->rhs && "Solver: null rhs.");
         assert(this->selector && "Solver: null selector.");
         assert(!this->scheme.stages.empty() &&
@@ -251,6 +296,11 @@ template <typename Scalar> class Solver {
 
     /*! @brief Advances the state by one time step. */
     void step() {
+        if (warmup_remaining > 0) {
+            --warmup_remaining;
+            warmupStep();
+            return;
+        }
         // Phase 1: refresh the skeleton on y_n. Mutating: truncates at
         // (atol, rtol) and re-orthogonalizes; the returned fibers evaluate
         // the truncated train exactly. The skeleton is fixed for the whole
@@ -331,6 +381,51 @@ template <typename Scalar> class Solver {
     [[nodiscard]] Scalar time() const { return t; }
 
   private:
+    /*!
+     * @brief One step in exact TT arithmetic: the same stage recursion as the
+     * fiber path, with trains instead of fibers and `compress` instead of
+     * the cross rebuild. Exact up to the (`atol`, `rtol`) truncation,
+     * whatever the state looks like — at the cost of full TT arithmetic on
+     * the (rank-inflated) stage combos.
+     */
+    void warmupStep() {
+        const Scalar dtp = (scheme.time_order == 2) ? dt * dt : dt;
+
+        const TensorTrain<Scalar> *stage_state = &history.front();
+        std::optional<TensorTrain<Scalar>> next;
+        for (std::size_t j = 0; j < scheme.stages.size(); ++j) {
+            const auto &stage = scheme.stages[j];
+
+            TensorTrain<Scalar> combo =
+                (stage.rhs_weight * dtp) *
+                rhs->evaluateTrain(*stage_state,
+                                   t + stage.rhs_time_offset * dt);
+            for (std::size_t m = 0; m < stage.history_weights.size(); ++m) {
+                // Zero weights are skipped: they contribute nothing but
+                // would still inflate the un-truncated combo's ranks.
+                if (stage.history_weights[m] != Scalar(0)) {
+                    combo = combo + stage.history_weights[m] * history[m];
+                }
+            }
+
+            if (j + 1 == scheme.stages.size() && boundary_condition) {
+                combo = boundary_condition->applyTrain(combo, t + dt);
+            }
+
+            // Restore minimal ranks; leaves the train left-orthogonal, as
+            // the fiber path's selectIndices requires once warm-up ends.
+            combo.compress(atol, rtol);
+            next.emplace(std::move(combo));
+            stage_state = &*next;
+        }
+
+        history.push_front(std::move(*next));
+        while (history.size() > scheme.history) {
+            history.pop_back();
+        }
+        t += dt;
+    }
+
     std::deque<TensorTrain<Scalar>> history; // history[0] = y_n.
     std::unique_ptr<RhsBase<Scalar>> rhs;
     Scheme<Scalar> scheme;
@@ -341,6 +436,7 @@ template <typename Scalar> class Solver {
     Scalar rtol;
     std::function<Eigen::Index(Eigen::Index, Eigen::Index)> num_samples;
     std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition;
+    int warmup_remaining;
 };
 
 } // namespace MatSubset::Experiments

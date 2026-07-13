@@ -104,16 +104,42 @@ template <typename Scalar> class TensorTrain {
     }
 
     /*!
+     * @brief Replaces core `k`.
+     * @param k The core index, in `[0, order())`.
+     * @param core The replacement core; its ranks must match the neighbours
+     * (`core.leftRank() == cores[k-1].rightRank()` and
+     * `core.rightRank() == cores[k+1].leftRank()`), and the boundary ranks must
+     * stay 1.
+     *
+     * For testing and experimentation: lets a caller swap in a modified core
+     * (e.g. one rebuilt by an accelerated routine) without rebuilding the
+     * train.
+     */
+    void setCore(std::size_t k, TensorTrainCore<Scalar> core) {
+        assert(k < cores.size() && "setCore: core index out of range.");
+        assert((k > 0 ? core.leftRank() == cores[k - 1].rightRank()
+                      : core.leftRank() == 1) &&
+               "setCore: left rank must match the left neighbour (1 at the "
+               "left boundary).");
+        assert((k + 1 < cores.size()
+                    ? core.rightRank() == cores[k + 1].leftRank()
+                    : core.rightRank() == 1) &&
+               "setCore: right rank must match the right neighbour (1 at the "
+               "right boundary).");
+        cores[k] = std::move(core);
+    }
+
+    /*!
      * @brief Evaluates the train at a single multi-index \f$ (i_1, \dots, i_d)
      * \f$.
-     * @param index The mode value for each core, in order; its length must equal
-     * the tensor order and each entry must be in range for its core.
+     * @param index The mode value for each core, in order; its length must
+     * equal the tensor order and each entry must be in range for its core.
      * @return The scalar tensor entry
      * \f$ G_1(i_1) \, G_2(i_2) \cdots G_d(i_d) \f$.
      *
      * Fixing every mode reduces each core to its `modeSlice`, a
-     * \f$ r_{k-1} \times r_k \f$ matrix; their product is the \f$ 1 \times 1 \f$
-     * entry. Cheap per call, but forms no dense tensor.
+     * \f$ r_{k-1} \times r_k \f$ matrix; their product is the \f$ 1 \times 1
+     * \f$ entry. Cheap per call, but forms no dense tensor.
      */
     [[nodiscard]] Scalar
     operator()(const std::vector<Eigen::Index> &index) const {
@@ -623,6 +649,105 @@ template <typename Scalar> class TensorTrain {
         return result;
     }
 };
+
+/*!
+ * @brief Sum of two trains by block core concatenation, without truncation.
+ *
+ * The classic construction: the first cores concatenate horizontally
+ * \f$ [A_1(i) \; B_1(i)] \f$, middle cores block-diagonally, the last cores
+ * vertically, so every bond rank is the sum of the operands' ranks. Compress
+ * afterwards to restore minimal ranks.
+ */
+template <typename Scalar>
+TensorTrain<Scalar> operator+(const TensorTrain<Scalar> &a,
+                              const TensorTrain<Scalar> &b) {
+    const std::size_t d = a.order();
+    assert(b.order() == d && "TensorTrain operator+: orders must match.");
+    assert(a.modeSizes() == b.modeSizes() &&
+           "TensorTrain operator+: mode sizes must match.");
+
+    std::vector<TensorTrainCore<Scalar>> cores;
+    cores.reserve(d);
+    for (std::size_t k = 0; k < d; ++k) {
+        const TensorTrainCore<Scalar> &A = a.core(k);
+        const TensorTrainCore<Scalar> &B = b.core(k);
+        const Eigen::Index n = A.modeSize();
+        // Boundary bonds stay rank 1; interior bonds concatenate.
+        const Eigen::Index r0 = (k == 0) ? 1 : A.leftRank() + B.leftRank();
+        const Eigen::Index r1 =
+            (k + 1 == d) ? 1 : A.rightRank() + B.rightRank();
+
+        TensorTrainCore<Scalar> core(r0, n, r1);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            // A occupies the top-left block, B the bottom-right; at the
+            // boundaries the singleton bond dimension is shared (`+=` adds
+            // the overlapping contributions there, e.g. for d = 1).
+            Eigen::MatrixX<Scalar> slice = Eigen::MatrixX<Scalar>::Zero(r0, r1);
+            const Eigen::Index b_row = (k == 0) ? 0 : A.leftRank();
+            const Eigen::Index b_col = (k + 1 == d) ? 0 : A.rightRank();
+            slice.block(0, 0, A.leftRank(), A.rightRank()) = A.modeSlice(i);
+            slice.block(b_row, b_col, B.leftRank(), B.rightRank()) +=
+                B.modeSlice(i);
+            core.setModeSlice(i, slice);
+        }
+        cores.push_back(std::move(core));
+    }
+    return TensorTrain<Scalar>(std::move(cores));
+}
+
+/*! @brief Scales a train by a constant (folded into the first core). */
+template <typename Scalar>
+TensorTrain<Scalar> operator*(Scalar factor, const TensorTrain<Scalar> &a) {
+    std::vector<TensorTrainCore<Scalar>> cores;
+    cores.reserve(a.order());
+    for (std::size_t k = 0; k < a.order(); ++k) {
+        cores.push_back(a.core(k));
+    }
+    cores.front().setLeftUnfolding(factor * cores.front().leftUnfolding());
+    return TensorTrain<Scalar>(std::move(cores));
+}
+
+/*!
+ * @brief Entry-wise (Hadamard) product of two trains, without truncation.
+ *
+ * Core slices multiply as Kronecker products,
+ * \f$ C_k(i) = A_k(i) \otimes B_k(i) \f$, so every bond rank is the product
+ * of the operands' ranks. Compress afterwards; a rank-1 factor leaves ranks
+ * unchanged.
+ */
+template <typename Scalar>
+TensorTrain<Scalar> hadamardProduct(const TensorTrain<Scalar> &a,
+                                    const TensorTrain<Scalar> &b) {
+    const std::size_t d = a.order();
+    assert(b.order() == d && "hadamardProduct: orders must match.");
+    assert(a.modeSizes() == b.modeSizes() &&
+           "hadamardProduct: mode sizes must match.");
+
+    std::vector<TensorTrainCore<Scalar>> cores;
+    cores.reserve(d);
+    for (std::size_t k = 0; k < d; ++k) {
+        const TensorTrainCore<Scalar> &A = a.core(k);
+        const TensorTrainCore<Scalar> &B = b.core(k);
+        const Eigen::Index n = A.modeSize();
+        TensorTrainCore<Scalar> core(A.leftRank() * B.leftRank(), n,
+                                     A.rightRank() * B.rightRank());
+        for (Eigen::Index i = 0; i < n; ++i) {
+            const Eigen::MatrixX<Scalar> As = A.modeSlice(i);
+            const Eigen::MatrixX<Scalar> Bs = B.modeSlice(i);
+            Eigen::MatrixX<Scalar> slice(As.rows() * Bs.rows(),
+                                         As.cols() * Bs.cols());
+            for (Eigen::Index p = 0; p < As.rows(); ++p) {
+                for (Eigen::Index q = 0; q < As.cols(); ++q) {
+                    slice.block(p * Bs.rows(), q * Bs.cols(), Bs.rows(),
+                                Bs.cols()) = As(p, q) * Bs;
+                }
+            }
+            core.setModeSlice(i, slice);
+        }
+        cores.push_back(std::move(core));
+    }
+    return TensorTrain<Scalar>(std::move(cores));
+}
 
 } // namespace MatSubset::Experiments
 

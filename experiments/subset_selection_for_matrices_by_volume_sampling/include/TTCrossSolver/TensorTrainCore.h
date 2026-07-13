@@ -105,8 +105,8 @@ template <typename Scalar> class TensorTrainCore {
      * @brief Contracts this operator core with a tensor core over a shared
      * mode ("zips" them).
      * @param tensor The tensor core \f$ B \f$, of shape
-     * \f$ s_0 \times n \times s_1 \f$; its mode size \f$ n \f$ is the operator's
-     * input size and is summed over.
+     * \f$ s_0 \times n \times s_1 \f$; its mode size \f$ n \f$ is the
+     * operator's input size and is summed over.
      * @param out_size The operator's output mode size \f$ m \f$.
      * @param in_size The operator's input mode size \f$ n \f$; must equal
      * `tensor.modeSize()`. `out_size * in_size` must equal this core's mode
@@ -121,9 +121,9 @@ template <typename Scalar> class TensorTrainCore {
      * This is the per-core step of a TT operator applied to a TT tensor: the
      * bond ranks multiply and the shared physical mode is contracted.
      */
-    [[nodiscard]] TensorTrainCore
-    zip(const TensorTrainCore &tensor, Eigen::Index out_size,
-        Eigen::Index in_size) const {
+    [[nodiscard]] TensorTrainCore zip(const TensorTrainCore &tensor,
+                                      Eigen::Index out_size,
+                                      Eigen::Index in_size) const {
         assert(out_size * in_size == mode &&
                "zip: out_size * in_size must equal the operator mode size.");
         assert(in_size == tensor.mode &&
@@ -141,8 +141,9 @@ template <typename Scalar> class TensorTrainCore {
                 Eigen::MatrixX<Scalar>::Zero(out_r0, out_r1);
             for (Eigen::Index in = 0; in < in_size; ++in) {
                 const Eigen::MatrixX<Scalar> A =
-                    modeSlice(o * in_size + in);  // r0 x r1
-                const Eigen::MatrixX<Scalar> B = tensor.modeSlice(in); // s0 x s1
+                    modeSlice(o * in_size + in); // r0 x r1
+                const Eigen::MatrixX<Scalar> B =
+                    tensor.modeSlice(in); // s0 x s1
                 // kron(A, B): block (a, c) is A(a, c) * B, operator rank outer.
                 for (Eigen::Index a = 0; a < left_rank; ++a) {
                     for (Eigen::Index c = 0; c < right_rank; ++c) {

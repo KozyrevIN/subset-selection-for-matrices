@@ -15,7 +15,7 @@
 
 #include <Eigen/Core>
 
-#include <MatSubset/ForwardIterativeVolumeSamplingSelector.h>
+#include <MatSubset/FrobeniusSelectionSelector.h>
 
 #include <AcousticEquation/AcousticRhs.h>
 #include <TTCrossSolver/SnapshotSaver.h>
@@ -72,13 +72,20 @@ int main(int argc, char **argv) {
     // rank near 4, which cannot represent a spherical wavefront (O(1) error,
     // axis-aligned lobes).
     const Scalar rtol = (argc > 3) ? std::atof(argv[3]) : Scalar(1e-6);
-    const Scalar width_factor = (argc > 4) ? std::atof(argv[4]) : Scalar(1.2);
-    const Eigen::Index oversampling = (argc > 5) ? std::atoi(argv[5]) : 4;
+    const Scalar width_factor = (argc > 4) ? std::atof(argv[4]) : Scalar(1.5);
+    const Eigen::Index oversampling = (argc > 5) ? std::atoi(argv[5]) : 5;
+    // Adaptive slack on top of the base policy: when a step consumes its full
+    // width budget at some bond (rebuilt rank == prescribed width), the
+    // rebuild was a lossy projection - truncation never got to act - so the
+    // slack doubles; after a calm stretch it halves back. `slack` is shared
+    // mutable state between this policy lambda and the controller in the
+    // stepping loop below.
+    auto slack = std::make_shared<Eigen::Index>(oversampling);
     const auto num_samples = [width_factor,
-                              oversampling](Eigen::Index rank, Eigen::Index) {
+                              slack](Eigen::Index rank, Eigen::Index) {
         return static_cast<Eigen::Index>(
                    std::ceil(width_factor * static_cast<Scalar>(rank))) +
-               oversampling;
+               *slack;
     };
     const Scalar extent = Scalar(2000);                   // m
     const Scalar h = extent / static_cast<Scalar>(n - 1); // m
@@ -133,7 +140,7 @@ int main(int argc, char **argv) {
     // 1/2 of it.
     const Scalar dt = Scalar(0.5) * h / (c_bottom * std::sqrt(Scalar(3)));
     const int n_steps = static_cast<int>(std::ceil(t_end / dt));
-    const int save_every = std::max(1, n_steps / 60);
+    const int save_every = 100; //std::max(1, n_steps / 60);
 
     std::cout << "grid " << n << "^3, h = " << h << " m, dt = " << dt << " s, "
               << n_steps << " steps to t = " << t_end << " s\n"
@@ -148,9 +155,10 @@ int main(int argc, char **argv) {
     auto boundary = std::make_unique<MaskBoundaryCondition<Scalar>>(
         makeCerjanMask<Scalar>(sizes, sponge_width, Scalar(0.03)));
 
-    // The wavefield starts at rest: p_{-1} = p_0 = 0 as rank-1 zero trains.
-    // The first skeleton is then arbitrary, but its fibers are exactly zero,
-    // so step 1 reduces to the source deposit alone.
+    // The wavefield starts at rest as exact zero trains - no ambient seed
+    // state. The first steps run in exact TT arithmetic (warm-up below), so
+    // no skeleton is ever selected from a structureless state; the fiber
+    // path takes over once the field carries real structure.
     const auto rest_state = [&]() {
         return makeRank1(Eigen::VectorX<Scalar>::Zero(n),
                          Eigen::VectorX<Scalar>::Zero(n),
@@ -160,43 +168,67 @@ int main(int argc, char **argv) {
     initial_history.push_back(rest_state()); // p_{-1}
     initial_history.push_back(rest_state()); // p_0
 
-    auto selector = std::make_unique<
-        MatSubset::ForwardIterativeVolumeSamplingSelector<Scalar>>();
+    // Deterministic greedy selection. FrobeniusSelectionSelector picks columns
+    // that minimize the pseudo-inverse Frobenius norm via rank-1 updates:
+    // O(n r^3) per bond against DerandomizedVolumeSelector's O(n r^4), an
+    // r-fold win that dominates the step at the ranks this solve reaches
+    // (~5x at rank 90).
+    auto selector =
+        std::make_unique<MatSubset::FrobeniusSelectionSelector<Scalar>>();
     const Scalar atol = Scalar(0);
 
+    // Warm-up: exact TT steps (rank-inflated combos + compress) until the
+    // wavefield has structure worth selecting a skeleton from.
+    const int warmup_steps = (argc > 6) ? std::atoi(argv[6]) : 10;
     Solver<Scalar> solver(std::move(initial_history), std::move(rhs),
                           Scheme<Scalar>::leapfrogSecondOrder(), dt,
                           std::move(selector), atol, rtol, num_samples,
-                          std::move(boundary));
+                          std::move(boundary), warmup_steps);
 
     std::vector<
         std::unique_ptr<MatSubset::Experiments::FieldMapperBase<Scalar>>>
         fields;
     fields.push_back(std::make_unique<IdentityFieldMapper<Scalar>>("pressure"));
     SnapshotSaver<Scalar> saver(
-        grid, std::move(fields), "snapshots", "wavefield",
+        grid, std::move(fields), "tmp/snapshots", "wavefield",
         MatSubset::Experiments::StoragePrecision::Float);
 
     saver.save(solver.getState(), solver.time());
+    std::vector<Eigen::Index> prev_ranks = solver.getState().ranks();
+    int calm_steps = 0;
     for (int step = 1; step <= n_steps; ++step) {
         solver.step();
+
+        // Slack controller: a bond whose rebuilt rank reaches the width its
+        // pre-step rank prescribed consumed the whole budget - the rebuild
+        // was lossy there. Double the slack at once; halve it (never below
+        // the base oversampling) after 25 calm steps.
+        const std::vector<Eigen::Index> new_ranks = solver.getState().ranks();
+        bool bound = false;
+        for (std::size_t b = 0; b < new_ranks.size(); ++b) {
+            if (new_ranks[b] >= num_samples(prev_ranks[b], n)) {
+                bound = true;
+            }
+        }
+        prev_ranks = new_ranks;
+        if (bound) {
+            *slack *= 2;
+            calm_steps = 0;
+            std::cout << "step " << step << ": width budget consumed, slack -> "
+                      << *slack << '\n';
+        } else if (++calm_steps >= 25 && *slack > oversampling) {
+            *slack = std::max(oversampling, *slack / 2);
+            calm_steps = 0;
+        }
+
         if (step % save_every == 0 || step == n_steps) {
             const std::string path =
                 saver.save(solver.getState(), solver.time());
             std::cout << "step " << step << " / " << n_steps
                       << ", t = " << solver.time()
                       << " s, max rank = " << maxRank(solver.getState())
-                      << ", wrote " << path << '\n';
+                      << ", slack = " << *slack << ", wrote " << path << '\n';
         }
-    }
-
-    // Raw dump of the final field (Fortran/first-mode-fastest order) for
-    // numerical comparison against a dense reference solve.
-    {
-        const Eigen::VectorXd dense = solver.getState().toDense();
-        std::ofstream out("snapshots/final_field.bin", std::ios::binary);
-        out.write(reinterpret_cast<const char *>(dense.data()),
-                  static_cast<std::streamsize>(sizeof(double)) * dense.size());
     }
 
     return 0;

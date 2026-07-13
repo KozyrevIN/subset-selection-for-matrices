@@ -358,3 +358,57 @@ TEST_CASE_TEMPLATE(
     CHECK((solver.getState().toDense() - factor * dense0).norm() <
           Scalar(100) * checkTol<Scalar>() * dense0.norm());
 }
+
+namespace {
+
+// F(y, t) = lambda * y with the exact-train path implemented too, for
+// exercising warm-up steps.
+template <typename Scalar> class ScaleRhsWithTrain : public ScaleRhs<Scalar> {
+  public:
+    ScaleRhsWithTrain(Scalar lambda) : ScaleRhs<Scalar>(lambda), l(lambda) {}
+
+    [[nodiscard]] TensorTrain<Scalar>
+    evaluateTrain(const TensorTrain<Scalar> &state, Scalar) const override {
+        return l * state;
+    }
+
+  private:
+    Scalar l;
+};
+
+} // namespace
+
+TEST_CASE_TEMPLATE("Solver warm-up steps match the discrete recurrence and "
+                   "hand off to the fiber path",
+                   Scalar, float, double) {
+    // Same setup as the leapfrog test: y' = lambda * y, y_n = a_n * y_0
+    // exactly, with the first 4 of 10 steps taken in exact TT arithmetic.
+    const Scalar lambda = Scalar(-0.3);
+    const Scalar dt = Scalar(0.05);
+    const int n_steps = 10;
+
+    auto y0 = makeTrain<Scalar>(3, 4, 2, 2, 2);
+    Eigen::MatrixX<Scalar> dense0 = y0.toDense();
+
+    std::vector<TensorTrain<Scalar>> init;
+    init.push_back(makeTrain<Scalar>(3, 4, 2, 2, 2));
+    init.push_back(std::move(y0));
+    Solver<Scalar> solver(std::move(init),
+                          std::make_unique<ScaleRhsWithTrain<Scalar>>(lambda),
+                          Scheme<Scalar>::leapfrog(), dt, makeSelector<Scalar>(),
+                          Scalar(0), checkTol<Scalar>(),
+                          /*num_samples=*/nullptr, /*boundary=*/nullptr,
+                          /*warmup_steps=*/4);
+
+    Scalar a_prev = Scalar(1);
+    Scalar a = Scalar(1);
+    for (int n = 0; n < n_steps; ++n) {
+        solver.step();
+        const Scalar a_next = a_prev + Scalar(2) * dt * lambda * a;
+        a_prev = a;
+        a = a_next;
+    }
+
+    CHECK((solver.getState().toDense() - a * dense0).norm() <
+          Scalar(100) * checkTol<Scalar>() * dense0.norm());
+}

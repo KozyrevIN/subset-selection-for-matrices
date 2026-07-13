@@ -601,3 +601,45 @@ TEST_CASE_TEMPLATE(
         CHECK(r <= 3);
     }
 }
+
+TEST_CASE_TEMPLATE("TensorTrain operator+, scalar multiply and "
+                   "hadamardProduct match dense arithmetic",
+                   Scalar, float, double) {
+    auto a = makeTrain<Scalar>(3, 4, 2, 2, 2);
+    std::vector<TensorTrainCore<Scalar>> b_cores;
+    b_cores.emplace_back(makeUnfolding<Scalar>(1, 3, 3, 7), 3);
+    b_cores.emplace_back(makeUnfolding<Scalar>(3, 4, 2, 8), 4);
+    b_cores.emplace_back(makeUnfolding<Scalar>(2, 2, 1, 9), 2);
+    TensorTrain<Scalar> b(std::move(b_cores));
+
+    Eigen::MatrixX<Scalar> da = a.toDense();
+    Eigen::MatrixX<Scalar> db = b.toDense();
+    const Scalar tol = checkTol<Scalar>();
+
+    // Sum: bond ranks add, entries add.
+    TensorTrain<Scalar> sum = a + b;
+    CHECK(sum.ranks() == std::vector<Eigen::Index>{1, 5, 4, 1});
+    CHECK((sum.toDense() - (da + db)).norm() <
+          Scalar(100) * tol * (da + db).norm());
+
+    // Scalar multiply.
+    TensorTrain<Scalar> scaled = Scalar(-2.5) * a;
+    CHECK((scaled.toDense() + Scalar(2.5) * da).norm() <
+          Scalar(100) * tol * da.norm());
+
+    // Hadamard: bond ranks multiply, entries multiply.
+    TensorTrain<Scalar> had = hadamardProduct(a, b);
+    CHECK(had.ranks() == std::vector<Eigen::Index>{1, 6, 4, 1});
+    Eigen::MatrixX<Scalar> expected = da.cwiseProduct(db);
+    CHECK((had.toDense() - expected).norm() <
+          Scalar(100) * tol * expected.norm());
+
+    // Single-core trains: the boundary blocks share the singleton bond.
+    std::vector<TensorTrainCore<Scalar>> ca, cb;
+    ca.emplace_back(makeUnfolding<Scalar>(1, 5, 1, 3), 5);
+    cb.emplace_back(makeUnfolding<Scalar>(1, 5, 1, 4), 5);
+    TensorTrain<Scalar> a1(std::move(ca)), b1(std::move(cb));
+    CHECK((TensorTrain<Scalar>(a1 + b1).toDense() -
+           (a1.toDense() + b1.toDense()))
+              .norm() < Scalar(100) * tol * a1.toDense().norm());
+}

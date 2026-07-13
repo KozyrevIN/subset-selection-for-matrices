@@ -160,7 +160,8 @@ template <typename Scalar> class AcousticRhs : public RhsBase<Scalar> {
                 std::vector<Eigen::Index> sizes, std::vector<Scalar> spacings)
         : speed(std::move(speed)), source_spatial(std::move(source_spatial)),
           source_time(std::move(source_time)), sizes(std::move(sizes)),
-          laplacian(makeLaplacianOperator<Scalar>(this->sizes, spacings)) {
+          laplacian(makeLaplacianOperator<Scalar>(this->sizes, spacings)),
+          speed_squared(hadamardProduct(this->speed, this->speed)) {
         assert(this->source_time && "AcousticRhs: null time envelope.");
         assert(this->speed.modeSizes() == this->sizes &&
                "AcousticRhs: speed mode sizes must match the grid.");
@@ -187,12 +188,27 @@ template <typename Scalar> class AcousticRhs : public RhsBase<Scalar> {
         return hadamardProduct(hadamardProduct(c, c), forced);
     }
 
+    [[nodiscard]] TensorTrain<Scalar>
+    evaluateTrain(const TensorTrain<Scalar> &state, Scalar t) const override {
+        assert(state.modeSizes() == sizes &&
+               "AcousticRhs: state mode sizes must match the grid.");
+        // The same three ingredients in exact TT arithmetic: ranks inflate
+        // (2 * state from the operator, * rank(c^2) from the Hadamard) and
+        // the caller truncates.
+        return hadamardProduct(speed_squared,
+                               laplacian.zip(state, sizes, sizes) +
+                                   source_time(t) * source_spatial);
+    }
+
   private:
     TensorTrain<Scalar> speed;
     TensorTrain<Scalar> source_spatial;
     std::function<Scalar(Scalar)> source_time;
     std::vector<Eigen::Index> sizes;
     TensorTrain<Scalar> laplacian;
+    // c^2 as a train, cached for evaluateTrain (rank(c)^2 in general, rank 1
+    // for a layered medium).
+    TensorTrain<Scalar> speed_squared;
 };
 
 /*!
@@ -218,6 +234,11 @@ class MaskBoundaryCondition : public BoundaryConditionBase<Scalar> {
     apply(const TensorFibers<Scalar> &state_fibers, Scalar) const override {
         return hadamardProduct(mask.atFibers(state_fibers.skeleton()),
                                state_fibers);
+    }
+
+    [[nodiscard]] TensorTrain<Scalar>
+    applyTrain(const TensorTrain<Scalar> &state, Scalar) const override {
+        return hadamardProduct(mask, state);
     }
 
   private:
