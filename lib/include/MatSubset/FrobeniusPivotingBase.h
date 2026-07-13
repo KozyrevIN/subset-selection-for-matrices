@@ -1,7 +1,8 @@
 #ifndef MAT_SUBSET_FROBENIUS_PIVOTING_BASE_H
 #define MAT_SUBSET_FROBENIUS_PIVOTING_BASE_H
 
-#include <cmath> // For std::copysign
+#include <cmath>   // For std::copysign
+#include <utility> // For std::move
 
 #include "SelectorBase.h" // Base class
 
@@ -35,13 +36,24 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
      * to form a well-conditioned submatrix in its first m columns.
      * @param V The input matrix (dimensions \f$ m \times n \f$). This matrix is
      * expected to have orthonormal rows.
+     * @param Wt_out Optional output: the algorithm's bookkeeping matrix
+     * \f$ W = V_{\mathcal{S}}^{-1} V \f$, stored transposed
+     * (\f$ n \times m \f$, row `j` holds \f$ W_j = V_{\mathcal{S}}^{-1} v_j
+     * \f$), in the same permuted column order as the returned indices and the
+     * transformed `V`. Here \f$ V_{\mathcal{S}} \f$ is the leading
+     * \f$ m \times m \f$ block of the transformed `V` (upper triangular after
+     * the Householder sweep). Callers can reuse it: e.g.
+     * \f$ 1 + \lVert W_j \rVert^2 = 1 + v_j^{\top} (V_{\mathcal{S}}
+     * V_{\mathcal{S}}^{\top})^{-1} v_j \f$.
      * @return A `std::vector` of `Eigen::Index` of permuted 0-based indices.
      *
      * This method is intended to be called by derived classes as part of their
      * `selectSubsetImpl` implementation to obtain an initial highly
      * nondegenerate subset of columns.
      */
-    std::vector<Eigen::Index> selectStartingSet(Eigen::MatrixX<Scalar> &V) const {
+    std::vector<Eigen::Index>
+    selectStartingSet(Eigen::MatrixX<Scalar> &V,
+                      Eigen::MatrixX<Scalar> *Wt_out = nullptr) const {
 
         const Eigen::Index m = V.rows();
         const Eigen::Index n = V.cols();
@@ -51,31 +63,63 @@ class FrobeniusPivotingBase : public SelectorBase<Scalar> {
             indices[j] = j;
         }
 
-        Eigen::MatrixX<Scalar> W = Eigen::MatrixX<Scalar>::Zero(m, n);
+        // Work on the transpose: for wide V (n >> m) every per-iteration
+        // sweep - the two norm scans, the Householder update, the W update -
+        // touches all n candidate columns, and in the direct layout those are
+        // strided row-block passes over a column-major matrix.
+        Eigen::MatrixX<Scalar> Vt = V.transpose();
+        Eigen::MatrixX<Scalar> Wt = Eigen::MatrixX<Scalar>::Zero(n, m);
 
+        Eigen::ArrayX<Scalar> numer(n);
+        Eigen::ArrayX<Scalar> denom(n);
         for (Eigen::Index i = 0; i < m; ++i) {
-            Eigen::ArrayX<Scalar> l =
-                (static_cast<Scalar>(1) +
-                 W.topRows(i).colwise().squaredNorm().array()) /
-                V.bottomRows(m - i).colwise().squaredNorm().array();
+            // Pivot scores l_j = (1 + ||W_j||^2) / ||V_bottom_j||^2, both
+            // norms accumulated column-by-column (contiguous n-vectors).
+            numer.setOnes();
+            for (Eigen::Index c = 0; c < i; ++c) {
+                numer += Wt.col(c).array().square();
+            }
+            denom.setZero();
+            for (Eigen::Index c = i; c < m; ++c) {
+                denom += Vt.col(c).array().square();
+            }
+
             Eigen::Index j_min;
-            l.tail(n - i).minCoeff(&j_min);
+            (numer.tail(n - i) / denom.tail(n - i)).minCoeff(&j_min);
             j_min += i;
 
             std::swap(indices[static_cast<size_t>(i)],
                       indices[static_cast<size_t>(j_min)]);
-            V.col(i).swap(V.col(j_min));
-            W.col(i).swap(W.col(j_min));
+            Vt.row(i).swap(Vt.row(j_min));
+            Wt.row(i).swap(Wt.row(j_min));
 
-            Eigen::VectorX<Scalar> v = V.col(i).tail(m - i);
+            Eigen::VectorX<Scalar> v = Vt.row(i).tail(m - i).transpose();
             v(0) += std::copysign(v.norm(), v(0));
             v /= v.norm();
 
-            V.bottomRows(m - i) -= 2 * v * v.transpose() * V.bottomRows(m - i);
-            W.topRows(i) -= W.col(i).head(i) * V.row(i) / V(i, i);
-            W.row(i) += V.row(i) / V(i, i);
+            // Householder reflector applied from the right of Vt's trailing
+            // columns (equivalently from the left of V's bottom rows): one
+            // GEMV plus a rank-1 update.
+            Eigen::VectorX<Scalar> y = Vt.rightCols(m - i) * v;
+            Vt.rightCols(m - i).noalias() -=
+                Scalar(2) * y * v.transpose();
+
+            // W bookkeeping, transposed: columns of W are rows of Wt. The
+            // pivot's W-row must be copied out first - the rank-1 update
+            // rewrites it (to zero, as in the direct layout).
+            const Eigen::VectorX<Scalar> alpha = Vt.col(i) / Vt(i, i);
+            if (i > 0) {
+                const Eigen::VectorX<Scalar> w =
+                    Wt.row(i).head(i).transpose();
+                Wt.leftCols(i).noalias() -= alpha * w.transpose();
+            }
+            Wt.col(i) = alpha;
         }
 
+        V = Vt.transpose();
+        if (Wt_out) {
+            *Wt_out = std::move(Wt);
+        }
         return indices;
     }
 };

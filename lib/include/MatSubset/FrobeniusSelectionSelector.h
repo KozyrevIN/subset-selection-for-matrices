@@ -1,7 +1,7 @@
 #ifndef MAT_SUBSET_FROBENIUS_SELECTION_SELECTOR_H
 #define MAT_SUBSET_FROBENIUS_SELECTION_SELECTOR_H
 
-#include <Eigen/SVD> // For Eigen::BDCSVD
+#include <Eigen/QR> // For Eigen::HouseholderQR
 
 #include "FrobeniusPivotingBase.h" // Base class
 
@@ -45,18 +45,22 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
      * @return A `std::vector` of `Eigen::Index` containing the 0-based indices
      * of the selected columns.
      */
-    std::vector<Eigen::Index> selectSubsetImpl(const Eigen::MatrixX<Scalar> &X,
-                                               Eigen::Index k,
-                                               Eigen::Index *swap_count) override {
+    std::vector<Eigen::Index>
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
+                     Eigen::Index *swap_count) override {
 
         const Eigen::Index m = X.rows();
         const Eigen::Index n = X.cols();
 
-        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X, Eigen::ComputeThinV);
-        Eigen::MatrixX<Scalar> V = svd.matrixV().transpose();
+        // LQ decomposition
+        Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
+        Eien::MatrixX<Scalar> V =
+            (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
+                .transpose();
 
+        Eigen::MatrixX<Scalar> Wt; // W = V_S^{-1} V, transposed (n x m)
         std::vector<Eigen::Index> indices =
-            FrobeniusPivotingBase<Scalar>::selectStartingSet(V);
+            FrobeniusPivotingBase<Scalar>::selectStartingSet(V, &Wt);
 
         if (k == m) {
             indices.resize(k);
@@ -70,36 +74,77 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
                                                     indices.end());
 
         Eigen::MatrixX<Scalar> V_remaining = V.rightCols(n - m);
-        Eigen::MatrixX<Scalar> M =
-            (V.leftCols(m) * V.leftCols(m).transpose()).inverse();
-        Eigen::ArrayX<Scalar> l =
-            (V_remaining.transpose() * (M * M) * V_remaining).diagonal();
-        Eigen::ArrayX<Scalar> d =
-            static_cast<Scalar>(1) +
-            (V_remaining.transpose() * M * V_remaining).diagonal().array();
 
+        // The starting set hands back W = V_S^{-1} V with V_S = V.leftCols(m),
+        // upper triangular after its Householder sweep. Since
+        // M = (V_S V_S^T)^{-1} = B^T B with B = V_S^{-1}, the greedy scores
+        // initialize directly from W:
+        //   d_j = 1 + v_j^T M v_j = 1 + ||W_j||^2,
+        //   l_j = ||M v_j||^2 = ||B^T W_j||^2.
+        // The triangular inverse is also better conditioned than inverting
+        // the Gram matrix V_S V_S^T, which squares the condition number.
+        Eigen::MatrixX<Scalar> B =
+            V.leftCols(m).template triangularView<Eigen::Upper>().solve(
+                Eigen::MatrixX<Scalar>::Identity(m, m));
+        Eigen::MatrixX<Scalar> M(m, m);
+        M.noalias() = B.transpose() * B;
+
+        // Row j of Wt.bottomRows(n - m) is W_j of remaining column j; row
+        // norms are accumulated column-by-column (contiguous slices).
+        Eigen::ArrayX<Scalar> d = Eigen::ArrayX<Scalar>::Ones(n - m);
+        for (Eigen::Index c = 0; c < m; ++c) {
+            d += Wt.col(c).tail(n - m).array().square();
+        }
+        // Row j of Tt is (B^T W_j)^T.
+        Eigen::MatrixX<Scalar> Tt(n - m, m);
+        Tt.noalias() = Wt.bottomRows(n - m) * B;
+        Eigen::ArrayX<Scalar> l = Eigen::ArrayX<Scalar>::Zero(n - m);
+        for (Eigen::Index c = 0; c < m; ++c) {
+            l += Tt.col(c).array().square();
+        }
+
+        // The pool shrinks by swap-with-last; `r` is the active width and the
+        // matrices keep their allocation. The projection buffers are
+        // preallocated at the full width and used through .head(r).
+        Eigen::Index r = n - m;
+        Eigen::VectorX<Scalar> vec_1(m);
+        Eigen::VectorX<Scalar> vec_2(m);
+        Eigen::ArrayX<Scalar> mul_1(r);
+        Eigen::ArrayX<Scalar> mul_2(r);
         for (Eigen::Index i = m; i < k; ++i) {
-            Eigen::ArrayX<Scalar> scores = l / d;
             Eigen::Index j_max;
-            scores.maxCoeff(&j_max);
+            (l.head(r) / d.head(r)).maxCoeff(&j_max);
 
             Eigen::VectorX<Scalar> v = V_remaining.col(j_max);
             Scalar denom = d(j_max);
 
-            addColumn(selected_indices, remaining_indices, l, d, V_remaining,
-                      j_max);
+            selected_indices.push_back(
+                remaining_indices[static_cast<size_t>(j_max)]);
+            --r;
+            if (j_max < r) {
+                remaining_indices[static_cast<size_t>(j_max)] =
+                    remaining_indices[static_cast<size_t>(r)];
+                l(j_max) = l(r);
+                d(j_max) = d(r);
+                V_remaining.col(j_max) = V_remaining.col(r);
+            }
+            remaining_indices.resize(static_cast<size_t>(r));
 
-            Eigen::VectorX<Scalar> vec_1 = M * v;
-            Eigen::VectorX<Scalar> vec_2 = M * vec_1;
-            Eigen::ArrayX<Scalar> mul_1 = vec_1.transpose() * V_remaining;
-            Eigen::ArrayX<Scalar> mul_2 = vec_2.transpose() * V_remaining;
-            Scalar mul_3 = (vec_2.transpose() * v).value();
+            vec_1.noalias() = M * v;
+            vec_2.noalias() = M * vec_1;
+            Scalar mul_3 = vec_2.dot(v);
 
-            M -= vec_1 * vec_1.transpose() / denom;
+            mul_1.head(r).matrix().noalias() =
+                V_remaining.leftCols(r).transpose() * vec_1;
+            mul_2.head(r).matrix().noalias() =
+                V_remaining.leftCols(r).transpose() * vec_2;
 
-            d -= mul_1.square() / denom;
-            mul_1 /= denom;
-            l += mul_1 * (mul_1 * mul_3 - 2 * mul_2);
+            M.noalias() -= vec_1 * vec_1.transpose() / denom;
+
+            d.head(r) -= mul_1.head(r).square() / denom;
+            mul_1.head(r) /= denom;
+            l.head(r) +=
+                mul_1.head(r) * (mul_1.head(r) * mul_3 - 2 * mul_2.head(r));
         }
 
         return selected_indices;
@@ -128,45 +173,6 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
             bound_val /= static_cast<Scalar>(m);
         }
         return bound_val;
-    }
-
-  private:
-    /*!
-     * @brief Helper to move column `j_selected` from remaining set to selected
-     * set. Modifies all parameters in place by copying the last remaining
-     * element to `j_selected` and then resizing.
-     * @param selected_indices Vector of selected column indices (grows by 1).
-     * @param remaining_indices Vector of remaining column indices (shrinks by
-     * 1).
-     * @param l Array of l-scores (numerators for the selection criterion).
-     * @param d Array of d-scores (denominators for the selection criterion).
-     * @param V_remaining Matrix of remaining \f$ V \f$ columns (from SVD).
-     * @param j_selected The 0-based index *within the current remaining set* to
-     * select and move.
-     */
-    void addColumn(std::vector<Eigen::Index> &selected_indices,
-                   std::vector<Eigen::Index> &remaining_indices,
-                   Eigen::ArrayX<Scalar> &l, Eigen::ArrayX<Scalar> &d,
-                   Eigen::MatrixX<Scalar> &V_remaining,
-                   Eigen::Index j_selected) const {
-
-        selected_indices.push_back(
-            remaining_indices[static_cast<size_t>(j_selected)]);
-
-        Eigen::Index new_size =
-            static_cast<Eigen::Index>(remaining_indices.size()) - 1;
-        if (j_selected < new_size) {
-            remaining_indices[static_cast<size_t>(j_selected)] =
-                remaining_indices[static_cast<size_t>(new_size)];
-            l(j_selected) = l(new_size);
-            d(j_selected) = d(new_size);
-            V_remaining.col(j_selected) = V_remaining.col(new_size);
-        }
-
-        remaining_indices.resize(static_cast<size_t>(new_size));
-        l.conservativeResize(new_size);
-        d.conservativeResize(new_size);
-        V_remaining.conservativeResize(Eigen::NoChange, new_size);
     }
 };
 
