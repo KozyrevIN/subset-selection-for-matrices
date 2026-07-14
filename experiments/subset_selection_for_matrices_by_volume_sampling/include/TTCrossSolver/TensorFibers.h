@@ -9,6 +9,8 @@
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
+#include "TTCrossSolver/TensorFibersCore.h" // For TensorFibersCore
+
 namespace MatSubset::Experiments {
 
 /*!
@@ -72,6 +74,51 @@ class FiberIndices {
             return parent[j];
         }
 
+        /*!
+         * @brief Decodes selected columns of a right unfolding into a right
+         * level.
+         * @param indices Selected flat column indices, each folded as
+         * `mode * rho + parent` (mode slower, matching the absorbed right
+         * unfolding).
+         * @param rho The number of right fibers (columns) the parent runs over.
+         * @return The level whose node `j` prepends mode `indices[j] / rho` to
+         * parent `indices[j] % rho`.
+         */
+        [[nodiscard]] static Level
+        fromRightIndices(const std::vector<Eigen::Index> &indices,
+                         Eigen::Index rho) {
+            std::vector<Eigen::Index> modes(indices.size());
+            std::vector<Eigen::Index> parents(indices.size());
+            for (std::size_t j = 0; j < indices.size(); ++j) {
+                modes[j] = indices[j] / rho;
+                parents[j] = indices[j] % rho;
+            }
+            return Level(std::move(modes), std::move(parents));
+        }
+
+        /*!
+         * @brief Decodes selected rows of a left unfolding into a left level.
+         * @param indices Selected flat row indices, each folded as
+         * `parent + l_prev * mode` (mode slower, matching the absorbed left
+         * unfolding).
+         * @param l_prev The number of left fibers (rows) the parent runs over.
+         * @param is_root True at bond 0, whose nodes extend the empty boundary
+         * index (parent -1) rather than a previous level.
+         * @return The level whose node `j` appends mode `indices[j] / l_prev` to
+         * parent `indices[j] % l_prev` (or -1 at the root).
+         */
+        [[nodiscard]] static Level
+        fromLeftIndices(const std::vector<Eigen::Index> &indices,
+                        Eigen::Index l_prev, bool is_root) {
+            std::vector<Eigen::Index> modes(indices.size());
+            std::vector<Eigen::Index> parents(indices.size());
+            for (std::size_t j = 0; j < indices.size(); ++j) {
+                modes[j] = indices[j] / l_prev;
+                parents[j] = is_root ? -1 : indices[j] % l_prev;
+            }
+            return Level(std::move(modes), std::move(parents));
+        }
+
       private:
         std::vector<Eigen::Index> mode_idx;
         std::vector<Eigen::Index> parent;
@@ -105,6 +152,29 @@ class FiberIndices {
     [[nodiscard]] const Level &rightLevel(std::size_t k) const {
         assert(k < right.size() && "FiberIndices: right level index OOR.");
         return right[k];
+    }
+
+    /*!
+     * @brief Replaces the left level at bond `k`.
+     *
+     * For adaptive cross sweeps, which re-select the levels one bond at a
+     * time. The caller is responsible for nestedness: the new level's parents
+     * must point into the current `left[k-1]`, and any existing `left[k+1]`
+     * becomes stale until it is re-selected in turn (sweep order takes care
+     * of both).
+     */
+    void setLeftLevel(std::size_t k, Level level) {
+        assert(k < left.size() && "FiberIndices: left level index OOR.");
+        left[k] = std::move(level);
+    }
+
+    /*!
+     * @brief Replaces the right level at bond `k`; mirror of `setLeftLevel`
+     * (parents of the new level must point into the current `right[k+1]`).
+     */
+    void setRightLevel(std::size_t k, Level level) {
+        assert(k < right.size() && "FiberIndices: right level index OOR.");
+        right[k] = std::move(level);
     }
 
     /*!
@@ -142,40 +212,72 @@ class FiberIndices {
  * Slab \f$ k \f$ is the 3D tensor of entries of the sampled tensor obtained by
  * fixing the left multi-index to one of `indices->left[k-1]`, the right
  * multi-index to one of `indices->right[k]`, and letting mode \f$ i_k \f$ run
- * over \f$ 0 \dots n_k - 1 \f$. It is stored as a left unfolding of shape
- * \f$ (\ell_{k-1} \, n_k) \times \rho_k \f$, where
+ * over \f$ 0 \dots n_k - 1 \f$. It is stored as a `TensorFibersCore` whose
+ * left unfolding has shape \f$ (\ell_{k-1} \, n_k) \times \rho_k \f$, where
  * \f$ \ell_{k-1} = \text{leftFiberCount}(k) \f$ and
  * \f$ \rho_k = \text{rightFiberCount}(k) \f$. These are exactly the shapes
  * consumed by `TensorTrainCore`.
  *
  * Two `TensorFibers` sharing the same `FiberIndices` combine slab-wise via `+`
- * and the Hadamard product, provided as friend free functions.
+ * and the Hadamard product, provided as friend free functions delegating to
+ * the entry-wise `TensorFibersCore` algebra.
  */
 template <typename Scalar> class TensorFibers {
   public:
     TensorFibers() = default;
 
     /*!
-     * @brief Constructs from per-core slabs and their shared skeleton.
+     * @brief Constructs from per-core slab unfoldings and their shared
+     * skeleton.
      * @param slabs Slab `k` as a left unfolding, shape
      * `(leftFiberCount(k) * n_k) x rightFiberCount(k)`.
      * @param indices The skeleton the slabs were evaluated on.
      */
     TensorFibers(std::vector<Eigen::MatrixX<Scalar>> slabs,
                  std::shared_ptr<const FiberIndices> indices)
-        : slabs(std::move(slabs)), indices(std::move(indices)) {
+        : indices(std::move(indices)) {
         assert(this->indices && "TensorFibers: null skeleton.");
-        assert(this->slabs.size() == this->indices->order() &&
+        assert(slabs.size() == this->indices->order() &&
+               "TensorFibers: slab count must equal the tensor order.");
+        cores.reserve(slabs.size());
+        for (std::size_t k = 0; k < slabs.size(); ++k) {
+            const auto l_prev =
+                static_cast<Eigen::Index>(this->indices->leftFiberCount(k));
+            assert(slabs[k].rows() % l_prev == 0 &&
+                   "TensorFibers: slab rows must be divisible by the left "
+                   "fiber count.");
+            assert(slabs[k].cols() ==
+                       static_cast<Eigen::Index>(
+                           this->indices->rightFiberCount(k)) &&
+                   "TensorFibers: slab columns must equal the right fiber "
+                   "count.");
+            const Eigen::Index n = slabs[k].rows() / l_prev;
+            cores.emplace_back(std::move(slabs[k]), n);
+        }
+    }
+
+    /*!
+     * @brief Constructs from per-core slabs and their shared skeleton.
+     * @param cores Slab `k` as a `TensorFibersCore` of shape
+     * `leftFiberCount(k) x n_k x rightFiberCount(k)`.
+     * @param indices The skeleton the slabs were evaluated on.
+     */
+    TensorFibers(std::vector<TensorFibersCore<Scalar>> cores,
+                 std::shared_ptr<const FiberIndices> indices)
+        : cores(std::move(cores)), indices(std::move(indices)) {
+        assert(this->indices && "TensorFibers: null skeleton.");
+        assert(this->cores.size() == this->indices->order() &&
                "TensorFibers: slab count must equal the tensor order.");
     }
 
-    /*! @brief The tensor order d (number of slabs). */
-    [[nodiscard]] std::size_t order() const { return slabs.size(); }
+    /*! @brief The tensor order d (number of fiber cores). */
+    [[nodiscard]] std::size_t order() const { return cores.size(); }
 
-    /*! @brief Slab `k`, the left unfolding of core `k`'s fiber tensor. */
-    [[nodiscard]] const Eigen::MatrixX<Scalar> &slab(std::size_t k) const {
-        assert(k < slabs.size() && "TensorFibers: slab index OOR.");
-        return slabs[k];
+    /*! @brief Fiber core `k`; its left unfolding (`leftUnfolding()`) is the
+     * shape consumed by `TensorTrainCore`. */
+    [[nodiscard]] const TensorFibersCore<Scalar> &core(std::size_t k) const {
+        assert(k < cores.size() && "TensorFibers: core index OOR.");
+        return cores[k];
     }
 
     /*! @brief The shared skeleton the slabs were sampled on. */
@@ -192,10 +294,10 @@ template <typename Scalar> class TensorFibers {
     friend TensorFibers operator+(const TensorFibers &a,
                                   const TensorFibers &b) {
         assertCombinable(a, b);
-        std::vector<Eigen::MatrixX<Scalar>> out;
-        out.reserve(a.slabs.size());
-        for (std::size_t k = 0; k < a.slabs.size(); ++k) {
-            out.push_back(a.slabs[k] + b.slabs[k]);
+        std::vector<TensorFibersCore<Scalar>> out;
+        out.reserve(a.cores.size());
+        for (std::size_t k = 0; k < a.cores.size(); ++k) {
+            out.push_back(a.cores[k] + b.cores[k]);
         }
         return TensorFibers(std::move(out), a.indices);
     }
@@ -207,10 +309,10 @@ template <typename Scalar> class TensorFibers {
      * entry on the fiber set; the skeleton is shared unchanged.
      */
     friend TensorFibers operator*(Scalar scalar, const TensorFibers &a) {
-        std::vector<Eigen::MatrixX<Scalar>> out;
-        out.reserve(a.slabs.size());
-        for (const auto &slab : a.slabs) {
-            out.push_back(scalar * slab);
+        std::vector<TensorFibersCore<Scalar>> out;
+        out.reserve(a.cores.size());
+        for (const auto &core : a.cores) {
+            out.push_back(scalar * core);
         }
         return TensorFibers(std::move(out), a.indices);
     }
@@ -222,36 +324,34 @@ template <typename Scalar> class TensorFibers {
     friend TensorFibers hadamardProduct(const TensorFibers &a,
                                         const TensorFibers &b) {
         assertCombinable(a, b);
-        std::vector<Eigen::MatrixX<Scalar>> out;
-        out.reserve(a.slabs.size());
-        for (std::size_t k = 0; k < a.slabs.size(); ++k) {
-            out.push_back(a.slabs[k].cwiseProduct(b.slabs[k]));
+        std::vector<TensorFibersCore<Scalar>> out;
+        out.reserve(a.cores.size());
+        for (std::size_t k = 0; k < a.cores.size(); ++k) {
+            out.push_back(hadamardProduct(a.cores[k], b.cores[k]));
         }
         return TensorFibers(std::move(out), a.indices);
     }
 
   private:
-    // Slab k as a left unfolding, shape (l_{k-1} * n_k) x rho_k.
-    std::vector<Eigen::MatrixX<Scalar>> slabs;
+    // Slab k of shape l_{k-1} x n_k x rho_k.
+    std::vector<TensorFibersCore<Scalar>> cores;
 
     // The skeleton the slabs were evaluated on. Shared because a whole family
     // of TensorFibers is typically sampled on one fixed set of indices.
     std::shared_ptr<const FiberIndices> indices;
 
     /*!
-     * @brief Asserts two operands are slab-wise combinable: same order, same
-     * shared skeleton, matching slab shapes.
+     * @brief Asserts two operands are slab-wise combinable: same order and
+     * same shared skeleton (the per-slab shape checks live in the
+     * `TensorFibersCore` algebra).
      */
     static void assertCombinable(const TensorFibers &a, const TensorFibers &b) {
-        assert(a.slabs.size() == b.slabs.size() &&
+        static_cast<void>(a);
+        static_cast<void>(b);
+        assert(a.cores.size() == b.cores.size() &&
                "TensorFibers combine: mismatched tensor order.");
         assert(a.indices == b.indices &&
                "TensorFibers combine: operands must share the same skeleton.");
-        for (std::size_t k = 0; k < a.slabs.size(); ++k) {
-            assert(a.slabs[k].rows() == b.slabs[k].rows() &&
-                   a.slabs[k].cols() == b.slabs[k].cols() &&
-                   "TensorFibers combine: mismatched slab shape.");
-        }
     }
 };
 

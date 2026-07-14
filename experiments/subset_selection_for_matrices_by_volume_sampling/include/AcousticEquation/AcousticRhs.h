@@ -6,12 +6,14 @@
 #include <cmath>      // For std::exp
 #include <cstddef>    // For std::size_t
 #include <functional> // For std::function
+#include <memory>     // For std::unique_ptr, std::make_unique
 #include <utility>    // For std::move
 #include <vector>     // For std::vector
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
-#include <TTCrossSolver/Solver.h>          // For RhsBase
+#include <TTCrossSolver/FiberEvaluator.h>  // For FiberEvaluatorBase
+#include <TTCrossSolver/SolverBase.h>      // For RhsBase, BoundaryCondition...
 #include <TTCrossSolver/TensorFibers.h>    // For TensorFibers
 #include <TTCrossSolver/TensorTrain.h>     // For TensorTrain
 #include <TTCrossSolver/TensorTrainCore.h> // For TensorTrainCore
@@ -124,6 +126,64 @@ makeLaplacianOperator(const std::vector<Eigen::Index> &sizes,
 }
 
 /*!
+ * @brief Slab-wise evaluator of the acoustic rhs
+ * \f$ F(p, t) = c^2 \odot (\Delta p + s(x) f(t)) \f$ at a fixed stage state
+ * and time, for the adaptive cross sweeps (see `AcousticRhs::makeEvaluator`).
+ * @tparam Scalar The underlying scalar type (e.g. `float`, `double`).
+ *
+ * The only term with rank structure, \f$ \Delta p \f$, is formed once at
+ * construction by `zip` (it does not depend on the skeleton); each `atFiber`
+ * call then samples the three ingredient trains on the current skeleton and
+ * combines them entry-wise on the fiber core — the same collocation as
+ * `AcousticRhs::evaluate`, one fiber core at a time.
+ *
+ * Non-owning towards the rhs: the `AcousticRhs` that created it must outlive
+ * it (evaluators are consumed within a stage).
+ */
+template <typename Scalar>
+class AcousticRhsFiberEvaluator : public FiberEvaluatorBase<Scalar> {
+  public:
+    /*!
+     * @brief Captures the stage: applies the Laplacian to the state and
+     * fixes the time envelope value.
+     * @param laplacian_of_state \f$ \Delta p \f$ as a train (already zipped).
+     * @param speed The medium's speed train \f$ c(x) \f$.
+     * @param source_spatial The source's spatial factor \f$ s(x) \f$.
+     * @param source_time_value The envelope value \f$ f(t) \f$ at the stage
+     * time.
+     */
+    AcousticRhsFiberEvaluator(TensorTrain<Scalar> laplacian_of_state,
+                              const TensorTrain<Scalar> &speed,
+                              const TensorTrain<Scalar> &source_spatial,
+                              Scalar source_time_value)
+        : laplacian_of_state(std::move(laplacian_of_state)), speed(&speed),
+          source_spatial(&source_spatial),
+          source_time_value(source_time_value) {}
+
+    [[nodiscard]] std::vector<Eigen::Index> modeSizes() const override {
+        return speed->modeSizes();
+    }
+
+    [[nodiscard]] TensorFibersCore<Scalar>
+    atFiber(std::size_t k, const FiberIndices &skeleton) const override {
+        // (Delta p + s(x) f(t)) on the fiber core.
+        TensorFibersCore<Scalar> forced =
+            laplacian_of_state.atFiber(k, skeleton) +
+            source_time_value * source_spatial->atFiber(k, skeleton);
+
+        // The pointwise c^2, entry-wise on the fiber core.
+        TensorFibersCore<Scalar> c = speed->atFiber(k, skeleton);
+        return hadamardProduct(hadamardProduct(c, c), forced);
+    }
+
+  private:
+    TensorTrain<Scalar> laplacian_of_state;
+    const TensorTrain<Scalar> *speed;
+    const TensorTrain<Scalar> *source_spatial;
+    Scalar source_time_value;
+};
+
+/*!
  * @brief Right-hand side of the acoustic wave equation
  * \f$ \frac{1}{c(x)^2} \partial_t^2 p = \Delta p + s(x) f(t) \f$, i.e.
  * \f$ F(p, t) = c^2 \odot (\Delta p + s(x) f(t)) \f$, in the fiber format —
@@ -200,6 +260,17 @@ template <typename Scalar> class AcousticRhs : public RhsBase<Scalar> {
                                    source_time(t) * source_spatial);
     }
 
+    [[nodiscard]] std::unique_ptr<FiberEvaluatorBase<Scalar>>
+    makeEvaluator(const TensorTrain<Scalar> &state, Scalar t) const override {
+        assert(state.modeSizes() == sizes &&
+               "AcousticRhs: state mode sizes must match the grid.");
+        // The zip is the skeleton-independent part of the stage; the sweeps
+        // then sample its result per slab.
+        return std::make_unique<AcousticRhsFiberEvaluator<Scalar>>(
+            laplacian.zip(state, sizes, sizes), speed, source_spatial,
+            source_time(t));
+    }
+
   private:
     TensorTrain<Scalar> speed;
     TensorTrain<Scalar> source_spatial;
@@ -241,7 +312,37 @@ class MaskBoundaryCondition : public BoundaryConditionBase<Scalar> {
         return hadamardProduct(mask, state);
     }
 
+    [[nodiscard]] std::unique_ptr<FiberEvaluatorBase<Scalar>>
+    makeEvaluator(const FiberEvaluatorBase<Scalar> &inner,
+                  Scalar) const override {
+        return std::make_unique<MaskedEvaluator>(mask, inner);
+    }
+
   private:
+    /*! @brief Fiber-core-wise \f$ D \odot \f$: the mask sampled on the
+     * skeleton, applied entry-wise to the wrapped evaluator's fiber core.
+     * Non-owning on both sides. */
+    class MaskedEvaluator : public FiberEvaluatorBase<Scalar> {
+      public:
+        MaskedEvaluator(const TensorTrain<Scalar> &mask,
+                        const FiberEvaluatorBase<Scalar> &inner)
+            : mask(&mask), inner(&inner) {}
+
+        [[nodiscard]] std::vector<Eigen::Index> modeSizes() const override {
+            return inner->modeSizes();
+        }
+
+        [[nodiscard]] TensorFibersCore<Scalar>
+        atFiber(std::size_t k, const FiberIndices &skeleton) const override {
+            return hadamardProduct(mask->atFiber(k, skeleton),
+                                   inner->atFiber(k, skeleton));
+        }
+
+      private:
+        const TensorTrain<Scalar> *mask;
+        const FiberEvaluatorBase<Scalar> *inner;
+    };
+
     TensorTrain<Scalar> mask;
 };
 

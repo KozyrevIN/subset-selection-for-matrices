@@ -116,7 +116,7 @@ TEST_CASE_TEMPLATE("TensorTrain::operator() agrees with atFibers evaluation",
         for (Eigen::Index c = 0; c < 2; ++c) {
             const Scalar entry =
                 tt(std::vector<Eigen::Index>{i, R0[c].first, R0[c].second});
-            CHECK(std::abs(fibers.slab(0)(i, c) - entry) < checkTol<Scalar>());
+            CHECK(std::abs(fibers.core(0).leftUnfolding()(i, c) - entry) < checkTol<Scalar>());
         }
     }
 
@@ -126,7 +126,7 @@ TEST_CASE_TEMPLATE("TensorTrain::operator() agrees with atFibers evaluation",
             for (Eigen::Index c = 0; c < 2; ++c) {
                 const Scalar entry =
                     tt(std::vector<Eigen::Index>{L0[p], i, R1[c]});
-                CHECK(std::abs(fibers.slab(1)(p + 2 * i, c) - entry) <
+                CHECK(std::abs(fibers.core(1).leftUnfolding()(p + 2 * i, c) - entry) <
                       checkTol<Scalar>());
             }
         }
@@ -137,7 +137,7 @@ TEST_CASE_TEMPLATE("TensorTrain::operator() agrees with atFibers evaluation",
         for (Eigen::Index i = 0; i < n2; ++i) {
             const Scalar entry =
                 tt(std::vector<Eigen::Index>{L1[p].first, L1[p].second, i});
-            CHECK(std::abs(fibers.slab(2)(p + 2 * i, 0) - entry) <
+            CHECK(std::abs(fibers.core(2).leftUnfolding()(p + 2 * i, 0) - entry) <
                   checkTol<Scalar>());
         }
     }
@@ -282,10 +282,10 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
 
     // Slabs have the fiber shapes (leftFiberCount(k) * n_k) x rightFiberCount.
     for (std::size_t k = 0; k < tt.order(); ++k) {
-        CHECK(fibers.slab(k).rows() ==
+        CHECK(fibers.core(k).leftUnfolding().rows() ==
               static_cast<Eigen::Index>(skeleton.leftFiberCount(k)) *
                   tt.core(k).modeSize());
-        CHECK(fibers.slab(k).cols() ==
+        CHECK(fibers.core(k).leftUnfolding().cols() ==
               static_cast<Eigen::Index>(skeleton.rightFiberCount(k)));
     }
 
@@ -294,7 +294,7 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
     {
         TensorFibers<Scalar> reeval = tt.atFibers(fibers.skeleton());
         for (std::size_t k = 0; k < tt.order(); ++k) {
-            CHECK((reeval.slab(k) - fibers.slab(k)).norm() <
+            CHECK((reeval.core(k).leftUnfolding() - fibers.core(k).leftUnfolding()).norm() <
                   Scalar(100) * checkTol<Scalar>());
         }
     }
@@ -434,7 +434,7 @@ TEST_CASE_TEMPLATE("TensorTrain::atFibers evaluates the train on a skeleton",
             slab0(i, c) = T(i, R0[c].first, R0[c].second);
         }
     }
-    CHECK((fibers.slab(0) - slab0).norm() < checkTol<Scalar>());
+    CHECK((fibers.core(0).leftUnfolding() - slab0).norm() < checkTol<Scalar>());
 
     Eigen::MatrixX<Scalar> slab1(2 * n1, 2);
     for (Eigen::Index p = 0; p < 2; ++p) {
@@ -444,7 +444,7 @@ TEST_CASE_TEMPLATE("TensorTrain::atFibers evaluates the train on a skeleton",
             }
         }
     }
-    CHECK((fibers.slab(1) - slab1).norm() < checkTol<Scalar>());
+    CHECK((fibers.core(1).leftUnfolding() - slab1).norm() < checkTol<Scalar>());
 
     Eigen::MatrixX<Scalar> slab2(2 * n2, 1);
     for (Eigen::Index p = 0; p < 2; ++p) {
@@ -452,7 +452,7 @@ TEST_CASE_TEMPLATE("TensorTrain::atFibers evaluates the train on a skeleton",
             slab2(p + 2 * i, 0) = T(L1[p].first, L1[p].second, i);
         }
     }
-    CHECK((fibers.slab(2) - slab2).norm() < checkTol<Scalar>());
+    CHECK((fibers.core(2).leftUnfolding() - slab2).norm() < checkTol<Scalar>());
 }
 
 TEST_CASE_TEMPLATE("TensorTrainCore::zip contracts one operator/tensor core",

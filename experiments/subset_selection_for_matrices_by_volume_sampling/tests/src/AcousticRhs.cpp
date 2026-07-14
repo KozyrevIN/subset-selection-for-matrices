@@ -208,7 +208,7 @@ TEST_CASE_TEMPLATE("AcousticRhs evaluates c^2 (lap + source) on the skeleton",
         for (Eigen::Index col = 0; col < 2; ++col) {
             const double e = static_cast<double>(
                 expect({i, R0[col].first, R0[col].second}));
-            CHECK(static_cast<double>(G.slab(0)(i, col)) ==
+            CHECK(static_cast<double>(G.core(0).leftUnfolding()(i, col)) ==
                   doctest::Approx(e).epsilon(tol));
         }
     }
@@ -218,7 +218,7 @@ TEST_CASE_TEMPLATE("AcousticRhs evaluates c^2 (lap + source) on the skeleton",
             for (Eigen::Index col = 0; col < 2; ++col) {
                 const double e =
                     static_cast<double>(expect({L0[p], i, R1[col]}));
-                CHECK(static_cast<double>(G.slab(1)(p + 2 * i, col)) ==
+                CHECK(static_cast<double>(G.core(1).leftUnfolding()(p + 2 * i, col)) ==
                       doctest::Approx(e).epsilon(tol));
             }
         }
@@ -228,7 +228,7 @@ TEST_CASE_TEMPLATE("AcousticRhs evaluates c^2 (lap + source) on the skeleton",
         for (Eigen::Index i = 0; i < 2; ++i) {
             const double e =
                 static_cast<double>(expect({L1[p].first, L1[p].second, i}));
-            CHECK(static_cast<double>(G.slab(2)(p + 2 * i, 0)) ==
+            CHECK(static_cast<double>(G.core(2).leftUnfolding()(p + 2 * i, 0)) ==
                   doctest::Approx(e).epsilon(tol));
         }
     }

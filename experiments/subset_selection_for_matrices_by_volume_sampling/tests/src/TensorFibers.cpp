@@ -88,10 +88,10 @@ TEST_CASE_TEMPLATE("TensorFibers operator+ and hadamardProduct are slab-wise",
     CHECK(sum.skeleton() == idx); // shares the skeleton
 
     for (std::size_t k = 0; k < a.order(); ++k) {
-        CHECK(sum.slab(k).rows() == a.slab(k).rows());
-        CHECK(sum.slab(k).cols() == a.slab(k).cols());
-        CHECK((sum.slab(k).array() == Scalar(7)).all());
-        CHECK((prod.slab(k).array() == Scalar(10)).all());
+        CHECK(sum.core(k).leftUnfolding().rows() == a.core(k).leftUnfolding().rows());
+        CHECK(sum.core(k).leftUnfolding().cols() == a.core(k).leftUnfolding().cols());
+        CHECK((sum.core(k).leftUnfolding().array() == Scalar(7)).all());
+        CHECK((prod.core(k).leftUnfolding().array() == Scalar(10)).all());
     }
 }
 
@@ -107,8 +107,8 @@ TEST_CASE_TEMPLATE("TensorFibers operator* scales every slab", Scalar, float,
     CHECK(scaled.skeleton() == idx); // shares the skeleton
 
     for (std::size_t k = 0; k < a.order(); ++k) {
-        CHECK(scaled.slab(k).rows() == a.slab(k).rows());
-        CHECK(scaled.slab(k).cols() == a.slab(k).cols());
-        CHECK((scaled.slab(k).array() == Scalar(6)).all());
+        CHECK(scaled.core(k).leftUnfolding().rows() == a.core(k).leftUnfolding().rows());
+        CHECK(scaled.core(k).leftUnfolding().cols() == a.core(k).leftUnfolding().cols());
+        CHECK((scaled.core(k).leftUnfolding().array() == Scalar(6)).all());
     }
 }
