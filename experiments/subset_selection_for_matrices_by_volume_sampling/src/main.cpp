@@ -4,6 +4,7 @@
 // top, and the Cerjan sponge as the absorbing boundary. Snapshots go to
 // ./snapshots as .vti files for ParaView.
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -18,21 +19,21 @@
 #include <MatSubset/FrobeniusSelectionSelector.h>
 
 #include <AcousticEquation/AcousticRhs.h>
+#include <TTCrossSolver/AdaptiveSolver.h>
 #include <TTCrossSolver/SnapshotSaver.h>
-#include <TTCrossSolver/Solver.h>
 #include <TTCrossSolver/TensorTrain.h>
 #include <TTCrossSolver/TensorTrainCore.h>
 
 using Scalar = double;
 
 using MatSubset::Experiments::AcousticRhs;
+using MatSubset::Experiments::AdaptiveSolver;
 using MatSubset::Experiments::Grid;
 using MatSubset::Experiments::IdentityFieldMapper;
 using MatSubset::Experiments::makeCerjanMask;
 using MatSubset::Experiments::MaskBoundaryCondition;
 using MatSubset::Experiments::Scheme;
 using MatSubset::Experiments::SnapshotSaver;
-using MatSubset::Experiments::Solver;
 using MatSubset::Experiments::TensorTrain;
 using MatSubset::Experiments::TensorTrainCore;
 
@@ -63,29 +64,15 @@ int main(int argc, char **argv) {
     // Grid: n^3 points on the cube [0, extent]^3, z = depth.
     const Eigen::Index n = (argc > 1) ? std::atoi(argv[1]) : 64;
     const Scalar t_end = (argc > 2) ? std::atof(argv[2]) : Scalar(1);
-    // Truncation tolerance and the skeleton width policy
-    // ceil(factor * rank) + oversampling. The rank-proportional slack keeps
-    // the per-step cross rebuild from silently truncating the leapfrog combo
-    // (whose numerical rank exceeds the state's) as the resolution grows; a
-    // purely constant budget works at one grid size and destabilizes at the
-    // next. Do not starve the solver either: a loose rtol (1e-3) pins the
-    // rank near 4, which cannot represent a spherical wavefront (O(1) error,
-    // axis-aligned lobes).
     const Scalar rtol = (argc > 3) ? std::atof(argv[3]) : Scalar(1e-6);
-    const Scalar width_factor = (argc > 4) ? std::atof(argv[4]) : Scalar(1.5);
-    const Eigen::Index oversampling = (argc > 5) ? std::atoi(argv[5]) : 5;
-    // Adaptive slack on top of the base policy: when a step consumes its full
-    // width budget at some bond (rebuilt rank == prescribed width), the
-    // rebuild was a lossy projection - truncation never got to act - so the
-    // slack doubles; after a calm stretch it halves back. `slack` is shared
-    // mutable state between this policy lambda and the controller in the
-    // stepping loop below.
-    auto slack = std::make_shared<Eigen::Index>(oversampling);
-    const auto num_samples = [width_factor,
-                              slack](Eigen::Index rank, Eigen::Index) {
+    const Scalar width_factor = (argc > 4) ? std::atof(argv[4]) : Scalar(1);
+    const Eigen::Index oversampling = (argc > 5) ? std::atoi(argv[5]) : n / 16;
+
+    const auto num_samples = [width_factor, oversampling](Eigen::Index rank,
+                                                          Eigen::Index) {
         return static_cast<Eigen::Index>(
                    std::ceil(width_factor * static_cast<Scalar>(rank))) +
-               *slack;
+               oversampling;
     };
     const Scalar extent = Scalar(2000);                   // m
     const Scalar h = extent / static_cast<Scalar>(n - 1); // m
@@ -98,8 +85,8 @@ int main(int argc, char **argv) {
     // 3-layer medium: c depends on depth only, so the speed train is rank 1
     // (ones x ones x c_z).
     const Scalar c_top = Scalar(1500);    // m/s
-    const Scalar c_middle = Scalar(2000); // m/s
-    const Scalar c_bottom = Scalar(2500); // m/s
+    const Scalar c_middle = Scalar(1500); // m/s
+    const Scalar c_bottom = Scalar(1500); // m/s
     Eigen::VectorX<Scalar> c_z(n);
     for (Eigen::Index i = 0; i < n; ++i) {
         const Scalar z = grid.coordinate(2, i);
@@ -140,12 +127,12 @@ int main(int argc, char **argv) {
     // 1/2 of it.
     const Scalar dt = Scalar(0.5) * h / (c_bottom * std::sqrt(Scalar(3)));
     const int n_steps = static_cast<int>(std::ceil(t_end / dt));
-    const int save_every = 100; //std::max(1, n_steps / 60);
+    const int save_every = 10; // std::max(1, n_steps / 60);
 
     std::cout << "grid " << n << "^3, h = " << h << " m, dt = " << dt << " s, "
               << n_steps << " steps to t = " << t_end << " s\n"
-              << "rtol = " << rtol << ", width policy = ceil("
-              << width_factor << " * r) + " << oversampling << '\n';
+              << "rtol = " << rtol << ", width policy = ceil(" << width_factor
+              << " * r) + " << oversampling << '\n';
 
     auto rhs = std::make_unique<AcousticRhs<Scalar>>(
         std::move(speed), source_spatial, ricker, sizes, spacings);
@@ -180,56 +167,46 @@ int main(int argc, char **argv) {
     // Warm-up: exact TT steps (rank-inflated combos + compress) until the
     // wavefield has structure worth selecting a skeleton from.
     const int warmup_steps = (argc > 6) ? std::atoi(argv[6]) : 10;
-    Solver<Scalar> solver(std::move(initial_history), std::move(rhs),
-                          Scheme<Scalar>::leapfrogSecondOrder(), dt,
-                          std::move(selector), atol, rtol, num_samples,
-                          std::move(boundary), warmup_steps);
+    AdaptiveSolver<Scalar> solver(std::move(initial_history), std::move(rhs),
+                                  Scheme<Scalar>::leapfrogSecondOrder(), dt,
+                                  std::move(selector), atol, rtol, num_samples,
+                                  std::move(boundary), warmup_steps);
 
     std::vector<
         std::unique_ptr<MatSubset::Experiments::FieldMapperBase<Scalar>>>
         fields;
     fields.push_back(std::make_unique<IdentityFieldMapper<Scalar>>("pressure"));
     SnapshotSaver<Scalar> saver(
-        grid, std::move(fields), "tmp/snapshots", "wavefield",
+        grid, std::move(fields), "out/snapshots", "wavefield",
         MatSubset::Experiments::StoragePrecision::Float);
 
     saver.save(solver.getState(), solver.time());
     std::vector<Eigen::Index> prev_ranks = solver.getState().ranks();
     int calm_steps = 0;
+    const auto solve_start = std::chrono::steady_clock::now();
     for (int step = 1; step <= n_steps; ++step) {
         solver.step();
 
-        // Slack controller: a bond whose rebuilt rank reaches the width its
-        // pre-step rank prescribed consumed the whole budget - the rebuild
-        // was lossy there. Double the slack at once; halve it (never below
-        // the base oversampling) after 25 calm steps.
-        const std::vector<Eigen::Index> new_ranks = solver.getState().ranks();
-        bool bound = false;
-        for (std::size_t b = 0; b < new_ranks.size(); ++b) {
-            if (new_ranks[b] >= num_samples(prev_ranks[b], n)) {
-                bound = true;
-            }
-        }
-        prev_ranks = new_ranks;
-        if (bound) {
-            *slack *= 2;
-            calm_steps = 0;
-            std::cout << "step " << step << ": width budget consumed, slack -> "
-                      << *slack << '\n';
-        } else if (++calm_steps >= 25 && *slack > oversampling) {
-            *slack = std::max(oversampling, *slack / 2);
-            calm_steps = 0;
-        }
-
         if (step % save_every == 0 || step == n_steps) {
-            const std::string path =
-                saver.save(solver.getState(), solver.time());
+            // const std::string path =
+            // saver.save(solver.getState(), solver.time());
+            const auto elapsed =
+                std::chrono::duration<Scalar>(std::chrono::steady_clock::now() -
+                                              solve_start)
+                    .count();
             std::cout << "step " << step << " / " << n_steps
                       << ", t = " << solver.time()
                       << " s, max rank = " << maxRank(solver.getState())
-                      << ", slack = " << *slack << ", wrote " << path << '\n';
+                      << ", elapsed = " << elapsed << " s (" << elapsed / step
+                      << " s/step)\n";
         }
     }
+    const auto solve_seconds =
+        std::chrono::duration<Scalar>(std::chrono::steady_clock::now() -
+                                      solve_start)
+            .count();
+    std::cout << "solve took " << solve_seconds << " s for " << n_steps
+              << " steps (" << solve_seconds / n_steps << " s/step)\n";
 
     return 0;
 }

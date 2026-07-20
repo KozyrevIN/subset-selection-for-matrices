@@ -25,7 +25,7 @@ namespace MatSubset::Experiments {
  * @tparam Scalar The underlying scalar type (e.g. `float`, `double`).
  *
  * Each fiber-format step (`SolverBase::step` past warm-up):
- * 1. Runs `selectIndices` on the current state \f$ y_n \f$ — truncating it at
+ * 1. Runs `selectCross` on the current state \f$ y_n \f$ — truncating it at
  *    (`atol`, `rtol`), re-orthogonalizing it, and fixing the step's skeleton
  *    of the width `num_samples(rank, candidates)` prescribes per bond.
  * 2. Evaluates the older history states on that skeleton via `atFibers`.
@@ -100,7 +100,7 @@ template <typename Scalar> class Solver : public SolverBase<Scalar> {
         // step - every TensorFibers below shares it, as the fiber algebra
         // requires.
         TensorFibers<Scalar> fibers_n =
-            history.front().selectIndices(selector, atol, rtol, num_samples);
+            history.front().selectCross(selector, atol, rtol, num_samples);
 
         // Phase 2: evaluate the older history states on this skeleton. This
         // is what makes multistep schemes work: y_{n-1} was built on the

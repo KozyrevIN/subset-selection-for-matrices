@@ -106,7 +106,8 @@ template <typename Scalar> class TensorTrainCore : public CoreBase<Scalar> {
     [[nodiscard]] TensorTrainCore add(const TensorTrainCore &other,
                                       bool is_first, bool is_last) const {
         const Eigen::Index n = this->mode;
-        const Eigen::Index r0 = is_first ? 1 : this->left_rank + other.left_rank;
+        const Eigen::Index r0 =
+            is_first ? 1 : this->left_rank + other.left_rank;
         const Eigen::Index r1 =
             is_last ? 1 : this->right_rank + other.right_rank;
 
@@ -143,7 +144,8 @@ template <typename Scalar> class TensorTrainCore : public CoreBase<Scalar> {
      * @return The Kronecker-product core \f$ C(i) = A(i) \otimes B(i) \f$;
      * its bond ranks are the products of the operands' ranks.
      */
-    [[nodiscard]] TensorTrainCore hadamardProduct(const TensorTrainCore &other) const {
+    [[nodiscard]] TensorTrainCore
+    hadamardProduct(const TensorTrainCore &other) const {
         const Eigen::Index n = this->mode;
         TensorTrainCore result(this->left_rank * other.left_rank, n,
                                this->right_rank * other.right_rank);
@@ -151,7 +153,7 @@ template <typename Scalar> class TensorTrainCore : public CoreBase<Scalar> {
             const Eigen::MatrixX<Scalar> A = this->modeSlice(i);
             const Eigen::MatrixX<Scalar> B = other.modeSlice(i);
             Eigen::MatrixX<Scalar> slice(A.rows() * B.rows(),
-                                        A.cols() * B.cols());
+                                         A.cols() * B.cols());
             for (Eigen::Index p = 0; p < A.rows(); ++p) {
                 for (Eigen::Index q = 0; q < A.cols(); ++q) {
                     slice.block(p * B.rows(), q * B.cols(), B.rows(),

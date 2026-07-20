@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -55,6 +56,14 @@ template <typename Scalar> TensorTrain<Scalar> makeTrain(Eigen::Index salt) {
 
 template <typename Scalar> Scalar checkTol() {
     return std::is_same_v<Scalar, float> ? Scalar(1e-3) : Scalar(1e-9);
+}
+
+// A num_samples width policy that oversamples every bond by a fixed count
+// beyond its rank (the old integer `oversample` knob, now expressed as the
+// dynamic policy both solvers share).
+std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+oversampleBy(Eigen::Index extra) {
+    return [extra](Eigen::Index rank, Eigen::Index) { return rank + extra; };
 }
 
 template <typename Scalar>
@@ -143,7 +152,7 @@ TEST_CASE_TEMPLATE(
     TrainFiberEvaluator<Scalar> evaluator(train);
     auto [rebuilt, skeleton] = TensorTrain<Scalar>::crossInterpolate(
         evaluator, makeSequentialSkeleton(), selector, Scalar(0),
-        checkTol<Scalar>(), /*oversample=*/1, /*rounds=*/2);
+        checkTol<Scalar>(), oversampleBy(1), /*rounds=*/2);
 
     REQUIRE(rebuilt.order() == train.order());
     CHECK(rebuilt.modeSizes() == train.modeSizes());
@@ -173,7 +182,7 @@ TEST_CASE_TEMPLATE("crossInterpolate round-trips through atFibers", Scalar,
     TrainFiberEvaluator<Scalar> evaluator(train);
     auto [rebuilt, skeleton] = TensorTrain<Scalar>::crossInterpolate(
         evaluator, makeSequentialSkeleton(), selector, Scalar(0),
-        checkTol<Scalar>(), /*oversample=*/1);
+        checkTol<Scalar>(), oversampleBy(1));
 
     TensorFibers<Scalar> fibers = rebuilt.atFibers(skeleton);
     TensorTrain<Scalar> again(fibers, Scalar(0), checkTol<Scalar>());
@@ -196,7 +205,7 @@ TEST_CASE_TEMPLATE("AdaptiveSolver forward Euler matches the discrete "
     AdaptiveSolver<Scalar> solver(
         std::move(init), std::make_unique<ScaleRhs<Scalar>>(lambda),
         Scheme<Scalar>::forwardEuler(), dt, makeSelector<Scalar>(), Scalar(0),
-        checkTol<Scalar>(), /*oversample=*/1);
+        checkTol<Scalar>(), oversampleBy(1));
 
     // Euler on y' = lambda*y multiplies by (1 + lambda*dt) each step, exactly.
     Scalar factor = Scalar(1);
@@ -229,7 +238,7 @@ TEST_CASE_TEMPLATE(
     AdaptiveSolver<Scalar> solver(
         std::move(init), std::make_unique<ScaleRhs<Scalar>>(-omega * omega),
         Scheme<Scalar>::leapfrogSecondOrder(), dt, makeSelector<Scalar>(),
-        Scalar(0), checkTol<Scalar>(), /*oversample=*/1);
+        Scalar(0), checkTol<Scalar>(), oversampleBy(1));
 
     // y_n = a_n * y_0 with a_{n+1} = (2 - omega^2*dt^2)*a_n - a_{n-1}.
     Scalar a_prev = Scalar(1);
@@ -263,7 +272,7 @@ TEST_CASE_TEMPLATE("AdaptiveSolver applies the boundary condition once per "
         std::move(init), std::make_unique<ScaleRhs<Scalar>>(Scalar(0)),
         Scheme<Scalar>::lowStorageRK({Scalar(0.5), Scalar(1)}), dt,
         makeSelector<Scalar>(), Scalar(0), checkTol<Scalar>(),
-        /*oversample=*/1,
+        oversampleBy(1),
         std::make_unique<MaskBoundaryCondition<Scalar>>(
             makeConstantMask<Scalar>({3, 4, 3}, Scalar(0.5))));
 
@@ -292,7 +301,7 @@ TEST_CASE_TEMPLATE("AdaptiveSolver warm-up hands off to the adaptive path",
     AdaptiveSolver<Scalar> solver(
         std::move(init), std::make_unique<ScaleRhs<Scalar>>(lambda),
         Scheme<Scalar>::leapfrog(), dt, makeSelector<Scalar>(), Scalar(0),
-        checkTol<Scalar>(), /*oversample=*/1, /*boundary=*/nullptr,
+        checkTol<Scalar>(), oversampleBy(1), /*boundary=*/nullptr,
         /*warmup_steps=*/4);
 
     Scalar a_prev = Scalar(1);
@@ -327,7 +336,7 @@ TEST_CASE_TEMPLATE("AcousticRhs::makeEvaluator matches evaluate slab-wise",
     state.leftOrthogonalize();
     auto selector = makeSelector<Scalar>();
     TensorFibers<Scalar> state_fibers =
-        state.selectIndices(selector, Scalar(0), checkTol<Scalar>());
+        state.selectCross(selector, Scalar(0), checkTol<Scalar>());
 
     const Scalar t = Scalar(0.3);
     TensorFibers<Scalar> reference = rhs.evaluate(state, state_fibers, t);

@@ -6,7 +6,7 @@
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
-#include "TTCrossSolver/TensorFibers.h"     // For FiberIndices
+#include "TTCrossSolver/FiberIndices.h"     // For FiberIndices
 #include "TTCrossSolver/TensorFibersCore.h" // For TensorFibersCore
 
 namespace MatSubset::Experiments {

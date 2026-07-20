@@ -1,8 +1,9 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_ADAPTIVE_SOLVER_H
 #define MAT_SUBSET_EXPERIMENTS_ADAPTIVE_SOLVER_H
 
-#include <cassert>  // For assert
-#include <cstddef>  // For std::size_t
+#include <cassert>    // For assert
+#include <cstddef>    // For std::size_t
+#include <functional> // For std::function
 #include <memory>   // For std::unique_ptr, std::shared_ptr
 #include <optional> // For std::optional
 #include <utility>  // For std::move, std::pair
@@ -85,18 +86,19 @@ class StageComboEvaluator : public FiberEvaluatorBase<Scalar> {
  * slack to cover it.
  *
  * Each stage runs one backward + one forward sweep warm-started from the
- * previous stage's (or step's) skeleton; level widths always equal the
- * post-truncation bond rank plus `oversample` on the side the sweep just
- * refreshed, and one half-sweep stale on the other side — the steady state
- * of warm-started sweeping. `oversample` is also the rank-growth headroom
- * per bond per sweep (a slab is never sampled more than `oversample` wider
- * than the current rank), so 1-2 suffices for slowly-varying dynamics but it
- * stays a knob for resolution studies.
+ * previous stage's (or step's) skeleton; level widths always equal
+ * `num_samples(rank, candidates)` on the side the sweep just refreshed, and
+ * one half-sweep stale on the other side — the steady state of warm-started
+ * sweeping. Because a level is re-selected at this width every sweep, the
+ * policy is also the rank-growth headroom per bond per sweep; the default
+ * `rank + 2` grows a bond by at most 2 per sweep, enough for slowly-varying
+ * dynamics, but the same `num_samples` slot as `Solver` stays a knob for
+ * resolution studies.
  *
  * The first non-warm-up step bootstraps the skeleton from the current state
- * via `selectIndices` (there is nothing better to warm-start from); warm-up
- * itself lives in `SolverBase` — a structureless initial state gives any
- * selector nothing to work with, adaptive or not.
+ * via `selectCrossIndices` (there is nothing better to warm-start from);
+ * warm-up itself lives in `SolverBase` — a structureless initial state gives
+ * any selector nothing to work with, adaptive or not.
  */
 template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
   public:
@@ -113,8 +115,9 @@ template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
      * @param atol Absolute Frobenius tolerance of the per-slab rank
      * truncation.
      * @param rtol Relative tolerance of the per-slab rank truncation.
-     * @param oversample Extra indices per level beyond the post-truncation
-     * bond rank; also the per-bond rank-growth headroom per sweep.
+     * @param num_samples Per-bond skeleton width policy
+     * `num_samples(rank, candidates)` (the same slot as `Solver`), also the
+     * per-bond rank-growth headroom per sweep; null defaults to `rank + 2`.
      * @param boundary_condition Optional transform of the new state at the
      * end of every step; must implement `makeEvaluator` (and `applyTrain`
      * for warm-up). Null for none.
@@ -124,17 +127,20 @@ template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
     AdaptiveSolver(std::vector<TensorTrain<Scalar>> initial_history,
                    std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme,
                    Scalar dt, std::unique_ptr<SelectorBase<Scalar>> selector,
-                   Scalar atol, Scalar rtol, Eigen::Index oversample = 2,
+                   Scalar atol, Scalar rtol,
+                   std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+                       num_samples = nullptr,
                    std::unique_ptr<BoundaryConditionBase<Scalar>>
                        boundary_condition = nullptr,
                    int warmup_steps = 0)
         : SolverBase<Scalar>(std::move(initial_history), std::move(rhs),
                              std::move(scheme), dt, std::move(selector), atol,
                              rtol, std::move(boundary_condition), warmup_steps),
-          oversample(oversample) {
-        assert(oversample >= 0 &&
-               "AdaptiveSolver: oversample must be non-negative.");
-    }
+          num_samples(num_samples
+                          ? std::move(num_samples)
+                          : [](Eigen::Index rank, Eigen::Index) {
+                                return rank + 2;
+                            }) {}
 
     /*! @brief The skeleton carried between steps (null until the first
      * adaptive step), for diagnostics. */
@@ -148,16 +154,12 @@ template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
      * adaptively, the skeleton warm-started across stages and steps. */
     void advance() override {
         // First adaptive step: bootstrap the skeleton from the current state
-        // at the widths the adaptive sweeps maintain (rank + oversample).
+        // at the widths the adaptive sweeps maintain (the num_samples policy).
         // Mutating: truncates y_n at (atol, rtol) and re-orthogonalizes it,
         // exactly like the fixed-skeleton solver's phase 1.
         if (!skeleton) {
-            const auto width = [this](Eigen::Index rank, Eigen::Index) {
-                return rank + oversample;
-            };
-            skeleton = history.front()
-                           .selectIndices(selector, atol, rtol, width)
-                           .skeleton();
+            skeleton = history.front().selectCrossIndices(selector, atol, rtol,
+                                                      num_samples);
         }
 
         const Scalar dtp = this->dtPower();
@@ -202,7 +204,7 @@ template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
             }
 
             auto [train, refined] = TensorTrain<Scalar>::crossInterpolate(
-                *stage_evaluator, *skeleton, selector, atol, rtol, oversample);
+                *stage_evaluator, *skeleton, selector, atol, rtol, num_samples);
             skeleton = std::move(refined);
             next.emplace(std::move(train));
             stage_state = &*next;
@@ -222,7 +224,10 @@ template <typename Scalar> class AdaptiveSolver : public SolverBase<Scalar> {
     using SolverBase<Scalar>::rtol;
     using SolverBase<Scalar>::boundary_condition;
 
-    Eigen::Index oversample;
+    // Per-bond width policy, resolved to `rank + 2` when none was given; used
+    // both to bootstrap the skeleton and by every adaptive sweep, so the two
+    // agree on the widths they maintain.
+    std::function<Eigen::Index(Eigen::Index, Eigen::Index)> num_samples;
 
     // The warm-started skeleton, refined by every stage's sweeps; null until
     // the first adaptive step bootstraps it from the state.

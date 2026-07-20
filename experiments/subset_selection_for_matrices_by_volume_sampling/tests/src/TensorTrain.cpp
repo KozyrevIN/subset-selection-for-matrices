@@ -250,17 +250,17 @@ TEST_CASE_TEMPLATE("TensorTrain compress truncates a rank-inflated tensor",
     CHECK(tt.ranks()[1] == 1); // the inflated bond collapsed to 1
 }
 
-TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
+TEST_CASE_TEMPLATE("TensorTrain::selectCross truncates, selects a skeleton "
                    "and returns self-consistent fibers",
                    Scalar, float, double) {
     auto tt = makeTrain<Scalar>(3, 4, 2, 2, 3);
-    tt.leftOrthogonalize(); // selectIndices assumes a left-orthogonal train
+    tt.leftOrthogonalize(); // selectCross assumes a left-orthogonal train
     Eigen::MatrixX<Scalar> dense = tt.toDense();
 
     std::unique_ptr<MatSubset::SelectorBase<Scalar>> selector =
         std::make_unique<MatSubset::DominantSelector<Scalar>>(Scalar(1));
 
-    TensorFibers<Scalar> fibers = tt.selectIndices(selector, /*atol=*/Scalar(0),
+    TensorFibers<Scalar> fibers = tt.selectCross(selector, /*atol=*/Scalar(0),
                                                    /*rtol=*/checkTol<Scalar>());
 
     // The TT-SVD half of the sweep preserves the tensor (bond 1 truncates from
@@ -290,7 +290,7 @@ TEST_CASE_TEMPLATE("TensorTrain::selectIndices truncates, selects a skeleton "
     }
 
     // atFibers re-evaluates the (mutated) train on the selected skeleton and
-    // reproduces selectIndices' slabs exactly.
+    // reproduces selectCross' slabs exactly.
     {
         TensorFibers<Scalar> reeval = tt.atFibers(fibers.skeleton());
         for (std::size_t k = 0; k < tt.order(); ++k) {
@@ -588,7 +588,7 @@ TEST_CASE_TEMPLATE(
             MatSubset::ForwardIterativeVolumeSamplingSelector<Scalar>>(12345);
     y.leftOrthogonalize();
     TensorFibers<Scalar> fy =
-        y.selectIndices(selector, Scalar(0), checkTol<Scalar>(), num_samples);
+        y.selectCross(selector, Scalar(0), checkTol<Scalar>(), num_samples);
     TensorFibers<Scalar> combo = fy + Scalar(1) * z.atFibers(fy.skeleton());
     TensorTrain<Scalar> rebuilt(combo);
 

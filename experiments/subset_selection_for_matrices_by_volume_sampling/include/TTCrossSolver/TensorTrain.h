@@ -282,9 +282,9 @@ template <typename Scalar> class TensorTrain {
      * @return `TensorFibers` sharing `skeleton`, whose core `k` holds
      * \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$, a fiber core of shape
      * \f$ \ell_{k-1} \times n_k \times \rho_k \f$ — the train's fibers on the
-     * skeleton, exactly the object `selectIndices` returns.
+     * skeleton, exactly the object `selectCross` returns.
      *
-     * Read-only counterpart of `selectIndices`: it does not select or mutate
+     * Read-only counterpart of `selectCross`: it does not select or mutate
      * the cores; the indices are given. Same two passes, but each just
      * contracts the neighbouring cores at the skeleton's nodes rather than
      * sampling them:
@@ -441,7 +441,7 @@ template <typename Scalar> class TensorTrain {
 
     /*!
      * @brief Truncates the train and selects a nested cross skeleton for every
-     * bond, returning the train's own fibers evaluated on it.
+     * bond. Requires no starting set of indices.
      * @param selector Column-subset selector shared across all bonds and both
      * sweeps.
      * @param atol Absolute Frobenius tolerance for the TT-SVD truncation.
@@ -457,10 +457,7 @@ template <typename Scalar> class TensorTrain {
      * \f$ \sum_m \alpha_m y_{n-m} + \gamma \, \Delta t^p F(y_n) \f$ — a
      * skeleton narrower than that combination's numerical rank makes the
      * rebuild a lossy projection with no tolerance control.
-     * @return The train's fibers on the selected skeleton: `TensorFibers` whose
-     * fiber core `k` holds \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$, with the
-     * `FiberIndices` skeleton embedded (`skeleton()`). Feeding it back into the
-     * fibers constructor reproduces the (truncated) train.
+     * @return The selected skeleton.
      *
      * Two sweeps:
      * 1. Right-to-left, mutating: each core absorbs the SVD carry, is
@@ -476,20 +473,23 @@ template <typename Scalar> class TensorTrain {
      *    already-processed cores absorbed. Selected rows decode into nested
      *    (mode, parent) nodes.
      *
-     * The saved partial evaluations refer to each core after its final
-     * mutation, so the returned fibers are exact evaluations of the train as
-     * it stands on exit.
+     * This is the one routine that manufactures a skeleton from nothing:
+     * selection runs on the train's own orthonormalized cores, seeing every
+     * candidate index at every bond, whereas the sweeps of `crossInterpolate`
+     * only *refine* a skeleton they are given (each slab shows them the
+     * tensor through the current skeleton alone). Use it to bootstrap the
+     * adaptive sweeps when there is no warm start.
      *
      * @note Assumes the train is left-orthogonal on entry (as produced by the
      * fibers constructor, `leftOrthogonalize()`, or `compress()`); the TT-SVD
      * truncation relies on it. On exit the train is left-orthogonal again, its
      * orthogonality center at the last core.
      */
-    TensorFibers<Scalar>
-    selectIndices(std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
-                  Scalar rtol,
-                  const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
-                      &num_samples = nullptr) {
+    std::shared_ptr<const FiberIndices> selectCrossIndices(
+        std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
+        Scalar rtol,
+        const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+            &num_samples = nullptr) {
         // Width policy: the bond rank when no policy is given.
         const auto width = [&num_samples](Eigen::Index rank,
                                           Eigen::Index candidates) {
@@ -500,10 +500,10 @@ template <typename Scalar> class TensorTrain {
         std::vector<FiberIndices::Level> left_levels(d);
         std::vector<FiberIndices::Level> right_levels(d);
 
-        // right_partial[k]: cores k+1..d-1 evaluated at the bond-k right
+        // right_partial: cores k+1..d-1 evaluated at the bond-k right
         // multi-indices (r_k x rho_k); identity at the right boundary.
-        std::vector<Eigen::MatrixX<Scalar>> right_partial(d);
-        right_partial[d - 1] = Eigen::MatrixX<Scalar>::Identity(1, 1);
+        Eigen::MatrixX<Scalar> right_partial =
+            Eigen::MatrixX<Scalar>::Identity(1, 1);
         right_levels[d - 1] = FiberIndices::Level({0}, {-1}); // root node
 
         // Sweep 1: right-to-left TT-SVD truncation + right index selection.
@@ -514,59 +514,47 @@ template <typename Scalar> class TensorTrain {
             }
             svd_carry = cores[k].rightSvd(atol, rtol);
 
-            const Eigen::Index rho = right_partial[k].cols();
+            const Eigen::Index rho = right_partial.cols();
             auto [indices, submatrix] = cores[k].rightSelectIndices(
-                right_partial[k], selector,
+                right_partial, selector,
                 width(cores[k].leftRank(), cores[k].modeSize() * rho));
 
             right_levels[k - 1] =
                 FiberIndices::Level::fromRightIndices(indices, rho);
-            right_partial[k - 1] = std::move(submatrix);
+            right_partial = std::move(submatrix);
         }
         if (d > 1) {
             cores[0].absorbRightFactor(svd_carry);
         }
 
-        // left_partial[k]: cores 0..k-1 evaluated at the bond-(k-1) left
+        // left_partial: cores 0..k-1 evaluated at the bond-(k-1) left
         // multi-indices (l_{k-1} x r_{k-1}); identity at the left boundary.
-        std::vector<Eigen::MatrixX<Scalar>> left_partial(d);
-        left_partial[0] = Eigen::MatrixX<Scalar>::Identity(1, 1);
+        Eigen::MatrixX<Scalar> left_partial =
+            Eigen::MatrixX<Scalar>::Identity(1, 1);
 
-        // Sweep 2: left-to-right QR orthogonalization + left index selection,
-        // forming each fiber core in the same iteration. Mirrors sweep 1: each
-        // core is made left-orthonormal *before* the selector runs on it, so
-        // selection acts on an orthonormal basis (the condition DEIM/volume
-        // sampling relies on) rather than on the right-orthogonal cores left by
-        // sweep 1. The QR carry is folded into the next core, so the train
-        // stays equal to the tensor and ends up left-orthogonal.
-        //
-        // The fiber core for bond k is formed here, not after the sweep: at
-        // iteration k the left and right orthogonalizations meet at core k. Its
-        // left_partial[k] and freshly orthogonalized cores[k] are final, while
-        // right_partial[k] still evaluates cores k+1..d-1 as sweep 1 left them
-        // (untouched so far). A later iteration folds the carry into core k+1
-        // and so invalidates right_partial[k] for that core, so the fiber core
-        // must be captured now, while all three factors describe the same train.
-        std::vector<TensorFibersCore<Scalar>> fiber_cores;
-        fiber_cores.reserve(d);
+        // Sweep 2: left-to-right QR orthogonalization + left index selection.
+        // Mirrors sweep 1: each core is made left-orthonormal *before* the
+        // selector runs on it, so selection acts on an orthonormal basis (the
+        // condition DEIM/volume sampling relies on) rather than on the
+        // right-orthogonal cores left by sweep 1. The QR carry is folded into
+        // the next core, so the train stays equal to the tensor and ends up
+        // left-orthogonal.
         Eigen::MatrixX<Scalar> qr_carry;
         for (std::size_t k = 0; k + 1 < d; ++k) {
             if (k > 0) {
                 cores[k].absorbLeftFactor(qr_carry);
             }
-            fiber_cores.push_back(
-                formFiberCore(cores[k], left_partial[k], right_partial[k]));
             qr_carry = cores[k].leftOrth();
 
-            const Eigen::Index l_prev = left_partial[k].rows();
+            const Eigen::Index l_prev = left_partial.rows();
             auto [indices, submatrix] = cores[k].leftSelectIndices(
-                left_partial[k], selector,
+                left_partial, selector,
                 width(cores[k].rightRank(), l_prev * cores[k].modeSize()));
 
             left_levels[k] =
                 FiberIndices::Level::fromLeftIndices(indices, l_prev, k == 0);
 
-            left_partial[k + 1] = std::move(submatrix);
+            left_partial = std::move(submatrix);
         }
         if (d > 1) {
             cores[d - 1].absorbLeftFactor(qr_carry);
@@ -574,15 +562,30 @@ template <typename Scalar> class TensorTrain {
         // left_levels[d-1] stays empty: no left set is selected at the last
         // bond (it would enumerate full multi-indices).
 
-        // The last core is not visited by the sweep; its fiber core is formed
-        // now, after it absorbs the trailing carry (right_partial[d-1] is
-        // identity).
-        fiber_cores.push_back(formFiberCore(cores[d - 1], left_partial[d - 1],
-                                            right_partial[d - 1]));
+        return std::make_shared<const FiberIndices>(std::move(left_levels),
+                                                    std::move(right_levels));
+    }
 
-        auto skeleton = std::make_shared<const FiberIndices>(
-            std::move(left_levels), std::move(right_levels));
-        return TensorFibers<Scalar>(std::move(fiber_cores), std::move(skeleton));
+    /*!
+     * @brief Truncates the train, selects a nested cross skeleton and returns
+     * the train's own fibers evaluated on it: `selectCrossIndices` followed by
+     * `atFibers`.
+     * @param selector,atol,rtol,num_samples See `selectCrossIndices`.
+     * @return The train's fibers on the selected skeleton: `TensorFibers` whose
+     * fiber core `k` holds \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$, with the
+     * `FiberIndices` skeleton embedded (`skeleton()`). Feeding it back into the
+     * fibers constructor reproduces the (truncated) train.
+     *
+     * Mutating exactly like `selectCrossIndices` (truncation +
+     * re-orthogonalization); the returned fibers are exact evaluations of the
+     * train as it stands on exit.
+     */
+    TensorFibers<Scalar>
+    selectCross(std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
+                Scalar rtol,
+                const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+                    &num_samples = nullptr) {
+        return atFibers(selectCrossIndices(selector, atol, rtol, num_samples));
     }
 
     /*!
@@ -598,10 +601,11 @@ template <typename Scalar> class TensorTrain {
      * @param atol Absolute Frobenius tolerance of the per-slab rank
      * truncation.
      * @param rtol Relative tolerance of the per-slab rank truncation.
-     * @param oversample Extra indices per level beyond the post-truncation
-     * rank. This is also the rank-growth headroom: a slab is sampled at most
-     * `oversample` wider than the current rank, so a bond rank can grow by at
-     * most `oversample` per sweep.
+     * @param num_samples Per-bond skeleton width policy, the same slot as
+     * `Solver`/`selectCrossIndices`: called `num_samples(rank, candidates)`
+     * with the post-truncation bond rank and the number of candidate fibers,
+     * and clamped to \f$ [\text{rank}, \text{candidates}] \f$. Null defaults to
+     * `rank + 1`.
      * @param rounds Number of (backward + forward) sweep pairs; 1 suffices
      * for a good warm start (e.g. the previous time step's skeleton), a cold
      * or poor start may need more.
@@ -613,18 +617,18 @@ template <typename Scalar> class TensorTrain {
      *   the mixed skeleton (stale left levels, right levels refreshed so
      *   far), stabilized by absorbing the carry \f$ \hat{P}_k^+ \f$,
      *   truncated by `rightSvd` — and only then, knowing the truncated rank,
-     *   the selector picks `rank + oversample` columns of the right-
-     *   orthonormal factor (with \f$ \hat{P}_k \f$ absorbed, so candidates
-     *   are actual fibers) as the new bond-(k-1) right level. \f$ \hat{P}
-     *   \f$ collects the columns of the cumulative right basis at the
-     *   selected fibers, exactly mirroring the \f$ \hat{Q} \f$ recursion of
-     *   the fibers constructor.
-     * - *Forward*, left-to-right, selection *and* construction: the fibers
-     *   constructor's stabilized rebuild with the index selection interleaved
-     *   after each `leftSvd`, so every left level is selected at the width
-     *   its core's truncated rank prescribes and the truncated orthonormal
-     *   factor is kept as the final core. There is no separate rebuild that
-     *   could invalidate the widths afterwards.
+     *   the selector picks `num_samples(rank, candidates)` columns of the
+     *   right-orthonormal factor (with \f$ \hat{P}_k \f$ absorbed, so
+     *   candidates are actual fibers) as the new bond-(k-1) right level.
+     *   \f$ \hat{P} \f$ collects the columns of the cumulative right basis at
+     *   the selected fibers, exactly mirroring the \f$ \hat{Q} \f$ recursion
+     *   of the fibers constructor.
+     * - *Forward*, left-to-right, selection *and* construction: the unified
+     *   `forwardSweep` with the dynamic level policy — the index selection
+     *   interleaved after each `leftSvd`, so every left level is selected at
+     *   the width its core's truncated rank prescribes and the truncated
+     *   orthonormal factor is kept as the final core. There is no separate
+     *   rebuild that could invalidate the widths afterwards.
      *
      * On exit the left levels are exactly consistent with the returned train;
      * the right levels are one half-sweep stale (their widths reflect the
@@ -634,22 +638,45 @@ template <typename Scalar> class TensorTrain {
      */
     [[nodiscard]] static std::pair<TensorTrain,
                                    std::shared_ptr<const FiberIndices>>
-    crossInterpolate(const FiberEvaluatorBase<Scalar> &f, FiberIndices skeleton,
-                     std::unique_ptr<SelectorBase<Scalar>> &selector,
-                     Scalar atol, Scalar rtol, Eigen::Index oversample = 2,
-                     int rounds = 1) {
+    crossInterpolate(
+        const FiberEvaluatorBase<Scalar> &f, FiberIndices skeleton,
+        std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
+        Scalar rtol,
+        const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
+            &num_samples = nullptr,
+        int rounds = 1) {
         assert(rounds >= 1 && "crossInterpolate: at least one round.");
-        assert(oversample >= 0 &&
-               "crossInterpolate: oversample must be non-negative.");
         assert(skeleton.order() == f.modeSizes().size() &&
                "crossInterpolate: skeleton order must match the tensor "
                "order.");
 
+        // Width policy: rank + 1 when none is given (the historical default
+        // oversampling, and the rank-growth headroom per sweep).
+        const auto width = [&num_samples](Eigen::Index rank,
+                                          Eigen::Index candidates) {
+            return num_samples ? num_samples(rank, candidates) : rank + 1;
+        };
+
         std::vector<TensorTrainCore<Scalar>> cores;
         for (int r = 0; r < rounds; ++r) {
-            backwardSelectSweep(f, skeleton, selector, atol, rtol, oversample);
-            cores = forwardCrossSweep(f, skeleton, selector, atol, rtol,
-                                      oversample);
+            backwardSelectSweep(f, skeleton, selector, atol, rtol, width);
+            cores = forwardSweep(
+                f, skeleton, atol, rtol,
+                [&](std::size_t k, const TensorTrainCore<Scalar> &core,
+                    const Eigen::MatrixX<Scalar> &hat_Q) {
+                    // Candidate rows are the fibers (p, i): U_{<=k} evaluated
+                    // at node p of the bond-(k-1) left level extended by mode
+                    // i; width decided after truncation from the truncated
+                    // rank and the candidate count.
+                    const Eigen::Index l_prev = hat_Q.rows();
+                    auto [indices, submatrix] = core.leftSelectIndices(
+                        hat_Q, selector,
+                        width(core.rightRank(), l_prev * core.modeSize()));
+                    skeleton.setLeftLevel(
+                        k, FiberIndices::Level::fromLeftIndices(indices, l_prev,
+                                                                k == 0));
+                    return std::move(submatrix);
+                });
         }
 
         return std::make_pair(
@@ -766,7 +793,7 @@ template <typename Scalar> class TensorTrain {
     }
 
     // ----------------------------------------------------------------------
-    //  Adaptive cross sweeps
+    //  Cross sweeps (the unified forward engine + the adaptive backward half)
     // ----------------------------------------------------------------------
 
     /*!
@@ -780,15 +807,16 @@ template <typename Scalar> class TensorTrain {
      * from the columns of the resulting right-orthonormal factor with
      * \f$ \hat{P}_k \f$ absorbed — so the candidates are actual fibers
      * (mode, parent into the *new* right level k), keeping the levels nested.
-     * The width is `truncated rank + oversample`, decided after the
+     * The width is `num_samples(rank, candidates)`, decided after the
      * truncation. The cores themselves are discarded; only the skeleton and
      * the \f$ \hat{P} \f$ recursion survive.
      */
+    template <typename Width>
     static void
     backwardSelectSweep(const FiberEvaluatorBase<Scalar> &f,
                         FiberIndices &skeleton,
                         std::unique_ptr<SelectorBase<Scalar>> &selector,
-                        Scalar atol, Scalar rtol, Eigen::Index oversample) {
+                        Scalar atol, Scalar rtol, const Width &width) {
         const std::size_t d = skeleton.order();
 
         // hat_P: columns of the cumulative right-orthonormal basis V_{>=k+1}
@@ -812,7 +840,7 @@ template <typename Scalar> class TensorTrain {
             // mode i extending node p of the (new) bond-k right level.
             const Eigen::Index rho = hat_P.cols();
             auto [indices, submatrix] = core.rightSelectIndices(
-                hat_P, selector, core.leftRank() + oversample);
+                hat_P, selector, width(core.leftRank(), core.modeSize() * rho));
 
             skeleton.setRightLevel(
                 k - 1, FiberIndices::Level::fromRightIndices(indices, rho));
@@ -823,117 +851,57 @@ template <typename Scalar> class TensorTrain {
     }
 
     /*!
-     * @brief The forward half of an adaptive cross round: the stabilized
-     * rebuild of `coresFromFibers` with the left-level selection interleaved,
-     * left to right.
-     *
-     * At core `k` the slab is evaluated on the current skeleton (left levels
-     * already refreshed, right levels from the backward sweep), the carry
-     * \f$ \hat{Q}_{k-1}^+ \f$ absorbed, and `leftSvd` truncates and leaves
-     * the orthonormal factor as the final core — then, knowing the truncated
-     * rank, the new bond-k left level is selected from its rows with
-     * \f$ \hat{Q}_{k-1} \f$ absorbed at width `rank + oversample`. Because
-     * selection happens after the truncation that also fixes the core, the
-     * returned skeleton's left widths always equal the built train's ranks
-     * plus the oversampling — no later rebuild can invalidate them.
-     * @return The interpolant's cores, left-orthogonal by construction (the
-     * trailing carry sits in the last core).
+     * @brief The unified forward sweep: builds left-orthogonal cores from the
+     * slab evaluations of `f` — the stabilized cross rebuild — with the
+     * source of each bond's left level as the policy seam.
+     * @param f The tensor, sampled one slab at a time on `skeleton`.
+     * @param skeleton The skeleton the slabs are evaluated on. Slab `k` reads
+     * only left levels `< k` and right levels `>= k`, so a dynamic policy may
+     * rewrite left level `k` through its own (non-const) reference at
+     * iteration `k` — the mixed-skeleton contract of `FiberEvaluatorBase`.
+     * @param next_left_level Invoked at every interior bond `k` — after the
+     * slab has absorbed the carry \f$ \hat{Q}_{k-1}^+ \f$ and `leftSvd` has
+     * truncated it — with the truncated core and \f$ \hat{Q}_{k-1} \f$.
+     * Returns \f$ \hat{Q}_k \f$, the rows of the cumulative orthonormal basis
+     * \f$ U_{\le k} \f$ at the bond-k left fibers: by *selecting* a new level
+     * into the skeleton (`crossInterpolate`) or by *reading* the skeleton's
+     * existing one (the fibers constructor) — the selection submatrix and the
+     * `appendLeftNodes` recursion produce the same rows.
+     * @return The cores, left-orthogonal by construction (the trailing carry
+     * sits in the last core, where no level is produced — a left set at the
+     * last bond would enumerate full multi-indices).
      */
+    template <typename NextLeftLevel>
     static std::vector<TensorTrainCore<Scalar>>
-    forwardCrossSweep(const FiberEvaluatorBase<Scalar> &f,
-                      FiberIndices &skeleton,
-                      std::unique_ptr<SelectorBase<Scalar>> &selector,
-                      Scalar atol, Scalar rtol, Eigen::Index oversample) {
+    forwardSweep(const FiberEvaluatorBase<Scalar> &f,
+                 const FiberIndices &skeleton, Scalar atol, Scalar rtol,
+                 NextLeftLevel &&next_left_level) {
         const std::size_t d = skeleton.order();
         std::vector<TensorTrainCore<Scalar>> result;
         result.reserve(d);
 
         // hat_Q: rows of the cumulative orthonormal basis U_{<=k} at the
-        // bond-k left fibers; identity at the left boundary.
+        // bond-k left fibers; carry = pinv(hat_Q), the stable inversion of
+        // DEIM-selected rows of an orthonormal basis (square inverse when not
+        // oversampled). At the left boundary both are the 1 x 1 identity.
         Eigen::MatrixX<Scalar> hat_Q = Eigen::MatrixX<Scalar>::Identity(1, 1);
         Eigen::MatrixX<Scalar> carry = Eigen::MatrixX<Scalar>::Identity(1, 1);
 
         for (std::size_t k = 0; k < d; ++k) {
             TensorFibersCore<Scalar> fiber_core = f.atFiber(k, skeleton);
-            const Eigen::Index l_prev = fiber_core.leftRank();
-            assert(l_prev ==
-                       static_cast<Eigen::Index>(skeleton.leftFiberCount(k)) &&
-                   "forwardCrossSweep: fiber core left rank must match the "
-                   "left fiber count.");
-
-            TensorTrainCore<Scalar> core(fiber_core.leftUnfolding(),
-                                         fiber_core.modeSize());
-            if (k > 0) {
-                core.absorbLeftFactor(carry); // pinv(hat_Q_{k-1})
-            }
-            if (k + 1 == d) {
-                // Last core keeps the trailing carry; right boundary rank 1.
-                // No left level is selected at the last bond (it would
-                // enumerate full multi-indices).
-                result.push_back(std::move(core));
-                break;
-            }
-
-            core.leftSvd(atol, rtol);
-
-            // Candidate rows are the fibers (p, i): U_{<=k} evaluated at
-            // node p of the (new) bond-(k-1) left level extended by mode i.
-            auto [indices, submatrix] = core.leftSelectIndices(
-                hat_Q, selector, core.rightRank() + oversample);
-
-            skeleton.setLeftLevel(
-                k, FiberIndices::Level::fromLeftIndices(indices, l_prev, k == 0));
-
-            // submatrix is exactly hat_Q_k: the selected rows of the
-            // hat_Q-absorbed orthonormal unfolding, i.e. U_{<=k} at the new
-            // bond-k left fibers.
-            hat_Q = std::move(submatrix);
-            carry = pseudoInverse(hat_Q);
-            result.push_back(std::move(core));
-        }
-        return result;
-    }
-
-    // ----------------------------------------------------------------------
-    //  Fibers rebuild
-    // ----------------------------------------------------------------------
-
-    /*!
-     * @brief Builds left-orthogonal cores from sampled fibers (stabilized
-     * TT-cross interpolation); see the fibers constructor for the math and
-     * the role of the (`atol`, `rtol`) slab truncation.
-     */
-    static std::vector<TensorTrainCore<Scalar>>
-    coresFromFibers(const TensorFibers<Scalar> &fibers, Scalar atol,
-                    Scalar rtol) {
-        const FiberIndices &skeleton = *fibers.skeleton();
-        const std::size_t d = fibers.order();
-
-        std::vector<TensorTrainCore<Scalar>> result;
-        result.reserve(d);
-
-        // hat_Q: rows of the cumulative orthonormal basis U_{<=k} at the
-        // selected multi-indices; carry = pinv(hat_Q), folded into the next
-        // slab. At the left boundary both are the 1 x 1 identity.
-        Eigen::MatrixX<Scalar> hat_Q = Eigen::MatrixX<Scalar>::Identity(1, 1);
-        Eigen::MatrixX<Scalar> carry = Eigen::MatrixX<Scalar>::Identity(1, 1);
-
-        for (std::size_t k = 0; k < d; ++k) {
-            const TensorFibersCore<Scalar> &fiber_core = fibers.core(k);
             assert(fiber_core.leftRank() ==
                        static_cast<Eigen::Index>(skeleton.leftFiberCount(k)) &&
-                   "TensorTrain(fibers): fiber core left rank must match the "
-                   "left fiber count.");
+                   "forwardSweep: fiber core left rank must match the left "
+                   "fiber count.");
 
             TensorTrainCore<Scalar> core(fiber_core.leftUnfolding(),
                                          fiber_core.modeSize());
             if (k > 0) {
                 assert(carry.cols() == core.leftRank() &&
-                       "TensorTrain(fibers): carry does not match the fiber "
-                       "core's left rank.");
-                core.absorbLeftFactor(carry);
+                       "forwardSweep: carry does not match the fiber core's "
+                       "left rank.");
+                core.absorbLeftFactor(carry); // pinv(hat_Q_{k-1})
             }
-
             if (k + 1 == d) {
                 // Last core keeps the trailing carry; right boundary rank 1.
                 result.push_back(std::move(core));
@@ -947,25 +915,51 @@ template <typename Scalar> class TensorTrain {
             // rank-deficient slab must not reach the pseudo-inverse below.
             core.leftSvd(atol, rtol);
 
-            // hat_Q_k(j, :) = hat_Q_{k-1}(p_j, :) * Q_k(i_j) over the level's
-            // (parent, mode) nodes: the selected rows of U_{<=k}. This is the
-            // same nesting recursion as `appendLeftNodes` (the root level's
-            // nodes have parent -1, clamped to 0 against the 1 x 1 hat_Q).
-            const FiberIndices::Level &level = skeleton.leftLevel(k);
-            assert(level.size() > 0 &&
-                   "TensorTrain(fibers): empty left index level.");
-            Eigen::MatrixX<Scalar> next_hat_Q =
-                appendLeftNodes(core, level, hat_Q, k == 0);
-
-            // The stable inversion: pseudo-inverse of DEIM-selected rows of an
-            // orthonormal basis (square inverse when not oversampled).
-            carry = pseudoInverse(next_hat_Q);
-            hat_Q = std::move(next_hat_Q);
+            hat_Q = next_left_level(k, core, hat_Q);
+            carry = pseudoInverse(hat_Q);
             result.push_back(std::move(core));
         }
         return result;
     }
+
+    // ----------------------------------------------------------------------
+    //  Fibers rebuild
+    // ----------------------------------------------------------------------
+
+    /*!
+     * @brief Builds left-orthogonal cores from sampled fibers (stabilized
+     * TT-cross interpolation): the unified `forwardSweep` with the static
+     * level policy, reading the skeleton the fibers were sampled on; see the
+     * fibers constructor for the math and the role of the (`atol`, `rtol`)
+     * slab truncation.
+     */
+    static std::vector<TensorTrainCore<Scalar>>
+    coresFromFibers(const TensorFibers<Scalar> &fibers, Scalar atol,
+                    Scalar rtol) {
+        assert(fibers.skeleton() && "TensorTrain(fibers): null skeleton.");
+        const FiberIndices &skeleton = *fibers.skeleton();
+        const FibersEvaluator<Scalar> evaluator(fibers);
+
+        return forwardSweep(
+            evaluator, skeleton, atol, rtol,
+            [&skeleton](std::size_t k, const TensorTrainCore<Scalar> &core,
+                        const Eigen::MatrixX<Scalar> &hat_Q) {
+                // hat_Q_k(j, :) = hat_Q_{k-1}(p_j, :) * Q_k(i_j) over the
+                // level's (parent, mode) nodes: the same nesting recursion a
+                // dynamic policy gets back as its selection submatrix (the
+                // root level's nodes have parent -1, clamped to 0 against the
+                // 1 x 1 hat_Q).
+                const FiberIndices::Level &level = skeleton.leftLevel(k);
+                assert(level.size() > 0 &&
+                       "TensorTrain(fibers): empty left index level.");
+                return appendLeftNodes(core, level, hat_Q, k == 0);
+            });
+    }
 };
+
+// ----------------------------------------------------------------------
+//  FiberEvaluatorBase adapter for tensor trains
+// ----------------------------------------------------------------------
 
 /*!
  * @brief Adapts a `TensorTrain` (optionally scaled) to the
@@ -999,6 +993,10 @@ class TrainFiberEvaluator : public FiberEvaluatorBase<Scalar> {
     const TensorTrain<Scalar> *train;
     Scalar scale;
 };
+
+// ----------------------------------------------------------------------
+//  Tensor trains operators
+// ----------------------------------------------------------------------
 
 /*!
  * @brief Sum of two trains by block core concatenation, without truncation.

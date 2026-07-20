@@ -1,10 +1,10 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_SOLVER_BASE_H
 #define MAT_SUBSET_EXPERIMENTS_SOLVER_BASE_H
 
-#include <cassert> // For assert
-#include <cstddef> // For std::size_t
-#include <deque>   // For std::deque
-#include <memory>  // For std::unique_ptr
+#include <cassert>  // For assert
+#include <cstddef>  // For std::size_t
+#include <deque>    // For std::deque
+#include <memory>   // For std::unique_ptr
 #include <optional> // For std::optional
 #include <utility>  // For std::move
 #include <vector>   // For std::vector
@@ -307,13 +307,13 @@ template <typename Scalar> class SolverBase {
      * @param warmup_steps Number of leading steps taken in exact TT
      * arithmetic (see the class docs and `RhsBase::evaluateTrain`).
      */
-    SolverBase(std::vector<TensorTrain<Scalar>> initial_history,
-               std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme,
-               Scalar dt, std::unique_ptr<SelectorBase<Scalar>> selector,
-               Scalar atol, Scalar rtol,
-               std::unique_ptr<BoundaryConditionBase<Scalar>>
-                   boundary_condition,
-               int warmup_steps)
+    SolverBase(
+        std::vector<TensorTrain<Scalar>> initial_history,
+        std::unique_ptr<RhsBase<Scalar>> rhs, Scheme<Scalar> scheme, Scalar dt,
+        std::unique_ptr<SelectorBase<Scalar>> selector, Scalar atol,
+        Scalar rtol,
+        std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition,
+        int warmup_steps)
         : rhs(std::move(rhs)), scheme(std::move(scheme)), dt(dt),
           selector(std::move(selector)), atol(atol), rtol(rtol),
           boundary_condition(std::move(boundary_condition)),
@@ -344,7 +344,7 @@ template <typename Scalar> class SolverBase {
              ++it) {
             history.push_back(std::move(*it));
         }
-        // Both fiber paths run selectIndices on the newest state (every step
+        // Both fiber paths run selectCross on the newest state (every step
         // for Solver, as the skeleton bootstrap for AdaptiveSolver), which
         // requires a left-orthogonal train. All later states are produced
         // left-orthogonal; older initial states are only touched by fiber
@@ -406,7 +406,7 @@ template <typename Scalar> class SolverBase {
             }
 
             // Restore minimal ranks; leaves the train left-orthogonal, as
-            // the fiber paths' selectIndices requires once warm-up ends.
+            // the fiber paths' selectCross requires once warm-up ends.
             combo.compress(atol, rtol);
             next.emplace(std::move(combo));
             stage_state = &*next;
