@@ -44,9 +44,6 @@ data
 results
 figures
 
-# Supplementary folder
-supplementary
-
 # Vscode files
 .vscode
 
