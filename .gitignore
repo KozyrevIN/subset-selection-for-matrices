@@ -37,6 +37,9 @@ build
 # Out folder
 out
 
+# Data folder (for datasets)
+data
+
 # Results and figures
 results
 figures
