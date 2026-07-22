@@ -182,28 +182,48 @@ template <typename Scalar> class Tester {
         std::cout << std::endl; // Add newline so progress bar appears below
         ProgressBar progress_bar(k_values.size() * trials_per_k *
                                  selectors.size());
-        int k_max_len = std::to_string(k_values.back()).length();
 
-        for (Eigen::Index k : k_values) {
-            // Calculate theoretical bounds once per k (independent of trials)
-            auto [m, n] = matrix_generator->getMatrixSize();
-
-            std::vector<Scalar> spectral_bounds(selectors.size());
-            std::vector<Scalar> frobenius_bounds(selectors.size());
-
-            for (int i = 0; i < selectors.size(); ++i) {
-                spectral_bounds[i] = std::sqrt(
+        // Precompute theoretical bounds once per k (independent of trials).
+        // spectral_bounds[ki][i] is the bound for k_values[ki], selector i.
+        auto [m, n] = matrix_generator->getMatrixSize();
+        std::vector<std::vector<Scalar>> spectral_bounds_by_k(k_values.size());
+        std::vector<std::vector<Scalar>> frobenius_bounds_by_k(k_values.size());
+        for (size_t ki = 0; ki < k_values.size(); ++ki) {
+            Eigen::Index k = k_values[ki];
+            spectral_bounds_by_k[ki].resize(selectors.size());
+            frobenius_bounds_by_k[ki].resize(selectors.size());
+            for (size_t i = 0; i < selectors.size(); ++i) {
+                spectral_bounds_by_k[ki][i] = std::sqrt(
                     selectors[i]->template bound<Norm::Spectral>(m, n, k));
-                frobenius_bounds[i] = std::sqrt(
+                frobenius_bounds_by_k[ki][i] = std::sqrt(
                     selectors[i]->template bound<Norm::Frobenius>(m, n, k));
             }
+        }
 
-            std::vector<int> trials(trials_per_k);
-            std::iota(trials.begin(), trials.end(), 0);
-            std::mutex output_mutex;
+        // Flatten the (k, trial) grid into a single work list so a single
+        // parallel_for saturates all cores even when trials_per_k == 1.
+        // Each work item is (k_index, trial_index); the trial index is unused
+        // by the body but kept for clarity / potential per-trial seeding.
+        std::vector<std::pair<size_t, int>> work_items;
+        work_items.reserve(k_values.size() * trials_per_k);
+        for (size_t ki = 0; ki < k_values.size(); ++ki) {
+            for (int t = 0; t < trials_per_k; ++t) {
+                work_items.emplace_back(ki, t);
+            }
+        }
 
-            std::for_each(
-                std::execution::par, trials.begin(), trials.end(), [&](int) {
+        std::mutex output_mutex;
+
+        std::for_each(
+            std::execution::par, work_items.begin(), work_items.end(),
+            [&](const std::pair<size_t, int> &item) {
+                    size_t ki = item.first;
+                    Eigen::Index k = k_values[ki];
+                    const std::vector<Scalar> &spectral_bounds =
+                        spectral_bounds_by_k[ki];
+                    const std::vector<Scalar> &frobenius_bounds =
+                        frobenius_bounds_by_k[ki];
+
                     // generateMatrix() is thread safe
                     Eigen::MatrixX<Scalar> X =
                         matrix_generator->generateMatrix();
@@ -306,9 +326,10 @@ template <typename Scalar> class Tester {
 
                         {
                             std::lock_guard<std::mutex> lock(output_mutex);
-                            std::string label =
-                                "k = " + std::format("{:^{}}", k, k_max_len);
-                            progress_bar.update(label);
+                            // Work items across all k run concurrently, so a
+                            // "current k" caption would just bounce around;
+                            // show the plain bar instead.
+                            progress_bar.update();
                             output_files[i]
                                 << k << "," << pinv_spectral_norm_ratio << ","
                                 << pinv_frobenius_norm_ratio << ","
@@ -323,7 +344,6 @@ template <typename Scalar> class Tester {
                         }
                     }
                 });
-        }
 
         // Add finish time and write final config
         auto finish_time = std::chrono::system_clock::now();
