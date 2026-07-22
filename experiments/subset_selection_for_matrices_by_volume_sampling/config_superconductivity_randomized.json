@@ -1,0 +1,33 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Superconductivity dataset",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/superconductivity.csv",
+                "target_file": "data/superconductivity_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "VS",
+                    "name": "forward iterative volume sampling"
+                },
+                {
+                    "display_name": "leverage scores",
+                    "name": "leverage scores"
+                },
+                {
+                    "display_name": "random columns",
+                    "name": "random columns"
+                }
+            ],
+            "k_values_ranges": [
+                {"start": 82, "stop": 200, "step": 1}
+            ],
+            "trials_per_k": 32
+        }
+    ]
+}
