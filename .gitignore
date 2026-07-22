@@ -57,3 +57,6 @@ CLAUDE.md
 
 # Snapshots folder
 snapshots
+
+# Pycache folder
+__pycache__
