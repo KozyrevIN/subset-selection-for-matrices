@@ -227,6 +227,108 @@ class SparseFieldMapper : public FieldMapperBase<Scalar> {
 };
 
 /*!
+ * @brief Maps a physical grid multi-index onto a QTT (bit-split) train, in
+ * either the grouped or the interleaved core layout.
+ * @tparam Scalar The underlying scalar type (e.g. `float`, `double`).
+ *
+ * Inverse of the QTT layout built in `QttAcousticRhs.h`: a physical axis of
+ * \f$ 2^{L_k} \f$ points is represented by \f$ L_k \f$ size-2 modes, big-endian
+ * (most-significant bit first). The physical index \f$ i_k \f$ becomes the bits
+ * \f$ b_{k,j} = (i_k \gg j)\,\&\,1 \f$. The two layouts differ only in the order
+ * those bit modes appear in the QTT multi-index:
+ * - grouped: all of axis 0's bits (MSB first), then axis 1's, ...;
+ * - interleaved: bit level \f$ L-1 \f$ of every axis (x, y, z, ...), then level
+ *   \f$ L-2 \f$, ..., down to level 0 (requires equal levels per axis).
+ *
+ * The display `Grid` stays the physical grid, so the snapshot writer loops over
+ * physical nodes exactly as in the TT case; this mapper only translates each
+ * node into the \f$ \sum_k L_k \f$ bit modes the QTT state indexes. `interleaved`
+ * must match the layout the state was built with (`QttLayout` in
+ * `QttAcousticRhs.h`).
+ */
+template <typename Scalar>
+class QttFieldMapper : public FieldMapperBase<Scalar> {
+  public:
+    /*!
+     * @brief Constructs the mapper from the physical axis sizes.
+     * @param name The field name.
+     * @param sizes The physical grid points per axis \f$ (2^{L_1}, \dots) \f$,
+     * each a power of two; their bit counts define the QTT mode layout.
+     * @param interleaved `false` for the grouped layout (default), `true` for
+     * the scale-interleaved layout; interleaved needs equal levels per axis.
+     */
+    QttFieldMapper(std::string name, std::vector<Eigen::Index> sizes,
+                   bool interleaved = false)
+        : FieldMapperBase<Scalar>(std::move(name)), interleaved(interleaved) {
+        levels.reserve(sizes.size());
+        for (const Eigen::Index n : sizes) {
+            assert(n >= 2 && "QttFieldMapper: each axis needs >= 2 points.");
+            Eigen::Index bits = 0;
+            Eigen::Index m = n;
+            while (m > 1) {
+                assert((m & 1) == 0 &&
+                       "QttFieldMapper: each axis size must be a power of 2.");
+                m >>= 1;
+                ++bits;
+            }
+            levels.push_back(bits);
+            total_levels += bits;
+        }
+        if (interleaved) {
+            for (const Eigen::Index l : levels) {
+                assert(l == levels.front() &&
+                       "QttFieldMapper: interleaved layout needs equal levels "
+                       "per axis (a cubic grid).");
+            }
+        }
+    }
+
+    [[nodiscard]] Scalar
+    evaluate(const TensorTrain<Scalar> &state,
+             const std::vector<Eigen::Index> &grid_index) const override {
+        assert(grid_index.size() == levels.size() &&
+               "QttFieldMapper: grid index length must equal the axis count.");
+        assert(state.modeSizes().size() ==
+                   static_cast<std::size_t>(total_levels) &&
+               "QttFieldMapper: QTT state order must equal sum of bit levels.");
+        // Big-endian bit b_{k,j} = (grid_index[k] >> j) & 1.
+        const auto bit = [&](std::size_t k, Eigen::Index j) -> Eigen::Index {
+            return (grid_index[k] >> j) & Eigen::Index(1);
+        };
+        for (std::size_t k = 0; k < levels.size(); ++k) {
+            assert(grid_index[k] >= 0 &&
+                   grid_index[k] < (Eigen::Index(1) << levels[k]) &&
+                   "QttFieldMapper: grid index out of range for its axis.");
+        }
+
+        std::vector<Eigen::Index> bit_index;
+        bit_index.reserve(static_cast<std::size_t>(total_levels));
+        if (!interleaved) {
+            // Grouped: axis 0's bits (MSB first), then axis 1's, ...
+            for (std::size_t k = 0; k < levels.size(); ++k) {
+                for (Eigen::Index j = levels[k] - 1; j >= 0; --j) {
+                    bit_index.push_back(bit(k, j));
+                }
+            }
+        } else {
+            // Interleaved: level L-1 of every axis, then L-2, ..., down to 0.
+            const Eigen::Index L = levels.front();
+            for (Eigen::Index j = L - 1; j >= 0; --j) {
+                for (std::size_t k = 0; k < levels.size(); ++k) {
+                    bit_index.push_back(bit(k, j));
+                }
+            }
+        }
+        return state(bit_index);
+    }
+
+  private:
+    std::vector<Eigen::Index> levels; //!< bit levels L_k per physical axis
+    Eigen::Index total_levels = 0;    //!< sum_k L_k = QTT tensor order
+    bool interleaved;                 //!< core ordering across axes
+};
+
+/*!
  * @brief Storage precision for the point-data arrays written to disk,
  * independent of the compute `Scalar`.
  */

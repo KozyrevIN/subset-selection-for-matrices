@@ -292,7 +292,8 @@ TEST_CASE_TEMPLATE(
 
 namespace {
 
-// The per-axis Cerjan taper, mirroring makeCerjanMask.
+// The per-axis Cerjan taper, mirroring makeCerjanMask: a quartic in the
+// normalized depth q = (width - dist) / width, C^2 at the inner edge.
 template <typename Scalar>
 Scalar taper1d(Eigen::Index i, Eigen::Index n, Eigen::Index width,
                Scalar strength) {
@@ -300,8 +301,10 @@ Scalar taper1d(Eigen::Index i, Eigen::Index n, Eigen::Index width,
     if (dist >= width) {
         return Scalar(1);
     }
-    const Scalar x = strength * static_cast<Scalar>(width - dist);
-    return std::exp(-x * x);
+    const Scalar q =
+        static_cast<Scalar>(width - dist) / static_cast<Scalar>(width);
+    const Scalar q2 = q * q;
+    return std::exp(-strength * q2 * q2);
 }
 
 // F = 0: isolates the boundary condition in the solver.

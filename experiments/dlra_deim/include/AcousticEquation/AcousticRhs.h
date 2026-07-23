@@ -12,6 +12,8 @@
 
 #include <Eigen/Core> // For Eigen::MatrixX, Eigen::Index
 
+#include <AcousticEquation/FiniteDifference.h> // For centralSecondDerivat...
+
 #include <TTCrossSolver/FiberEvaluator.h>  // For FiberEvaluatorBase
 #include <TTCrossSolver/SolverBase.h>      // For RhsBase, BoundaryCondition...
 #include <TTCrossSolver/TensorFibers.h>    // For TensorFibers
@@ -69,33 +71,50 @@ TensorTrainCore<Scalar> makeOperatorCore(
  * folded as \f$ \text{out} \cdot n_k + \text{in} \f$); interior bond ranks
  * are 2 (1 for d = 1).
  *
- * \f$ L_k = \mathrm{tridiag}(1, -2, 1) / h_k^2 \f$ with the stencil truncated
- * at the ends — homogeneous Dirichlet boundaries. The classic construction:
+ * \f$ L_k \f$ is the central second-derivative stencil of accuracy
+ * `order` (`centralSecondDerivativeWeights`, divided by \f$ h_k^2 \f$), with any
+ * term reaching outside \f$ [0, n-1] \f$ dropped — the homogeneous Dirichlet
+ * boundary (ghost values 0), the same "truncated at the ends" rule the
+ * second-order stencil used, generalized to the wider stencil. Raising `order`
+ * cuts the numerical dispersion the wave operator accumulates over time. The
+ * TT operator stays rank 2 whatever the order: each axis still contributes one
+ * \f$ L_k \f$. The classic construction:
  * the first core carries \f$ [L_1 \; I] \f$, middle cores
  * \f$ \bigl[\begin{smallmatrix} I & 0 \\ L_k & I \end{smallmatrix}\bigr] \f$,
  * the last core \f$ [I \; L_d]^\top \f$, so the bond product telescopes into
  * the sum of one-site terms.
+ *
+ * @param order The (even) accuracy order of the stencil (default 2). Must match
+ * `DenseSolver`'s order for the same-grid dense residual to isolate the
+ * low-rank error.
  */
 template <typename Scalar>
 TensorTrain<Scalar>
 makeLaplacianOperator(const std::vector<Eigen::Index> &sizes,
-                      const std::vector<Scalar> &spacings) {
+                      const std::vector<Scalar> &spacings, int order = 2) {
     const std::size_t d = sizes.size();
     assert(d >= 1 && "makeLaplacianOperator: at least one dimension.");
     assert(spacings.size() == d &&
            "makeLaplacianOperator: one spacing per dimension.");
 
-    // The 1D Dirichlet stencil tridiag(1, -2, 1) / h^2.
-    const auto stencil = [](Eigen::Index n, Scalar h) {
+    // The 1D central second-derivative stencil of the requested order / h^2,
+    // truncated at the ends (ghost values 0). Must match DenseSolver::laplacian.
+    const std::vector<Scalar> weights =
+        centralSecondDerivativeWeights<Scalar>(order);
+    const auto stencil = [&weights](Eigen::Index n, Scalar h) {
         Eigen::MatrixX<Scalar> L = Eigen::MatrixX<Scalar>::Zero(n, n);
-        const Scalar w = Scalar(1) / (h * h);
+        const Scalar inv_h2 = Scalar(1) / (h * h);
+        const auto radius = static_cast<Eigen::Index>(weights.size()) - 1;
         for (Eigen::Index i = 0; i < n; ++i) {
-            L(i, i) = Scalar(-2) * w;
-            if (i > 0) {
-                L(i, i - 1) = w;
-            }
-            if (i + 1 < n) {
-                L(i, i + 1) = w;
+            L(i, i) = weights[0] * inv_h2;
+            for (Eigen::Index j = 1; j <= radius; ++j) {
+                const Scalar w = weights[static_cast<std::size_t>(j)] * inv_h2;
+                if (i - j >= 0) {
+                    L(i, i - j) = w;
+                }
+                if (i + j < n) {
+                    L(i, i + j) = w;
+                }
             }
         }
         return L;
@@ -214,13 +233,17 @@ template <typename Scalar> class AcousticRhs : public RhsBase<Scalar> {
      * @param sizes The grid points per dimension.
      * @param spacings The grid spacings per dimension (for the Laplacian
      * stencil).
+     * @param order The (even) accuracy order of the Laplacian stencil
+     * (default 2); must match `DenseSolver`'s order for the same-grid dense
+     * residual to isolate the low-rank error.
      */
     AcousticRhs(TensorTrain<Scalar> speed, TensorTrain<Scalar> source_spatial,
                 std::function<Scalar(Scalar)> source_time,
-                std::vector<Eigen::Index> sizes, std::vector<Scalar> spacings)
+                std::vector<Eigen::Index> sizes, std::vector<Scalar> spacings,
+                int order = 2)
         : speed(std::move(speed)), source_spatial(std::move(source_spatial)),
           source_time(std::move(source_time)), sizes(std::move(sizes)),
-          laplacian(makeLaplacianOperator<Scalar>(this->sizes, spacings)),
+          laplacian(makeLaplacianOperator<Scalar>(this->sizes, spacings, order)),
           speed_squared(hadamardProduct(this->speed, this->speed)) {
         assert(this->source_time && "AcousticRhs: null time envelope.");
         assert(this->speed.modeSizes() == this->sizes &&
@@ -349,26 +372,41 @@ class MaskBoundaryCondition : public BoundaryConditionBase<Scalar> {
 /*!
  * @brief The Cerjan absorbing sponge as a rank-1 TT mask:
  * \f$ D = d_1 \otimes \dots \otimes d_d \f$ with the per-axis taper
- * \f$ d(i) = \exp\bigl(-(\alpha (w - \mathrm{dist}_i))^2\bigr) \f$ for nodes
- * within \f$ w \f$ cells of a wall (\f$ \mathrm{dist}_i = \min(i, n-1-i) \f$)
- * and \f$ d(i) = 1 \f$ in the interior.
+ * \f$ d(i) = \exp\bigl(-\alpha \, q^4\bigr) \f$, where
+ * \f$ q = (w - \mathrm{dist}_i) / w \in [0, 1] \f$ is the normalized depth
+ * into the strip for nodes within \f$ w \f$ cells of a wall
+ * (\f$ \mathrm{dist}_i = \min(i, n-1-i) \f$), and \f$ d(i) = 1 \f$ in the
+ * interior.
  * @param sizes The grid points per dimension.
  * @param width The absorbing strip width \f$ w \f$ in cells (classically
- * 20-40); 0 disables damping (all-ones mask).
- * @param strength The taper rate \f$ \alpha \f$ (Cerjan's classic value is
- * 0.015 for a 20-cell strip).
+ * 20-40, or auto-sized to ~2 wavelengths); 0 disables damping (all-ones mask).
+ * @param strength The total absorption exponent \f$ \alpha \f$ at the wall
+ * (dimensionless): the wall multiplier is \f$ e^{-\alpha} \f$ per step. Because
+ * it acts on the *normalized* depth \f$ q \f$, the same \f$ \alpha \f$ gives
+ * the same absorption profile at any grid resolution or strip width.
  * @return The rank-1 mask train, ready for `MaskBoundaryCondition`.
+ *
+ * The profile is quartic in the normalized depth \f$ q \f$, so the damping and
+ * its first *and second* derivatives all vanish at the inner edge
+ * (\f$ q = 0 \f$): the taper is \f$ C^2 \f$ there. C^2 is what matters here —
+ * the wave operator carries second derivatives, so a taper that is only C^1
+ * still leaves a jump in the discrete curvature \f$ D'' \f$ at the seam, and
+ * that jump is a thin scattering layer sitting exactly at radius \f$ w \f$.
+ * It reflects a sharp secondary front on first contact even when \f$ \alpha \f$
+ * is tiny (the damping is nearly flat but its curvature is not). The quartic
+ * cuts the seam \f$ D'' \f$ jump by ~30x versus the quadratic. (A merely
+ * gradient-continuous C^1 profile, or worse a linear one with a kink in the
+ * slope, reflects visibly.)
  *
  * Separability is what makes the sponge free in TT arithmetic: a Hadamard
  * product with a rank-1 tensor only rescales core slices and cannot increase
  * ranks. Corners are damped by the product of both axes' tapers, as they
- * should be. The taper must stay gentle (small \f$ \alpha \f$, wide strip) or
- * its inner edge itself reflects.
+ * should be.
  */
 template <typename Scalar>
 TensorTrain<Scalar> makeCerjanMask(const std::vector<Eigen::Index> &sizes,
                                    Eigen::Index width,
-                                   Scalar strength = Scalar(0.015)) {
+                                   Scalar strength = Scalar(3)) {
     assert(!sizes.empty() && "makeCerjanMask: at least one dimension.");
     assert(width >= 0 && "makeCerjanMask: width must be non-negative.");
 
@@ -379,8 +417,13 @@ TensorTrain<Scalar> makeCerjanMask(const std::vector<Eigen::Index> &sizes,
         for (Eigen::Index i = 0; i < n; ++i) {
             const Eigen::Index dist = std::min(i, n - 1 - i);
             if (dist < width) {
-                const Scalar x = strength * static_cast<Scalar>(width - dist);
-                taper(i, 0) = std::exp(-x * x);
+                // Normalized depth into the strip: 0 at the inner edge, 1 at
+                // the wall. A quartic profile is C^2 at the inner edge, so the
+                // discrete D'' has no jump there to scatter the wave.
+                const Scalar q = static_cast<Scalar>(width - dist) /
+                                 static_cast<Scalar>(width);
+                const Scalar q2 = q * q;
+                taper(i, 0) = std::exp(-strength * q2 * q2);
             } else {
                 taper(i, 0) = Scalar(1);
             }

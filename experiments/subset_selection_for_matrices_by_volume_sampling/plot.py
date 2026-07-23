@@ -163,13 +163,22 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
         grp    = df_filt.groupby('k')[metric_col]
         means  = grp.mean().reindex(k_vals).values
 
-        ax.plot(k_vals, means, color=color, label=name)
+        # Randomized algorithms (multiple trials per k) are shown as their
+        # mean +- std band only, with no central line: the solid means of the
+        # three randomized baselines ran straight through the low region where
+        # every dashed theoretical bound lives and drowned them out.
+        randomized = (df_filt.groupby('k').size() > 1).any()
 
-        if show_std:
+        if not randomized:
+            ax.plot(k_vals, means, color=color, label=name, zorder=2)
+
+        if show_std and randomized:
             stds = grp.std().reindex(k_vals).fillna(0).values
             ax.fill_between(k_vals, means - stds, means + stds,
-                            color=color, alpha=0.25, linewidth=0)
+                            color=color, alpha=0.25, linewidth=0, zorder=1)
 
+        # Bounds sit above the data lines (zorder=3): solid lines drawn later
+        # in this loop must not paint over earlier algorithms' dashed bounds.
         if (show_bound and metric_col == 'X_S_dag_X_frobenius_norm_inv'
                 and m is not None and n is not None
                 and (bound_algos is None or name in bound_algos)):
@@ -178,7 +187,7 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
                 dash_offsets = [0, 3, 6, 9, 12]
                 offset = dash_offsets[idx % len(dash_offsets)]
                 ax.plot(k_vals, bound, color=color, linewidth=1.2, alpha=0.8,
-                        linestyle=(offset, (4, 4)))
+                        linestyle=(offset, (4, 4)), zorder=3)
         elif (show_bound and 'frobenius_bound' in df_filt.columns
                 and metric_col == 'pinv_frobenius_norm_ratio'
                 and (bound_algos is None or name in bound_algos)):
@@ -187,7 +196,7 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
                 dash_offsets = [0, 3, 6, 9, 12]
                 offset = dash_offsets[idx % len(dash_offsets)]
                 ax.plot(k_vals, bound, color=color, linewidth=1.2, alpha=0.8,
-                        linestyle=(offset, (4, 4)))
+                        linestyle=(offset, (4, 4)), zorder=3)
 
     style_ax(ax)
     ax.set_xlabel(r'$k$')
@@ -206,12 +215,20 @@ def has_nonzero_bound(data: dict) -> bool:
 
 def make_legend(fig, algo_names, data, show_std: bool, show_bound: bool,
                 ncols: int = 4):
-    algo_handles = [
-        plt.Line2D([0], [0], color=COLORS[i % len(COLORS)], linewidth=1.2,
-                   label=name)
-        for i, name in enumerate(algo_names)
-        if name in data
-    ]
+    # Randomized algorithms (multiple trials per k) are drawn as std bands with
+    # no central line, so their legend swatch is the band patch, not a line.
+    algo_handles = []
+    for i, name in enumerate(algo_names):
+        if name not in data:
+            continue
+        color = COLORS[i % len(COLORS)]
+        randomized = (data[name].groupby('k').size() > 1).any()
+        if randomized:
+            algo_handles.append(
+                plt.Rectangle((0, 0), 1, 1, fc=color, alpha=0.25, label=name))
+        else:
+            algo_handles.append(
+                plt.Line2D([0], [0], color=color, linewidth=1.2, label=name))
     extra_handles = []
     if show_std:
         extra_handles.append(
@@ -224,23 +241,17 @@ def make_legend(fig, algo_names, data, show_std: bool, show_bound: bool,
                        linewidth=1.2, label='theoretical bound')
         )
 
-    n_extra = len(extra_handles)
-    if n_extra > 0:
-        total_before_extras = len(algo_handles)
-        remainder = total_before_extras % ncols
-        slots_left = (ncols - remainder) % ncols
-        if slots_left >= n_extra:
-            spacers = slots_left - n_extra
-        else:
-            spacers = slots_left + (ncols - n_extra)
-        blank = plt.Line2D([0], [0], color='none', label='')
-        handles = algo_handles + [blank] * spacers + extra_handles
-    else:
-        handles = algo_handles
+    # fig.legend fills column-major, so with n_rows = ceil(total / ncols) the
+    # extras appended last land at the top rows of the last column: with 9
+    # algorithms and ncols=4 (3 rows), 'standard deviation' sits on row 1 and
+    # 'theoretical bound' on row 2. No blank spacer handles — they reserved a
+    # full column each and blew the gap before the last column wide open.
+    handles = algo_handles + extra_handles
 
     fig.legend(handles=handles, loc='upper center',
                bbox_to_anchor=(0.5, 0.0), ncols=ncols,
-               frameon=False, handlelength=1.0)
+               frameon=False, handlelength=1.0,
+               columnspacing=1.0, handletextpad=0.5)
 
 
 def save_figure(fig, stem: str):
@@ -263,8 +274,11 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
     ylabel_left  = r'$1 \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
     ylabel_right = r'$\Vert X^\dag \Vert_F \,/\, \Vert X_\mathcal{S}^\dag \Vert_F$'
 
+    # Slightly wider than TEXT_WIDTH: the 4-column legend below the axes is
+    # the widest element, so the axes may as well use the same width.
     fig, (ax_left, ax_right) = plt.subplots(
-        1, 2, figsize=(TEXT_WIDTH, 0.45 * TEXT_WIDTH), layout='constrained')
+        1, 2, figsize=(1.15 * TEXT_WIDTH, 0.5 * TEXT_WIDTH),
+        layout='constrained')
 
     plot_metric_subplot(ax_left, data, algo_names,
                         metric_col='X_S_dag_X_frobenius_norm_inv',
@@ -278,9 +292,11 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
                         show_std=show_std, show_bound=show_bound,
                         bound_algos=BOUND_ALGOS)
 
-    # 9 algorithms + 2 extras → 5 columns keeps the legend to three rows.
+    # 9 algorithms + 2 extras at 4 columns → three rows filled column-major:
+    # algorithms occupy the first three columns, 'standard deviation' and
+    # 'theoretical bound' the first two rows of the fourth.
     make_legend(fig, algo_names, data, show_std=show_std, show_bound=show_bound,
-                ncols=5)
+                ncols=4)
     save_figure(fig, out_stem)
 
 
