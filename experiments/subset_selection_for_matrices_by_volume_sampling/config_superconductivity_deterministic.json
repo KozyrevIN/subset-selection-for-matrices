@@ -28,20 +28,20 @@
                     "name": "frobenius removal"
                 },
                 {
-                    "c": 1.0,
+                    "c": 1.000001,
                     "display_name": "Dominant",
                     "initialization": "greedy",
                     "name": "dominant"
                 },
                 {
-                    "c": 1.0,
+                    "c": 1.000001,
                     "display_name": "Dominant-split",
                     "initialization": "greedy",
                     "name": "volume add-remove"
                 }
             ],
             "k_values_ranges": [
-                {"start": 82, "stop": 200, "step": 1}
+                {"start": 82, "stop": 150, "step": 1}
             ],
             "trials_per_k": 1
         }
