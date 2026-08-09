@@ -42,6 +42,9 @@ TEXT_WIDTH = 17 * CM
 
 plt.rcParams.update({
     "text.usetex":     True,
+    # amsmath for \dfrac in the legend's bound label (the default usetex
+    # preamble is minimal and does not provide it).
+    "text.latex.preamble": r"\usepackage{amsmath}",
     "font.family":     "serif",
     "font.size":       11,
     "axes.titlesize":  11,
@@ -66,27 +69,19 @@ CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'leverage scores',
              'random columns']
 
-# Algorithms for which a theoretical Frobenius bound is meaningful.
-BOUND_ALGOS = {'FDVS', 'RDVS', 'Frobenius selection', 'Dominant', 'Dominant-split'}
-
-# Analytical bounds for the left subplot (1 / ‖X_S† X‖_F), as a function of
-# (m, n, k). Each formula below bounds ‖X_S† X‖_F², so the value plotted on
-# the 1/‖X_S† X‖_F axis is the inverse square root of the formula.
-_ORTHONORMAL_BOUND_SQ = {
-    'FDVS':                lambda m, n, k: m * (n - m + 1) / (k - m + 1),
-    'RDVS':                lambda m, n, k: m * (n - m + 1) / (k - m + 1),
-    'Dominant':            lambda m, n, k: m * (n - m + 1) / (k - m + 1),
-    'Dominant-split':      lambda m, n, k: m * (n - m + 1) / (k - m + 1),
-    'Frobenius selection': lambda m, n, k: (m ** 2 / k) * (n - m + 1),
-}
+# The single shared theoretical bound, drawn once on both subplots. It follows
+# from the volume bound ‖X_S† X‖_F² ≤ m (n-m+1)/(k-m+1): dividing m by its square
+# root gives m/‖X_S† X‖_F ≥ √m · √((k-m+1)/(n-m+1)), and the same √((k-m+1)/
+# (n-m+1)) lower-bounds the pinv Frobenius ratio ‖X†‖_F/‖X_S†‖_F. It is a valid
+# lower bound for every deterministic algorithm on both axes (the randomized
+# baselines, having no such guarantee, may dip below it). The LaTeX form is a
+# legend entry (see make_legend), rendered as a proper fraction.
+BOUND_LATEX = r'$\sqrt{\dfrac{k - m + 1}{n - m + 1}}$'
 
 
-def orthonormal_bound(name: str, m: int, n: int, k: np.ndarray) -> np.ndarray:
-    """1/‖X_S† X‖_F bound for *name* at k, or None if not defined."""
-    func = _ORTHONORMAL_BOUND_SQ.get(name)
-    if func is None:
-        return None
-    return 1.0 / np.sqrt(func(m, n, k))
+def shared_bound(m: int, n: int, k: np.ndarray) -> np.ndarray:
+    """The lower bound √((k-m+1)/(n-m+1)) at k, shared by both subplots."""
+    return np.sqrt((k - m + 1) / (n - m + 1))
 
 
 def infer_m_n(cfg: dict) -> tuple:
@@ -143,12 +138,12 @@ def style_ax(ax):
 
 def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
                         ylabel: str, show_std: bool, show_bound: bool = True,
-                        bound_algos: set = None, m: int = None, n: int = None):
-    """Plot mean (± std) of *metric_col* on *ax* for every algorithm.
-    If bound_algos is given, only draw bounds for algorithms in that set.
-    When metric_col is 'X_S_dag_X_frobenius_norm_inv' and m, n are given,
-    draws the per-algorithm analytical bound from orthonormal_bound() instead
-    of the CSV 'frobenius_bound' column."""
+                        m: int = None, n: int = None):
+    """Plot mean (± std) of *metric_col* on *ax* for every algorithm, plus the
+    single shared lower bound √((k-m+1)/(n-m+1)). The left subplot
+    (metric_col 'X_S_dag_X_frobenius_norm_inv') plots √m / ‖X_S† X‖_F; the CSV
+    stores 1 / ‖X_S† X‖_F, so its means are scaled by √m."""
+    all_k = []
     for idx, name in enumerate(algo_names):
         if name not in data:
             continue
@@ -163,40 +158,28 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
         grp    = df_filt.groupby('k')[metric_col]
         means  = grp.mean().reindex(k_vals).values
 
-        # Randomized algorithms (multiple trials per k) are shown as their
-        # mean +- std band only, with no central line: the solid means of the
-        # three randomized baselines ran straight through the low region where
-        # every dashed theoretical bound lives and drowned them out.
-        randomized = (df_filt.groupby('k').size() > 1).any()
+        # The left subplot plots √m / ‖X_S† X‖_F (the CSV stores
+        # 1 / ‖X_S† X‖_F). The √m makes √((k-m+1)/(n-m+1)) an exact lower bound:
+        # ‖X_S† X‖_F² ≤ m (n-m+1)/(k-m+1) ⟹ √m/‖X_S† X‖_F ≥ √((k-m+1)/(n-m+1)).
+        scale = (np.sqrt(m) if (metric_col == 'X_S_dag_X_frobenius_norm_inv'
+                                and m is not None) else 1.0)
+        means = means * scale
+        all_k.append(k_vals)
 
-        if not randomized:
-            ax.plot(k_vals, means, color=color, label=name, zorder=2)
+        ax.plot(k_vals, means, color=color, label=name, zorder=2)
 
-        if show_std and randomized:
-            stds = grp.std().reindex(k_vals).fillna(0).values
+        if show_std:
+            stds = grp.std().reindex(k_vals).fillna(0).values * scale
             ax.fill_between(k_vals, means - stds, means + stds,
                             color=color, alpha=0.25, linewidth=0, zorder=1)
 
-        # Bounds sit above the data lines (zorder=3): solid lines drawn later
-        # in this loop must not paint over earlier algorithms' dashed bounds.
-        if (show_bound and metric_col == 'X_S_dag_X_frobenius_norm_inv'
-                and m is not None and n is not None
-                and (bound_algos is None or name in bound_algos)):
-            bound = orthonormal_bound(name, m, n, k_vals)
-            if bound is not None:
-                dash_offsets = [0, 3, 6, 9, 12]
-                offset = dash_offsets[idx % len(dash_offsets)]
-                ax.plot(k_vals, bound, color=color, linewidth=1.2, alpha=0.8,
-                        linestyle=(offset, (4, 4)), zorder=3)
-        elif (show_bound and 'frobenius_bound' in df_filt.columns
-                and metric_col == 'pinv_frobenius_norm_ratio'
-                and (bound_algos is None or name in bound_algos)):
-            bound = df_filt.groupby('k')['frobenius_bound'].mean().reindex(k_vals).values
-            if bound.any():
-                dash_offsets = [0, 3, 6, 9, 12]
-                offset = dash_offsets[idx % len(dash_offsets)]
-                ax.plot(k_vals, bound, color=color, linewidth=1.2, alpha=0.8,
-                        linestyle=(offset, (4, 4)), zorder=3)
+    # The single shared bound, drawn once on top of everything (zorder=3). Its
+    # formula lives in the legend (see make_legend), not as an annotation.
+    if show_bound and m is not None and n is not None and all_k:
+        k_grid = np.unique(np.concatenate(all_k))
+        bound  = shared_bound(m, n, k_grid)
+        ax.plot(k_grid, bound, color='black', linewidth=1.4,
+                linestyle=(0, (4, 3)), zorder=3)
 
     style_ax(ax)
     ax.set_xlabel(r'$k$')
@@ -206,29 +189,17 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
     ax.margins(x=0)
 
 
-def has_nonzero_bound(data: dict) -> bool:
-    for df in data.values():
-        if 'frobenius_bound' in df.columns and (df['frobenius_bound'] != 0).any():
-            return True
-    return False
-
-
-def make_legend(fig, algo_names, data, show_std: bool, show_bound: bool,
+def make_legend(fig, algo_names, data, show_std: bool, show_bound: bool = True,
                 ncols: int = 4):
-    # Randomized algorithms (multiple trials per k) are drawn as std bands with
-    # no central line, so their legend swatch is the band patch, not a line.
-    algo_handles = []
-    for i, name in enumerate(algo_names):
-        if name not in data:
-            continue
-        color = COLORS[i % len(COLORS)]
-        randomized = (data[name].groupby('k').size() > 1).any()
-        if randomized:
-            algo_handles.append(
-                plt.Rectangle((0, 0), 1, 1, fc=color, alpha=0.25, label=name))
-        else:
-            algo_handles.append(
-                plt.Line2D([0], [0], color=color, linewidth=1.2, label=name))
+    algo_handles = [
+        plt.Line2D([0], [0], color=COLORS[i % len(COLORS)], linewidth=1.2,
+                   label=name)
+        for i, name in enumerate(algo_names)
+        if name in data
+    ]
+    # Extras: the standard-deviation swatch and the shared bound with its
+    # formula as the label (a proper fraction), rendered as a black dashed line
+    # matching the one drawn on both subplots.
     extra_handles = []
     if show_std:
         extra_handles.append(
@@ -237,21 +208,21 @@ def make_legend(fig, algo_names, data, show_std: bool, show_bound: bool,
         )
     if show_bound:
         extra_handles.append(
-            plt.Line2D([0], [0], color='black', linestyle='--',
-                       linewidth=1.2, label='theoretical bound')
+            plt.Line2D([0], [0], color='black', linewidth=1.4,
+                       linestyle=(0, (4, 3)), label=BOUND_LATEX)
         )
 
-    # fig.legend fills column-major, so with n_rows = ceil(total / ncols) the
-    # extras appended last land at the top rows of the last column: with 9
-    # algorithms and ncols=4 (3 rows), 'standard deviation' sits on row 1 and
-    # 'theoretical bound' on row 2. No blank spacer handles — they reserved a
-    # full column each and blew the gap before the last column wide open.
+    # fig.legend fills column-major: with 9 algorithms and ncols=4 (3 rows) the
+    # two extras appended last fill the top two rows of the fourth column —
+    # 'standard deviation' on row 1, the bound fraction on row 2. No blank
+    # spacer handles: they reserved a full column each and blew the gap before
+    # the last column wide open.
     handles = algo_handles + extra_handles
 
     fig.legend(handles=handles, loc='upper center',
                bbox_to_anchor=(0.5, 0.0), ncols=ncols,
-               frameon=False, handlelength=1.0,
-               columnspacing=1.0, handletextpad=0.5)
+               frameon=False, handlelength=1.4, handletextpad=0.5,
+               columnspacing=1.0)
 
 
 def save_figure(fig, stem: str):
@@ -264,14 +235,14 @@ def save_figure(fig, stem: str):
 
 
 def make_figure(exp_name, cfg, data, algo_names, out_stem):
-    """Two subplots: left = 1/‖X_S† X‖_F, right = ‖X†‖_F/‖X_S†‖_F."""
+    """Two subplots: left = √m/‖X_S† X‖_F, right = ‖X†‖_F/‖X_S†‖_F, each with
+    the shared lower bound √((k-m+1)/(n-m+1)) drawn (labelled in the legend)."""
     # Randomized algorithms have multiple rows per k; deterministic ones a
     # single row (std = 0, no visible band). Show the std machinery whenever
     # any algorithm has more than one trial at some k.
     show_std   = any((df.groupby('k').size() > 1).any() for df in data.values())
-    show_bound = has_nonzero_bound(data)
     m, n       = infer_m_n(cfg)
-    ylabel_left  = r'$1 \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
+    ylabel_left  = r'$\sqrt{m} \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
     ylabel_right = r'$\Vert X^\dag \Vert_F \,/\, \Vert X_\mathcal{S}^\dag \Vert_F$'
 
     # Slightly wider than TEXT_WIDTH: the 4-column legend below the axes is
@@ -283,19 +254,17 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
     plot_metric_subplot(ax_left, data, algo_names,
                         metric_col='X_S_dag_X_frobenius_norm_inv',
                         show_ylabel=True, ylabel=ylabel_left,
-                        show_std=show_std, show_bound=show_bound,
-                        bound_algos=BOUND_ALGOS, m=m, n=n)
+                        show_std=show_std, m=m, n=n)
 
     plot_metric_subplot(ax_right, data, algo_names,
                         metric_col='pinv_frobenius_norm_ratio',
                         show_ylabel=True, ylabel=ylabel_right,
-                        show_std=show_std, show_bound=show_bound,
-                        bound_algos=BOUND_ALGOS)
+                        show_std=show_std, m=m, n=n)
 
     # 9 algorithms + 2 extras at 4 columns → three rows filled column-major:
-    # algorithms occupy the first three columns, 'standard deviation' and
-    # 'theoretical bound' the first two rows of the fourth.
-    make_legend(fig, algo_names, data, show_std=show_std, show_bound=show_bound,
+    # algorithms occupy the first three columns; 'standard deviation' and the
+    # bound fraction fill the top two rows of the fourth.
+    make_legend(fig, algo_names, data, show_std=show_std, show_bound=True,
                 ncols=4)
     save_figure(fig, out_stem)
 
