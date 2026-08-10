@@ -35,11 +35,24 @@ RESULTS_DIR="$SCRIPT_DIR/$OUTPUT_PATH"
 echo "==> Building (config: $BUILD_TYPE) …"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target MatSubsetExperiments -j"$(nproc)"
 
-TESTER="$BUILD_DIR/tools/Tester"
-if [[ ! -x "$TESTER" ]]; then
-    echo "ERROR: Tester binary not found at $TESTER" >&2
+# The Tester's output directory has moved between CMake layouts (tools/ in
+# older build trees, matrix_tools/ in freshly configured ones), so locate it
+# rather than assuming either.
+TESTER=""
+for candidate in "$BUILD_DIR/matrix_tools/Tester" "$BUILD_DIR/tools/Tester"; do
+    if [[ -x "$candidate" ]]; then
+        TESTER="$candidate"
+        break
+    fi
+done
+if [[ -z "$TESTER" ]]; then
+    TESTER="$(find "$BUILD_DIR" -name Tester -type f -perm -u+x -print -quit)"
+fi
+if [[ -z "$TESTER" ]]; then
+    echo "ERROR: Tester binary not found under $BUILD_DIR" >&2
     exit 1
 fi
+echo "    using Tester at $TESTER"
 
 # ── 2. run experiments ────────────────────────────────────────────────────────
 echo ""

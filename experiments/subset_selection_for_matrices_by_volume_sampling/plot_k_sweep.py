@@ -2,7 +2,7 @@
 """
 Plot script for the subset_selection_for_matrices_by_volume_sampling experiment.
 
-Adapted from the spectral-norm experiment's plot.py. The deterministic and
+Adapted from the spectral-norm experiment's plot_k_sweep.py. The deterministic and
 randomized tester runs both write into the same results subfolder
 (Superconductivity_dataset), so this script globs every CSV in the folder
 rather than trusting a single config's algorithm list.
@@ -12,14 +12,23 @@ Layout (matrix has a regression target):
   - right = ‖X†‖_F / ‖X_S†‖_F (Frobenius norm ratio)
 
 Usage (from repo root or from this directory):
-    python experiments/subset_selection_for_matrices_by_volume_sampling/plot.py
+    python experiments/subset_selection_for_matrices_by_volume_sampling/plot_k_sweep.py
+
+Every experiment found under RESULTS_DIR is plotted. To plot just one, name it
+(or any part of its name, case-insensitively) as an argument or in EXPERIMENT:
+
+    python plot_k_sweep.py superconductivity     # only the dataset figure
+    python plot_k_sweep.py unfolding             # only the Allen-Cahn one
+    EXPERIMENT=superconductivity python plot_k_sweep.py
 
 Environment overrides:
     RESULTS_DIR  – path to the results directory  (default: <script_dir>/results)
     FIGURES_DIR  – path to save figures           (default: <script_dir>/figures)
+    EXPERIMENT   – plot only experiments whose name contains this (default: all)
 """
 
 import os
+import sys
 import json
 from pathlib import Path
 from datetime import datetime
@@ -62,6 +71,10 @@ COLORS = plt.cm.tab10.colors
 # Map experiment name → output file stem
 OUT_STEMS = {
     'Superconductivity dataset': 'plot_superconductivity',
+    # A TT unfolding of the Allen-Cahn state taken from the middle of the run
+    # (see run_allen_cahn.sh) — the same two-panel figure on a matrix the
+    # PDE genuinely produces rather than on a static dataset.
+    'Allen-Cahn unfolding': 'plot_allen_cahn_unfolding',
 }
 
 # Canonical algorithm order (by display_name) so colours are stable across runs.
@@ -95,14 +108,26 @@ def infer_m_n(cfg: dict) -> tuple:
     m = min(k_values)
 
     target_file = cfg.get('matrix', {}).get('target_file')
-    if not target_file:
+    if target_file:
+        target_path = SCRIPT_DIR / target_file
+        if target_path.exists():
+            with open(target_path) as fh:
+                n = sum(1 for line in fh if line.strip())
+            return m, n
+
+    # No regression target (e.g. the Allen-Cahn unfolding): fall back to the
+    # matrix file itself. It is stored tall and auto-transposed on load, so the
+    # column count n of X is its number of data rows.
+    file_path = cfg.get('matrix', {}).get('file_path')
+    if not file_path:
         return m, None
-    target_path = SCRIPT_DIR / target_file
-    if not target_path.exists():
+    matrix_path = SCRIPT_DIR / file_path
+    if not matrix_path.exists():
         return m, None
-    with open(target_path) as fh:
-        n = sum(1 for line in fh if line.strip())
-    return m, n
+    with open(matrix_path) as fh:
+        rows = sum(1 for line in fh
+                   if line.strip() and not line.lstrip().startswith('#'))
+    return m, max(rows, m)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -271,18 +296,55 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def discover_experiments():
+    """Every experiment present in RESULTS_DIR, by name, in a stable order.
+
+    The results folder is its own manifest: the Tester writes one subfolder per
+    experiment, each carrying the config.json it ran with, and the folder name
+    is the experiment name with spaces turned into underscores. Scanning for
+    those is authoritative in a way index.json is not — each Tester run
+    *overwrites* index.json with only the experiments of the config it just
+    ran, so running one config by hand silently drops every other experiment's
+    figure until a runner rebuilds the file.
+
+    index.json is still read when it lists something this scan missed, so a
+    hand-curated index (or results laid out some other way) keeps working.
+    """
+    found = {cfg.parent.name.replace('_', ' ')
+             for cfg in RESULTS_DIR.glob('*/config.json')}
+
     index_file = RESULTS_DIR / 'index.json'
-    if not index_file.exists():
+    if index_file.exists():
+        with open(index_file) as fh:
+            found |= set(json.load(fh).get('experiments', []))
+
+    return sorted(found)
+
+
+def main():
+    experiments = discover_experiments()
+    if not experiments:
         raise FileNotFoundError(
-            f"Results index not found: {index_file}\n"
+            f"No experiment results found under {RESULTS_DIR}\n"
             "Run the tester binary with the config(s) first."
         )
 
-    with open(index_file) as fh:
-        index = json.load(fh)
+    # Optional filter: a substring of the experiment name, from the command
+    # line or EXPERIMENT. Substring rather than exact match so the names in the
+    # results folder ("Superconductivity dataset", "Allen-Cahn unfolding") do
+    # not have to be typed in full.
+    selector = (sys.argv[1] if len(sys.argv) > 1
+                else os.environ.get('EXPERIMENT', '')).strip()
+    if selector:
+        matched = [e for e in experiments if selector.lower() in e.lower()]
+        if not matched:
+            raise SystemExit(
+                f"No experiment matches {selector!r}.\n"
+                f"Available: {', '.join(experiments)}"
+            )
+        experiments = matched
 
-    for exp_name in index['experiments']:
+    for exp_name in experiments:
         print(f'Loading: {exp_name}')
         cfg, data = load_experiment(exp_name)
 

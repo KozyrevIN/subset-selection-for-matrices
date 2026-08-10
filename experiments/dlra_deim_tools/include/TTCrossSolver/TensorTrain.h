@@ -374,6 +374,10 @@ template <typename Scalar> class TensorTrain {
      * @brief Compresses the train with a truncated TT-SVD sweep.
      * @param atol Absolute Frobenius tolerance passed to each core's SVD.
      * @param rtol Relative tolerance passed to each core's SVD.
+     * @param max_rank Optional hard cap on every bond rank; non-positive
+     * (the default) leaves the truncation purely tolerance-driven. With
+     * atol = rtol = 0 the cap alone decides the ranks, which is how a
+     * fixed-rank train is built.
      *
      * First right-orthogonalizes so the whole norm sits in the first core, then
      * sweeps left to right applying a truncating SVD at every bond. Each SVD
@@ -381,15 +385,16 @@ template <typename Scalar> class TensorTrain {
      * trailing carry lands in the last core so the tensor is preserved. The
      * train ends up left-orthogonal.
      */
-    void compress(Scalar atol, Scalar rtol) {
+    void compress(Scalar atol, Scalar rtol, Eigen::Index max_rank = 0) {
         rightOrthogonalize();
 
         const std::size_t d = cores.size();
-        Eigen::MatrixX<Scalar> carry = cores.front().leftSvd(atol, rtol);
+        Eigen::MatrixX<Scalar> carry =
+            cores.front().leftSvd(atol, rtol, max_rank);
         for (std::size_t k = 1; k < d; ++k) {
             cores[k].absorbLeftFactor(carry);
             if (k + 1 < d) {
-                carry = cores[k].leftSvd(atol, rtol);
+                carry = cores[k].leftSvd(atol, rtol, max_rank);
             }
         }
     }
@@ -489,7 +494,8 @@ template <typename Scalar> class TensorTrain {
         std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
         Scalar rtol,
         const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
-            &num_samples = nullptr) {
+            &num_samples = nullptr,
+        Eigen::Index max_rank = 0) {
         // Width policy: the bond rank when no policy is given.
         const auto width = [&num_samples](Eigen::Index rank,
                                           Eigen::Index candidates) {
@@ -512,7 +518,7 @@ template <typename Scalar> class TensorTrain {
             if (k + 1 < d) {
                 cores[k].absorbRightFactor(svd_carry);
             }
-            svd_carry = cores[k].rightSvd(atol, rtol);
+            svd_carry = cores[k].rightSvd(atol, rtol, max_rank);
 
             const Eigen::Index rho = right_partial.cols();
             auto [indices, submatrix] = cores[k].rightSelectIndices(
@@ -570,7 +576,8 @@ template <typename Scalar> class TensorTrain {
      * @brief Truncates the train, selects a nested cross skeleton and returns
      * the train's own fibers evaluated on it: `selectCrossIndices` followed by
      * `atFibers`.
-     * @param selector,atol,rtol,num_samples See `selectCrossIndices`.
+     * @param selector,atol,rtol,num_samples,max_rank See
+     * `selectCrossIndices`.
      * @return The train's fibers on the selected skeleton: `TensorFibers` whose
      * fiber core `k` holds \f$ W_{k-1} \, G_k(i_k) \, V_{k+1} \f$, with the
      * `FiberIndices` skeleton embedded (`skeleton()`). Feeding it back into the
@@ -584,8 +591,10 @@ template <typename Scalar> class TensorTrain {
     selectCross(std::unique_ptr<SelectorBase<Scalar>> &selector, Scalar atol,
                 Scalar rtol,
                 const std::function<Eigen::Index(Eigen::Index, Eigen::Index)>
-                    &num_samples = nullptr) {
-        return atFibers(selectCrossIndices(selector, atol, rtol, num_samples));
+                    &num_samples = nullptr,
+                Eigen::Index max_rank = 0) {
+        return atFibers(
+            selectCrossIndices(selector, atol, rtol, num_samples, max_rank));
     }
 
     /*!

@@ -1,0 +1,48 @@
+{
+    "output_path": "results/allen_cahn",
+    "n": 128,
+    "rank": 16,
+    "t_end": 10,
+    "kappa": 0.1,
+    "order": 2,
+    "snapshots": 100,
+    "width_factor": 1.0,
+    "oversampling": 0,
+    "trials_per_algorithm": 16,
+    "threads": 0,
+    "algorithms": [
+        {
+            "display_name": "FDVS",
+            "name": "derandomized volume"
+        },
+        {
+            "display_name": "RDVS",
+            "name": "spectral removal"
+        },
+        {
+            "display_name": "Frobenius selection",
+            "name": "frobenius selection"
+        },
+        {
+            "display_name": "Frobenius removal",
+            "name": "frobenius removal"
+        },
+        {
+            "display_name": "Dominant",
+            "name": "dominant",
+            "c": 1.000001,
+            "initialization": "greedy"
+        },
+        {
+            "display_name": "Dominant-split",
+            "name": "volume add-remove",
+            "c": 1.000001,
+            "initialization": "greedy"
+        },
+        {
+            "display_name": "VS",
+            "name": "forward iterative volume sampling",
+            "randomized": true
+        }
+    ]
+}

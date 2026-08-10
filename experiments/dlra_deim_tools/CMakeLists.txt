@@ -12,15 +12,11 @@ find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOXML)
 
 # Create binaries: the TT demo (AcousticWave) and its QTT variant
 # (AcousticWaveQtt), which share the include/ headers.
-add_executable(${PROJECT_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+add_executable(${PROJECT_NAME}
+               "${CMAKE_CURRENT_SOURCE_DIR}/src/main_acoustic.cpp")
 set_target_properties(${PROJECT_NAME} PROPERTIES
                       CXX_STANDARD 20
                       OUTPUT_NAME "AcousticWave")
-
-add_executable(AcousticWaveQtt "${CMAKE_CURRENT_SOURCE_DIR}/src/main_qtt.cpp")
-set_target_properties(AcousticWaveQtt PROPERTIES
-                      CXX_STANDARD 20
-                      OUTPUT_NAME "AcousticWaveQtt")
 
 # The 3D Allen-Cahn demo (AllenCahn), sharing the same include/ headers as the
 # acoustic demos.
@@ -29,7 +25,27 @@ set_target_properties(AllenCahn PROPERTIES
                       CXX_STANDARD 20
                       OUTPUT_NAME "AllenCahn")
 
-foreach(target ${PROJECT_NAME} AcousticWaveQtt AllenCahn)
+# The selector-comparison driver of the volume-sampling experiment: the same
+# Allen-Cahn discretization, run once per column-subset-selection algorithm and
+# scored against a dense reference. Config-driven (see
+# src/main_allen_cahn_tester.cpp), and it builds its selectors with the
+# Tester's own factory, hence the matrix_tools include directory below.
+add_executable(AllenCahnTester
+               "${CMAKE_CURRENT_SOURCE_DIR}/src/main_allen_cahn_tester.cpp")
+set_target_properties(AllenCahnTester PROPERTIES
+                      CXX_STANDARD 20
+                      OUTPUT_NAME "AllenCahnTester")
+
+# nlohmann_json, for the config and the shared SelectorFactory.
+include(FetchContent)
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
+FetchContent_MakeAvailable(json)
+
+target_include_directories(AllenCahnTester PRIVATE
+                           "${CMAKE_CURRENT_SOURCE_DIR}/../matrix_tools/include")
+target_link_libraries(AllenCahnTester nlohmann_json::nlohmann_json)
+
+foreach(target ${PROJECT_NAME} AllenCahn AllenCahnTester)
     target_include_directories(${target} PRIVATE
                                "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

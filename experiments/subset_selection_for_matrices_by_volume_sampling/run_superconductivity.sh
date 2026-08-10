@@ -3,7 +3,7 @@
 # subset_selection_for_matrices_by_volume_sampling experiment.
 #
 # Usage (from repo root or from this directory):
-#   bash experiments/subset_selection_for_matrices_by_volume_sampling/run_all.sh
+#   bash experiments/subset_selection_for_matrices_by_volume_sampling/run_superconductivity.sh
 #
 # Optional env overrides:
 #   BUILD_DIR   – path to CMake build directory (default: <repo_root>/build/experiments)
@@ -20,17 +20,30 @@ PYTHON="${PYTHON:-python3}"
 
 RESULTS_DIR="$SCRIPT_DIR/results"
 FIGURES_DIR="$SCRIPT_DIR/figures"
-PLOTTER="$SCRIPT_DIR/plot.py"
+PLOTTER="$SCRIPT_DIR/plot_k_sweep.py"
 
 # ── 1. build ──────────────────────────────────────────────────────────────────
 echo "==> Building (config: $BUILD_TYPE) …"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target MatSubsetExperiments -j"$(nproc)"
 
-TESTER="$BUILD_DIR/tools/Tester"
-if [[ ! -x "$TESTER" ]]; then
-    echo "ERROR: Tester binary not found at $TESTER" >&2
+# The Tester's output directory has moved between CMake layouts (tools/ in
+# older build trees, matrix_tools/ in freshly configured ones), so locate it
+# rather than assuming either.
+TESTER=""
+for candidate in "$BUILD_DIR/matrix_tools/Tester" "$BUILD_DIR/tools/Tester"; do
+    if [[ -x "$candidate" ]]; then
+        TESTER="$candidate"
+        break
+    fi
+done
+if [[ -z "$TESTER" ]]; then
+    TESTER="$(find "$BUILD_DIR" -name Tester -type f -perm -u+x -print -quit)"
+fi
+if [[ -z "$TESTER" ]]; then
+    echo "ERROR: Tester binary not found under $BUILD_DIR" >&2
     exit 1
 fi
+echo "    using Tester at $TESTER"
 
 # ── 2. prepare data ───────────────────────────────────────────────────────────
 echo ""
@@ -50,23 +63,18 @@ echo ""
 echo "==> Running superconductivity experiment (randomized algorithms) …"
 (cd "$SCRIPT_DIR" && "$TESTER" "$SCRIPT_DIR/config_superconductivity_randomized.json")
 
-# ── 4. merge index.json ───────────────────────────────────────────────────────
-# Each tester run overwrites index.json with only its experiments.
-# Rebuild it from all result subfolders that contain a config.json.
+# ── 4. refresh index.json ─────────────────────────────────────────────────────
+# Each tester run overwrites index.json with only its experiments; rebuild it
+# from all result subfolders that contain a config.json.
 echo ""
-echo "==> Merging index.json …"
-"$PYTHON" -c "
-import json, pathlib
-results = pathlib.Path('$RESULTS_DIR')
-experiments = sorted(p.parent.name.replace('_', ' ') for p in results.glob('*/config.json'))
-(results / 'index.json').write_text(json.dumps({'experiments': experiments}, indent=4))
-print('index.json updated:', experiments)
-"
+echo "==> Refreshing index.json …"
+RESULTS_DIR="$RESULTS_DIR" "$PYTHON" "$SCRIPT_DIR/update_index.py"
 
 # ── 5. plots ──────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Plotting …"
-RESULTS_DIR="$RESULTS_DIR" FIGURES_DIR="$FIGURES_DIR" "$PYTHON" "$PLOTTER"
+RESULTS_DIR="$RESULTS_DIR" FIGURES_DIR="$FIGURES_DIR" "$PYTHON" "$PLOTTER" \
+    "Superconductivity dataset"
 
 echo ""
 echo "==> All done. Figures saved to $FIGURES_DIR/"

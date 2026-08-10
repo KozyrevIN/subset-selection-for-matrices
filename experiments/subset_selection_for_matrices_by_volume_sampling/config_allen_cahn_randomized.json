@@ -3,12 +3,11 @@
     "output_path": "results",
     "experiments": [
         {
-            "name": "Superconductivity dataset",
+            "name": "Allen-Cahn unfolding",
             "enabled": true,
             "matrix": {
                 "type": "matrix from file",
-                "file_path": "data/superconductivity.csv",
-                "target_file": "data/superconductivity_target.csv"
+                "file_path": "results/allen_cahn/allen_cahn_unfolding.csv"
             },
             "algorithms": [
                 {
@@ -16,18 +15,22 @@
                     "name": "forward iterative volume sampling"
                 },
                 {
-                    "display_name": "Leverage scores",
+                    "display_name": "leverage scores",
                     "name": "leverage scores"
                 },
                 {
-                    "display_name": "Random columns",
+                    "display_name": "random columns",
                     "name": "random columns"
                 }
             ],
             "k_values_ranges": [
-                {"start": 82, "stop": 200, "step": 1}
+                {
+                    "start": 16,
+                    "stop": 64,
+                    "step": 1
+                }
             ],
-            "trials_per_k": 32
+            "trials_per_k": 16
         }
     ]
 }

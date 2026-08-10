@@ -180,14 +180,18 @@ template <typename Scalar> class CoreBase {
      * values.
      * @param rtol Relative tolerance; the effective threshold is
      * \f$ \max(\text{atol}, \text{rtol} \cdot \lVert \sigma \rVert_2) \f$.
+     * @param max_rank Optional hard cap on the kept rank (see
+     * `truncatedRank`); non-positive for none.
      * @return The carry \f$ \Sigma V^{\top} \f$ (truncated rank x r1) for the
      * next core.
      */
-    Eigen::MatrixX<Scalar> leftSvd(Scalar atol, Scalar rtol) {
+    Eigen::MatrixX<Scalar> leftSvd(Scalar atol, Scalar rtol,
+                                   Eigen::Index max_rank = 0) {
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(
             left_unfolding, Eigen::ComputeThinU | Eigen::ComputeThinV);
 
-        Eigen::Index rank = truncatedRank(svd.singularValues(), atol, rtol);
+        Eigen::Index rank =
+            truncatedRank(svd.singularValues(), atol, rtol, max_rank);
 
         // U truncated: (r0 * n) x rank.
         Eigen::MatrixX<Scalar> U = svd.matrixU().leftCols(rank);
@@ -212,10 +216,13 @@ template <typename Scalar> class CoreBase {
      * values.
      * @param rtol Relative tolerance; the effective threshold is
      * \f$ \max(\text{atol}, \text{rtol} \cdot \lVert \sigma \rVert_2) \f$.
+     * @param max_rank Optional hard cap on the kept rank (see
+     * `truncatedRank`); non-positive for none.
      * @return The carry \f$ U \Sigma \f$ (r0 x truncated rank) for the previous
      * core.
      */
-    Eigen::MatrixX<Scalar> rightSvd(Scalar atol, Scalar rtol) {
+    Eigen::MatrixX<Scalar> rightSvd(Scalar atol, Scalar rtol,
+                                    Eigen::Index max_rank = 0) {
         // Right unfolding r0 x (n * r1) viewed directly from the stored buffer.
         Eigen::Map<Eigen::MatrixX<Scalar>> absorbed(
             left_unfolding.data(), left_rank, mode * right_rank);
@@ -223,7 +230,8 @@ template <typename Scalar> class CoreBase {
         Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(
             absorbed, Eigen::ComputeThinU | Eigen::ComputeThinV);
 
-        Eigen::Index rank = truncatedRank(svd.singularValues(), atol, rtol);
+        Eigen::Index rank =
+            truncatedRank(svd.singularValues(), atol, rtol, max_rank);
 
         // Orthonormal right factor V^T truncated: rank x (n * r1).
         Eigen::MatrixX<Scalar> Vt = svd.matrixV().leftCols(rank).transpose();
@@ -399,13 +407,21 @@ template <typename Scalar> class CoreBase {
      * Frobenius norm of the discarded tail stays below
      * \f$ \max(\text{atol}, \text{rtol} \cdot \lVert \sigma \rVert_2) \f$.
      * At least one singular value is always kept.
+     *
+     * A positive `max_rank` caps the result on top of the tolerance rule, so
+     * the bond never exceeds that rank however slowly the spectrum decays.
+     * This is what makes a *fixed-rank* run possible: at atol = rtol = 0 the
+     * tail rule keeps everything, and the cap alone fixes the rank profile.
+     * Non-positive (the default) leaves the tolerance rule untouched.
      */
     static Eigen::Index truncatedRank(const Eigen::VectorX<Scalar> &sigma,
-                                      Scalar atol, Scalar rtol) {
+                                      Scalar atol, Scalar rtol,
+                                      Eigen::Index max_rank = 0) {
         const Eigen::Index n = sigma.size();
         if (n <= 1) {
             return n;
         }
+        const Eigen::Index cap = (max_rank > 0) ? std::min(max_rank, n) : n;
 
         const Scalar threshold = std::max(atol, rtol * sigma.norm());
         const Scalar threshold_sq = threshold * threshold;
@@ -420,7 +436,7 @@ template <typename Scalar> class CoreBase {
             }
             rank = i;
         }
-        return rank;
+        return std::min(rank, cap);
     }
 };
 

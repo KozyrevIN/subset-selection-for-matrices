@@ -71,6 +71,11 @@ template <typename Scalar> class Solver : public SolverBase<Scalar> {
      * @param num_samples Per-bond skeleton width policy
      * `num_samples(rank, candidates)` (see the class docs); null selects
      * exactly the bond rank, freezing the rank profile.
+     * @param max_rank Optional hard cap on every bond rank of the per-step
+     * truncation; non-positive (the default) for none. With atol = rtol = 0
+     * the tolerance rule keeps every direction, so this cap is what makes the
+     * run fixed-rank: the state sits at exactly `max_rank` throughout and no
+     * rank adaptivity takes place.
      * @param boundary_condition Optional transform of the new state's fibers
      * at the end of every step (e.g. an absorbing mask); null for none.
      * @param warmup_steps Number of leading steps taken in exact TT
@@ -84,11 +89,11 @@ template <typename Scalar> class Solver : public SolverBase<Scalar> {
                nullptr,
            std::unique_ptr<BoundaryConditionBase<Scalar>> boundary_condition =
                nullptr,
-           int warmup_steps = 0)
+           int warmup_steps = 0, Eigen::Index max_rank = 0)
         : SolverBase<Scalar>(std::move(initial_history), std::move(rhs),
                              std::move(scheme), dt, std::move(selector), atol,
                              rtol, std::move(boundary_condition), warmup_steps),
-          num_samples(std::move(num_samples)) {}
+          num_samples(std::move(num_samples)), max_rank(max_rank) {}
 
   protected:
     /*! @brief One fiber-format step on a skeleton frozen from \f$ y_n \f$
@@ -100,7 +105,8 @@ template <typename Scalar> class Solver : public SolverBase<Scalar> {
         // step - every TensorFibers below shares it, as the fiber algebra
         // requires.
         TensorFibers<Scalar> fibers_n =
-            history.front().selectCross(selector, atol, rtol, num_samples);
+            history.front().selectCross(selector, atol, rtol, num_samples,
+                                        max_rank);
 
         // Phase 2: evaluate the older history states on this skeleton. This
         // is what makes multistep schemes work: y_{n-1} was built on the
@@ -171,6 +177,10 @@ template <typename Scalar> class Solver : public SolverBase<Scalar> {
     using SolverBase<Scalar>::boundary_condition;
 
     std::function<Eigen::Index(Eigen::Index, Eigen::Index)> num_samples;
+
+    /*! @brief Hard cap on every bond rank of the per-step truncation; 0 for
+     * none (see the constructor). */
+    Eigen::Index max_rank = 0;
 };
 
 } // namespace MatSubset::Experiments

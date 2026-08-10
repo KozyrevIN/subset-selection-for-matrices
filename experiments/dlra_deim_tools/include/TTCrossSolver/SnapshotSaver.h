@@ -382,7 +382,9 @@ template <typename Scalar> class SnapshotSaver {
                "SnapshotSaver: VTK image data supports 1 to 3 dimensions.");
         assert(!this->fields.empty() &&
                "SnapshotSaver: at least one field mapper is required.");
-        for (const auto &field : this->fields) {
+        // [[maybe_unused]]: the loop body is nothing but the assert, so under
+        // NDEBUG `field` is bound and never read — which -Werror rejects.
+        for ([[maybe_unused]] const auto &field : this->fields) {
             assert(field != nullptr && "SnapshotSaver: null field mapper.");
         }
     }

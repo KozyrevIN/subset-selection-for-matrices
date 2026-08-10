@@ -1,6 +1,7 @@
 #ifndef MAT_SUBSET_EXPERIMENTS_ALLEN_CAHN_INITIAL_CONDITION_H
 #define MAT_SUBSET_EXPERIMENTS_ALLEN_CAHN_INITIAL_CONDITION_H
 
+#include <algorithm> // For std::min
 #include <cassert> // For assert
 #include <cmath>   // For std::exp, std::tan, std::sin, std::abs
 #include <cstddef> // For std::size_t
@@ -109,6 +110,9 @@ denseFieldFromFunction(const Grid<Scalar> &grid, const Func &func) {
  * @param sizes The mode sizes \f$ (n_1, \dots, n_d) \f$.
  * @param rtol Relative Frobenius tolerance: at each bond the singular values
  * whose trailing energy stays within `rtol` of the slab norm are dropped.
+ * @param max_rank Optional hard cap on every bond rank, applied on top of the
+ * tolerance rule; non-positive (the default) for none. At rtol = 0 the cap
+ * alone fixes the ranks, giving the quasi-optimal fixed-rank TT-SVD.
  * @return The compressed train; its `toDense()` matches `dense` to within
  * roughly \f$ \sqrt{d - 1}\,\text{rtol} \f$ relative error.
  *
@@ -123,7 +127,8 @@ template <typename Scalar>
 [[nodiscard]] TensorTrain<Scalar>
 ttFromDenseTensor(const Eigen::VectorX<Scalar> &dense,
                   const std::vector<Eigen::Index> &sizes,
-                  Scalar rtol = Scalar(1e-10)) {
+                  Scalar rtol = Scalar(1e-10),
+                  Eigen::Index max_rank = 0) {
     const std::size_t d = sizes.size();
     assert(d >= 1 && "ttFromDenseTensor: at least one mode.");
 
@@ -180,6 +185,9 @@ ttFromDenseTensor(const Eigen::VectorX<Scalar> &dense,
             }
             tail = next_tail;
             --rank;
+        }
+        if (max_rank > 0) {
+            rank = std::min(rank, max_rank);
         }
 
         // Core k: the leading `rank` left singular vectors, shape
