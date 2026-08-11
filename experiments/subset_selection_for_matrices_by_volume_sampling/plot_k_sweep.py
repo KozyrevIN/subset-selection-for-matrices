@@ -66,7 +66,11 @@ plt.rcParams.update({
     "axes.edgecolor":  "gray",
 })
 
-COLORS = plt.cm.tab10.colors
+# tab10 first, so every algorithm that already had a colour keeps it, then
+# tab20b for the overflow: the canonical roster is longer than 10 now that DEIM
+# and QDEIM are in it, and wrapping with % 10 would silently hand two
+# algorithms the same colour.
+COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
 
 # Map experiment name → output file stem
 OUT_STEMS = {
@@ -79,8 +83,8 @@ OUT_STEMS = {
 
 # Canonical algorithm order (by display_name) so colours are stable across runs.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
-             'Dominant', 'Dominant-split', 'VS', 'leverage scores',
-             'random columns']
+             'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
+             'leverage scores', 'random columns']
 
 # The single shared theoretical bound, drawn once on both subplots. It follows
 # from the volume bound ‖X_S† X‖_F² ≤ m (n-m+1)/(k-m+1): dividing m by its square

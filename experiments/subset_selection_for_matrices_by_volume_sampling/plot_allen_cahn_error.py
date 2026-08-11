@@ -31,7 +31,8 @@ Environment overrides:
     FIGURES_DIR    – path to save figures          (default: <script_dir>/figures)
     RESULTS_SUBDIR – subfolder of RESULTS_DIR with the run
                                                    (default: allen_cahn)
-    RANK           – fixed TT rank, named in the best-rank-r legend entry (default: 10)
+    RANK           – fixed TT rank, named in the best-rank-r legend entry
+                     (default: read from the run's own max_rank column)
 """
 
 import os
@@ -52,9 +53,12 @@ FIGURES_DIR.mkdir(exist_ok=True)
 
 RESULTS_SUBDIR = os.environ.get('RESULTS_SUBDIR', 'allen_cahn')
 
-# The fixed rank is set by run_allen_cahn.sh; it is only ever *named* in
-# the best-rank-r legend entry, never used to compute anything.
-RANK = int(os.environ.get('RANK', 10))
+# The fixed rank is only ever *named* in the best-rank-r legend entry, never
+# used to compute anything. run_allen_cahn.sh passes it from the config, but a
+# hardcoded fallback silently mislabels the figure whenever the config's rank
+# changes and the plotter is run standalone — so when RANK is unset it is read
+# back from the run's own max_rank column (see resolve_rank).
+RANK_ENV = os.environ.get('RANK')
 
 # ── style (shared with plot_k_sweep.py) ───────────────────────────────────────────────
 CM         = 1 / 2.54
@@ -75,7 +79,11 @@ plt.rcParams.update({
     "axes.edgecolor":  "gray",
 })
 
-COLORS = plt.cm.tab10.colors
+# tab10 first, so every algorithm that already had a colour keeps it, then
+# tab20b for the overflow: the canonical roster is longer than 10 now that DEIM
+# and QDEIM are in it, and wrapping with % 10 would silently hand two
+# algorithms the same colour.
+COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
 
 # Same canonical order as plot_k_sweep.py, so an algorithm keeps its colour across both
 # figures of the experiment. Every name keeps its slot whether or not the run
@@ -84,10 +92,27 @@ COLORS = plt.cm.tab10.colors
 # holding the positions keeps each remaining algorithm's colour identical to the
 # unfolding figure, which does run them.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
-             'Dominant', 'Dominant-split', 'VS', 'leverage scores',
-             'random columns']
+             'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
+             'leverage scores', 'random columns']
 
-BEST_LABEL = rf'best rank-${RANK}$'
+
+def resolve_rank(df) -> int:
+    """The rank named in the best-rank-r legend entry.
+
+    RANK from the environment wins (run_allen_cahn.sh passes the config's
+    value), but otherwise it comes from the run itself: every row records the
+    max_rank it was integrated at, so the label cannot drift out of sync with
+    the data the way a hardcoded default does."""
+    if RANK_ENV is not None:
+        return int(RANK_ENV)
+
+    ranks = df['max_rank'].unique()
+    if len(ranks) != 1:
+        raise ValueError(
+            f"Run mixes several max_rank values ({sorted(ranks)}); "
+            "set RANK explicitly to say which one the figure is about."
+        )
+    return int(ranks[0])
 
 
 def style_ax(ax):
@@ -198,7 +223,7 @@ def plot_error_subplot(ax, df, show_ylabel: bool, title: str):
     ax.margins(x=0)
 
 
-def make_legend(fig, df_list, ncols: int = 3):
+def make_legend(fig, df_list, best_label: str, ncols: int = 3):
     present = set()
     for df in df_list:
         present |= set(df['algorithm'])
@@ -210,11 +235,11 @@ def make_legend(fig, df_list, ncols: int = 3):
     ]
     handles.append(
         plt.Rectangle((0, 0), 1, 1, fc='gray', alpha=0.25,
-                      label=r'mean $\pm$ std over samples')
+                      label=r'standard deviation')
     )
     handles.append(
         plt.Line2D([0], [0], color='black', linewidth=1.4,
-                   linestyle=(0, (4, 3)), label=BEST_LABEL)
+                   linestyle=(0, (4, 3)), label=best_label)
     )
 
     fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.0),
@@ -245,7 +270,7 @@ def main():
     if ylim is not None:
         ax.set_ylim(*ylim)
 
-    make_legend(fig, [df], ncols=3)
+    make_legend(fig, [df], rf'best rank-${resolve_rank(df)}$', ncols=4)
     save_figure(fig, 'plot_allen_cahn')
 
 

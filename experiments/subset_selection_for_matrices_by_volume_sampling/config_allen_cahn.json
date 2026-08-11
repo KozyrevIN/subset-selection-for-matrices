@@ -1,7 +1,7 @@
 {
     "output_path": "results/allen_cahn",
     "n": 128,
-    "rank": 16,
+    "rank": 12,
     "t_end": 10,
     "kappa": 0.1,
     "order": 2,
@@ -43,6 +43,14 @@
             "display_name": "VS",
             "name": "forward iterative volume sampling",
             "randomized": true
+        },
+        {
+            "display_name": "DEIM",
+            "name": "deim"
+        },
+        {
+            "display_name": "QDEIM",
+            "name": "qdeim"
         }
     ]
 }

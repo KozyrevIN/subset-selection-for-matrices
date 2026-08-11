@@ -114,6 +114,7 @@ template <typename Scalar> class SelectorFactory {
  *   (DominantSelector, VolumeAddRemoveSelector)
  *
  * Registered selectors:
+ * - "deim" - DeimSelector (supports k = m only)
  * - "derandomized volume" - DerandomizedVolumeSelector (optional "eps")
  * - "dominant" - DominantSelector (requires "c" parameter)
  * - "dual set" - DualSetSelector
@@ -122,6 +123,7 @@ template <typename Scalar> class SelectorFactory {
  * - "frobenius selection" - FrobeniusSelectionSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
  * - "leverage scores" - LeverageScoresSelector (optional "seed")
+ * - "qdeim" - QdeimSelector (supports k = m only)
  * - "random columns" - RandomColumnsSelector (optional "seed")
  * - "rect-maxvol" - RectMaxvolSelector (requires "c" parameter)
  * - "reverse iterative volume sampling" - ReverseIterativeVolumeSamplingSelector (optional "seed")
@@ -149,6 +151,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
      * factory is immediately ready to create selectors via create().
      */
     DefaultSelectorFactory() {
+        registerNoArgsSelector<DeimSelector>();
         registerEpsArgSelector<DerandomizedVolumeSelector>();
         registerCArgWithInitSelector<DominantSelector>();
         registerNoArgsSelector<DualSetSelector>();
@@ -157,6 +160,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerNoArgsSelector<FrobeniusSelectionSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
         registerSeedArgSelector<LeverageScoresSelector>();
+        registerNoArgsSelector<QdeimSelector>();
         registerSeedArgSelector<RandomColumnsSelector>();
         registerCArgSelector<RectMaxvolSelector>();
         registerSeedArgSelector<ReverseIterativeVolumeSamplingSelector>();
@@ -179,8 +183,10 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
     void registerNoArgsSelector() {
         auto dummy = std::make_unique<Selector<Scalar>>();
         std::string name = dummy->getAlgorithmName();
+        // [[maybe_unused]]: the parameter is required by the Creator
+        // signature, but a no-args selector reads nothing out of the config.
         typename SelectorFactory<Scalar>::Creator creator =
-            [](const nlohmann::json &config) {
+            []([[maybe_unused]] const nlohmann::json &config) {
                 return std::make_unique<Selector<Scalar>>();
             };
         this->registerSelector(name, creator);

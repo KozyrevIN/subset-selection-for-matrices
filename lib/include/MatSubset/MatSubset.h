@@ -1,3 +1,4 @@
+#include "DeimSelector.h"
 #include "DerandomizedVolumeSelector.h"
 #include "DominantSelector.h"
 #include "DualSetSelector.h"
@@ -6,6 +7,7 @@
 #include "FrobeniusSelectionSelector.h"
 #include "InterlacingFamiliesSelector.h"
 #include "LeverageScoresSelector.h"
+#include "QdeimSelector.h"
 #include "RandomColumnsSelector.h"
 #include "RectMaxvolSelector.h"
 #include "ReverseIterativeVolumeSamplingSelector.h"

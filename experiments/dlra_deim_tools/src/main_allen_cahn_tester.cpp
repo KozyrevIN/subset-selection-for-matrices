@@ -46,12 +46,18 @@
 //     "oversampling": 0,
 //     "trials_per_algorithm": 16,            // seeds for randomized algorithms
 //     "threads": 0,                          // 0 = hardware concurrency
+//     "unfolding_time": 0.5,                 // when to dump the unfolding matrix
 //     "algorithms": [
 //       {"display_name": "FDVS", "name": "derandomized volume"},
 //       {"display_name": "VS",   "name": "forward iterative volume sampling",
 //        "randomized": true}
 //     ]
 //   }
+//
+// Note that the interpolation-point baselines, `"deim"` and `"qdeim"`, return
+// exactly one index per basis vector and so require the skeleton width to equal
+// the rank — i.e. `"width_factor": 1.0` with `"oversampling": 0`. Widening the
+// skeleton while they are in the roster trips their `k = m` assertion.
 //
 // `"randomized": true` marks an algorithm to be re-run under
 // `trials_per_algorithm` distinct seeds (injected as the `"seed"` the factory
@@ -65,7 +71,7 @@
 // Output (written to "output_path"):
 //   allen_cahn_errors.csv  columns: algorithm,sample,step,t,error,best_error,
 //                                   max_rank,ranks
-// plus, at the midpoint of the run, a dump of one TT unfolding of the reference
+// plus, at "unfolding_time", a dump of one TT unfolding of the reference
 // state (allen_cahn_unfolding.csv) so the standard `Tester` pipeline can be
 // pointed at a matrix this problem genuinely produces.
 
@@ -78,6 +84,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -90,6 +97,7 @@
 #include <pthread.h> // For the large-stack worker threads (see runOnBigStackThreads)
 
 #include <Eigen/Core>
+#include <Eigen/SVD> // For BDCSVD, to score the captured matrices
 
 #include <nlohmann/json.hpp>
 
@@ -147,6 +155,7 @@ struct Config {
     Eigen::Index oversampling = 0;
     int trials = 16;                 // seeds per randomized algorithm
     int threads = 0;                 // 0 = hardware concurrency
+    Scalar unfolding_time = Scalar(0.5); // when to dump the unfolding matrix
     std::filesystem::path output_path;
     std::vector<AlgorithmSpec> algorithms;
 };
@@ -177,6 +186,7 @@ Config parseConfig(const std::filesystem::path &path) {
     c.oversampling = j.value("oversampling", c.oversampling);
     c.trials = j.value("trials_per_algorithm", c.trials);
     c.threads = j.value("threads", c.threads);
+    c.unfolding_time = j.value("unfolding_time", c.unfolding_time);
 
     const std::filesystem::path parent =
         path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
@@ -258,21 +268,120 @@ Scalar bestApproximationError(const Eigen::VectorX<Scalar> &reference,
 }
 
 /*!
- * @brief Writes the bond-`bond` left unfolding of `train` as a plain CSV.
+ * @brief A selector that records every matrix it is asked to select from, and
+ * delegates the selection itself to a real selector.
  *
- * This is the matrix a cross step actually hands the selector: rows are the
- * (left-index, mode) pairs, columns the right bond index. Dumping it lets the
- * standard `Tester` pipeline — and therefore the exact two-panel figure of the
- * superconductivity experiment — be pointed at a matrix this PDE produces
- * mid-run, instead of at a static dataset.
- *
- * `MatrixFromFileGenerator` auto-transposes a tall matrix to be wide, which is
- * what a TT unfolding is (many more rows than columns), so it arrives at the
- * selectors in the orientation they require.
+ * Used to capture the *actual* input of a cross step: what reaches a selector
+ * is not a bare core unfolding but that unfolding contracted with the
+ * accumulated factor from the cores already swept (`right_partial` /
+ * `left_partial` in `TensorTrain::selectCrossIndices`, via
+ * `CoreBase::absorbRight`/`absorbLeft`). Reconstructing that by hand is both
+ * fiddly and easy to get subtly wrong, so instead the real sweep is run and
+ * this listens in.
  */
-void writeUnfoldingCsv(const TensorTrain<Scalar> &train, std::size_t bond,
+class CapturingSelector : public MatSubset::SelectorBase<Scalar> {
+  public:
+    explicit CapturingSelector(
+        std::unique_ptr<MatSubset::SelectorBase<Scalar>> inner)
+        : inner(std::move(inner)) {}
+
+    [[nodiscard]] std::string getAlgorithmName() const override {
+        return "capturing(" + inner->getAlgorithmName() + ")";
+    }
+
+    /*! @brief Every matrix handed to the selector, in sweep order. */
+    std::vector<Eigen::MatrixX<Scalar>> seen;
+
+  protected:
+    std::vector<Eigen::Index>
+    selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
+                     Eigen::Index *swap_count) override {
+        seen.push_back(X);
+        (void)swap_count;
+        return inner->selectSubset(X, k);
+    }
+
+  private:
+    std::unique_ptr<MatSubset::SelectorBase<Scalar>> inner;
+};
+
+/*!
+ * @brief Writes, as a plain CSV, the worst-conditioned matrix a cross step of
+ * `train` actually hands its selector.
+ *
+ * Dumping a matrix here lets the standard `Tester` pipeline — and therefore the
+ * exact figure of the superconductivity experiment — be pointed at a matrix
+ * this PDE produces, instead of at a static dataset. *Which* matrix is dumped
+ * matters a great deal.
+ *
+ * A core's bare unfolding is a degenerate test case. Each sweep of
+ * `selectCrossIndices` orthogonalizes the core before selecting from it
+ * (`rightSvd` in sweep 1, `leftOrth` in sweep 2), so the bare unfolding has
+ * exactly orthonormal rows: every singular value 1, condition number 1. Every
+ * selector's guarantee is trivially tight on such a matrix.
+ *
+ * What the selector is really given is that orthonormal core *contracted with
+ * the accumulated factor of the cores already swept* (`absorbRight`/
+ * `absorbLeft` of `right_partial`/`left_partial`). At a boundary core that
+ * factor is still the 1x1 identity, so those captures are exactly orthonormal;
+ * the interior ones are not, and are what this keeps.
+ *
+ * A caveat worth knowing when reading the resulting figure: the accumulated
+ * factor is itself a *column submatrix of an orthonormal core*, not the
+ * TT-SVD's \f$ \Sigma \f$, so it never carries the train's spectrum. Measured
+ * on this problem the interior captures land at a condition number of roughly
+ * 1.01-1.21 across ranks and times — mildly non-orthonormal, never
+ * ill-conditioned. That is genuinely the regime this solver's selectors work
+ * in, so it is the honest matrix to compare them on, but it does mean the
+ * figure probes well-conditioned selection rather than a hard case.
+ *
+ * It is written transposed (tall, one row per column of the matrix) because
+ * `MatrixFromFileGenerator` auto-transposes a tall matrix back to wide, which
+ * is the orientation the selectors require.
+ */
+void writeUnfoldingCsv(const TensorTrain<Scalar> &train,
+                       const MatSubset::Experiments::SelectorFactory<Scalar>
+                           &factory,
+                       const nlohmann::json &algorithm, Scalar atol,
+                       Scalar rtol, Eigen::Index rank,
                        const std::filesystem::path &path) {
-    const Eigen::MatrixX<Scalar> &M = train.core(bond).leftUnfolding();
+    // Run a real cross selection on a copy of the train, listening in on every
+    // matrix the selector is handed. The width policy is null, i.e. exactly the
+    // bond rank, matching the run's own no-oversampling skeleton.
+    TensorTrain<Scalar> copy = train;
+    auto capture = std::make_unique<CapturingSelector>(factory.create(algorithm));
+    CapturingSelector *tap = capture.get();
+    std::unique_ptr<MatSubset::SelectorBase<Scalar>> as_base(std::move(capture));
+    copy.selectCrossIndices(as_base, atol, rtol, nullptr, rank);
+
+    // Keep the captured matrix with the widest spectrum: the boundary cores
+    // contribute a perfectly conditioned one (nothing has been absorbed yet),
+    // so picking on conditioning is what selects an interior, informative one.
+    const Eigen::MatrixX<Scalar> *best = nullptr;
+    Scalar best_spread = Scalar(-1);
+    for (const Eigen::MatrixX<Scalar> &X : tap->seen) {
+        if (X.rows() < 2 || X.cols() < X.rows()) {
+            continue;
+        }
+        Eigen::BDCSVD<Eigen::MatrixX<Scalar>> svd(X);
+        const auto &sv = svd.singularValues();
+        const Scalar smallest = sv(sv.size() - 1);
+        const Scalar spread =
+            (smallest > Scalar(0)) ? sv(0) / smallest : std::numeric_limits<Scalar>::infinity();
+        if (spread > best_spread) {
+            best_spread = spread;
+            best = &X;
+        }
+    }
+    if (!best) {
+        throw std::runtime_error("no usable matrix was captured for the dump");
+    }
+    std::cout << "   captured " << tap->seen.size()
+              << " selector inputs; keeping a " << best->rows() << " x "
+              << best->cols() << " one (cond ~ " << best_spread << ")\n";
+
+    // Transposed so the file is tall and survives the generator's auto-transpose.
+    const Eigen::MatrixX<Scalar> M = best->transpose();
     std::ofstream out(path);
     if (!out) {
         throw std::runtime_error("cannot write " + path.string());
@@ -454,6 +563,16 @@ int main(int argc, char **argv) {
         AllenCahnDenseSolver<Scalar> dense(kappa, sizes, spacings, scheme, dt,
                                            std::move(initial_history),
                                            opt.order);
+        // t_end = 0 asks for the initial state alone: no integration happens,
+        // so the trajectory is seeded with step 0 and the loop below does
+        // nothing. That makes the unfolding dump usable as a pure "what does
+        // the initial condition look like" probe, at grid sizes a full
+        // integration could never reach.
+        if (n_steps == 0) {
+            reference_fields.push_back(f0_dense);
+            reference_steps.push_back(0);
+            reference_times.push_back(Scalar(0));
+        }
         for (int step = 1; step <= n_steps; ++step) {
             dense.step();
             if (step % save_every == 0 || step == n_steps) {
@@ -465,17 +584,31 @@ int main(int argc, char **argv) {
         std::cout << "   " << reference_fields.size() << " snapshots stored\n";
     }
 
-    // The mid-run unfolding dump: TT-SVD the reference field at the middle
-    // snapshot at the run's fixed rank, then write one interior bond's left
-    // unfolding. This is a matrix the cross solver genuinely selects columns
-    // from, at a moment when the dynamics are fully developed.
+    // The unfolding dump: TT-SVD the reference field at "unfolding_time" at the
+    // run's fixed rank, then write the last core's right unfolding (see
+    // writeUnfoldingCsv for why that one). This is a matrix the cross solver
+    // genuinely selects columns from, taken at a moment when the dynamics have
+    // developed but the state has not yet smoothed out.
     {
-        const std::size_t mid = reference_fields.size() / 2;
-        const TensorTrain<Scalar> mid_train = ttFromDenseTensor<Scalar>(
-            reference_fields[mid], sizes, rtol, opt.rank);
-        std::cout << "\nmid-run state (t = " << reference_times[mid]
-                  << "): TT ranks " << interiorRanks(mid_train) << '\n';
-        writeUnfoldingCsv(mid_train, /*bond=*/1,
+        // The stored snapshot nearest the requested time.
+        std::size_t pick = 0;
+        for (std::size_t i = 1; i < reference_times.size(); ++i) {
+            if (std::abs(reference_times[i] - opt.unfolding_time) <
+                std::abs(reference_times[pick] - opt.unfolding_time)) {
+                pick = i;
+            }
+        }
+        const TensorTrain<Scalar> train = ttFromDenseTensor<Scalar>(
+            reference_fields[pick], sizes, rtol, opt.rank);
+        std::cout << "\nunfolding state (requested t = " << opt.unfolding_time
+                  << ", nearest snapshot t = " << reference_times[pick]
+                  << "): TT ranks " << interiorRanks(train) << '\n';
+        // The capture runs a real selection sweep, so it needs a selector; the
+        // first configured algorithm stands in. Which one is used only affects
+        // which columns the *sweep* keeps as it moves left, not the property
+        // being dumped (the absorbed, non-orthonormal unfolding).
+        writeUnfoldingCsv(train, factory, opt.algorithms.front().config, atol,
+                          rtol, opt.rank,
                           out_dir / "allen_cahn_unfolding.csv");
     }
 

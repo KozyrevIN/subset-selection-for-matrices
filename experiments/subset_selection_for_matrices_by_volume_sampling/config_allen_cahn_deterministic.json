@@ -41,8 +41,8 @@
             ],
             "k_values_ranges": [
                 {
-                    "start": 16,
-                    "stop": 64,
+                    "start": 12,
+                    "stop": 48,
                     "step": 1
                 }
             ],

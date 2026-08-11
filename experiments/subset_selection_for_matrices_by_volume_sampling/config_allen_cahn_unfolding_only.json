@@ -1,0 +1,20 @@
+{
+    "output_path": "results/allen_cahn_unfolding_only",
+    "n": 128,
+    "rank": 16,
+    "t_end": 0.6,
+    "kappa": 0.1,
+    "order": 2,
+    "snapshots": 6,
+    "width_factor": 1.0,
+    "oversampling": 0,
+    "trials_per_algorithm": 1,
+    "threads": 0,
+    "algorithms": [
+        {
+            "display_name": "FDVS",
+            "name": "derandomized volume"
+        }
+    ],
+    "unfolding_time": 0.5
+}

@@ -1,8 +1,9 @@
 #ifndef MAT_SUBSET_VOLUME_PIVOTING_BASE_H
 #define MAT_SUBSET_VOLUME_PIVOTING_BASE_H
 
-#include <cassert> // For assert
-#include <cmath>   // For std::log, std::log2, std::sqrt, std::exp, std::ceil
+#include <cassert>  // For assert
+#include <cmath>    // For std::log, std::log2, std::sqrt, std::exp, std::ceil
+#include <iostream> // For std::cerr (warnings)
 
 #include <Eigen/LU> // For Eigen::MatrixBase::inverse
 #include <Eigen/QR> // For Eigen::HouseholderQR
