@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """
-Generate the Tester configs for the mid-run Allen-Cahn unfolding.
+Generate the Tester configs for a mid-run TT unfolding.
 
-The unfolding dumped by AllenCahnTester is a tall matrix whose shape depends
-on the grid and on the ranks the solver happened to reach, so the k range cannot
-be hard-coded the way the superconductivity configs do. This script reads the
-dumped CSV, works out the (auto-transposed) matrix shape, and writes a
-deterministic and a randomized config over k in [m, K_MAX_FACTOR * m] — m is
-the TT rank for this matrix, so by default the sweep runs up to 4r rather than
-all the way to n.
+Shared by both PDE experiments: the Allen-Cahn tester and the acoustic one each
+dump one matrix that their cross steps genuinely select columns from, and this
+turns either into the pair of Tester configs behind the two-panel k-sweep
+figure. Only EXPERIMENT and the input path differ between them.
+
+The dumped unfolding is a tall matrix whose shape depends on the grid and on
+the ranks the solver happened to reach, so the k range cannot be hard-coded the
+way the superconductivity configs do. This script reads the dumped CSV, works
+out the (auto-transposed) matrix shape, and writes a deterministic and a
+randomized config over k in [m, K_MAX_FACTOR * m] — m is the TT rank for this
+matrix, so by default the sweep runs up to 4r rather than all the way to n.
 
 `MatrixFromFileGenerator` transposes a tall matrix to be wide, so the selectors
 see m = (CSV column count) rows and n = (CSV row count) columns.
 
-Environment (all set by run_allen_cahn.sh):
+Environment (all set by the run_*.sh scripts):
     UNFOLDING    – path to the dumped unfolding CSV
+    EXPERIMENT   – experiment name; doubles as the results subfolder and as the
+                   key plot_k_sweep.py looks up in OUT_STEMS
+                   (default: 'Allen-Cahn unfolding')
     RESULTS_DIR  – results directory the Tester writes into
     CONFIG_DET   – path to write the deterministic config to
     CONFIG_RAND  – path to write the randomized config to
@@ -34,6 +41,7 @@ CONFIG_DET  = Path(os.environ.get('CONFIG_DET',
                                   SCRIPT_DIR / 'config_allen_cahn_deterministic.json'))
 CONFIG_RAND = Path(os.environ.get('CONFIG_RAND',
                                   SCRIPT_DIR / 'config_allen_cahn_randomized.json'))
+
 SAMPLES     = int(os.environ.get('SAMPLES', 16))
 
 # k sweeps over [m, K_MAX_FACTOR * m] rather than all the way to n — see
@@ -41,8 +49,9 @@ SAMPLES     = int(os.environ.get('SAMPLES', 16))
 K_MAX_FACTOR = int(os.environ.get('K_MAX_FACTOR', 4))
 
 # The experiment name doubles as the results subfolder (spaces → underscores)
-# and as the key plot_k_sweep.py looks up in OUT_STEMS.
-EXPERIMENT_NAME = 'Allen-Cahn unfolding'
+# and as the key plot_k_sweep.py looks up in OUT_STEMS. It defaults to the
+# Allen-Cahn one so an unset environment keeps that experiment's old behaviour.
+EXPERIMENT_NAME = os.environ.get('EXPERIMENT', 'Allen-Cahn unfolding')
 
 # The nine algorithms of the superconductivity experiment, split the same way:
 # deterministic ones run once per k, randomized ones run SAMPLES times. Dominant
@@ -61,8 +70,8 @@ DETERMINISTIC = [
 
 RANDOMIZED = [
     {"display_name": "VS",              "name": "forward iterative volume sampling"},
-    {"display_name": "leverage scores", "name": "leverage scores"},
-    {"display_name": "random columns",  "name": "random columns"},
+    {"display_name": "Leverage scores", "name": "leverage scores"},
+    {"display_name": "Random columns",  "name": "random columns"},
 ]
 
 

@@ -120,7 +120,7 @@ echo ""
 echo "==> Generating the unfolding configs from $UNFOLDING …"
 UNFOLDING="$UNFOLDING" RESULTS_DIR="$RESULTS_DIR" SAMPLES="$SAMPLES" \
 CONFIG_DET="$CONFIG_DET" CONFIG_RAND="$CONFIG_RAND" \
-"$PYTHON" "$SCRIPT_DIR/make_allen_cahn_configs.py"
+"$PYTHON" "$SCRIPT_DIR/make_unfolding_configs.py"
 
 echo ""
 echo "==> Running the unfolding experiment (deterministic algorithms) …"

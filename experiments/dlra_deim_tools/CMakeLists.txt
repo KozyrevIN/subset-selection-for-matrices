@@ -36,16 +36,27 @@ set_target_properties(AllenCahnTester PROPERTIES
                       CXX_STANDARD 20
                       OUTPUT_NAME "AllenCahnTester")
 
+# The same comparison on the acoustic wave equation: tolerance-driven rather
+# than fixed-rank, since a wavefront's rank grows as it propagates, so it
+# reports the rank alongside the error (see src/main_acoustic_tester.cpp).
+add_executable(AcousticTester
+               "${CMAKE_CURRENT_SOURCE_DIR}/src/main_acoustic_tester.cpp")
+set_target_properties(AcousticTester PROPERTIES
+                      CXX_STANDARD 20
+                      OUTPUT_NAME "AcousticTester")
+
 # nlohmann_json, for the config and the shared SelectorFactory.
 include(FetchContent)
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
-target_include_directories(AllenCahnTester PRIVATE
-                           "${CMAKE_CURRENT_SOURCE_DIR}/../matrix_tools/include")
-target_link_libraries(AllenCahnTester nlohmann_json::nlohmann_json)
+foreach(tester AllenCahnTester AcousticTester)
+    target_include_directories(${tester} PRIVATE
+                               "${CMAKE_CURRENT_SOURCE_DIR}/../matrix_tools/include")
+    target_link_libraries(${tester} nlohmann_json::nlohmann_json)
+endforeach()
 
-foreach(target ${PROJECT_NAME} AllenCahn AllenCahnTester)
+foreach(target ${PROJECT_NAME} AllenCahn AllenCahnTester AcousticTester)
     target_include_directories(${target} PRIVATE
                                "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

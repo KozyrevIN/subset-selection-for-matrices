@@ -1,0 +1,36 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Acoustic unfolding",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "results/acoustic/acoustic_unfolding.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "VS",
+                    "name": "forward iterative volume sampling"
+                },
+                {
+                    "display_name": "leverage scores",
+                    "name": "leverage scores"
+                },
+                {
+                    "display_name": "random columns",
+                    "name": "random columns"
+                }
+            ],
+            "k_values_ranges": [
+                {
+                    "start": 14,
+                    "stop": 56,
+                    "step": 1
+                }
+            ],
+            "trials_per_k": 16
+        }
+    ]
+}

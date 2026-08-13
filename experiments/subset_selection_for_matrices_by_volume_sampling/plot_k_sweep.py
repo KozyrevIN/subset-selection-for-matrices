@@ -79,12 +79,40 @@ OUT_STEMS = {
     # (see run_allen_cahn.sh) — the same two-panel figure on a matrix the
     # PDE genuinely produces rather than on a static dataset.
     'Allen-Cahn unfolding': 'plot_allen_cahn_unfolding',
+    # The same, on the acoustic wave equation (see run_acoustic.sh). That run
+    # is tolerance-driven rather than fixed-rank, so its unfolding is taken
+    # from the solver's own state mid-run.
+    'Acoustic unfolding': 'plot_acoustic_unfolding',
 }
+
+# Experiments drawn as a single wide panel rather than two.
+#
+# The figure's two metrics — √m/‖X_S† X‖_F and ‖X†‖_F/‖X_S†‖_F — are different
+# quantities and separate on the dataset experiments, which is why both are
+# shown there. On the TT unfoldings of the PDE runs they track each other so
+# closely that the panels are the same picture twice, so those keep only the
+# pinv ratio, stretched across the full width.
+SINGLE_PANEL = {'Allen-Cahn unfolding', 'Acoustic unfolding'}
 
 # Canonical algorithm order (by display_name) so colours are stable across runs.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
-             'leverage scores', 'random columns']
+             'Leverage scores', 'Random columns']
+
+
+def canonical_label(name: str) -> str:
+    """The display name to draw for an algorithm, as a sentence-cased label.
+
+    Names reach the plot from the result *filenames*, so they carry whatever
+    capitalization the config that produced them used — and the older PDE
+    unfolding configs wrote 'leverage scores' / 'random columns' where the
+    dataset ones wrote them capitalized. Matching CANONICAL case-insensitively
+    lets a run of either vintage keep its colour slot and print the same label,
+    so old results need not be regenerated to get a consistent legend."""
+    for canon in CANONICAL:
+        if name.casefold() == canon.casefold():
+            return canon
+    return name
 
 # The single shared theoretical bound, drawn once on both subplots. It follows
 # from the volume bound ‖X_S† X‖_F² ≤ m (n-m+1)/(k-m+1): dividing m by its square
@@ -143,7 +171,8 @@ def load_experiment(exp_name: str):
 
     # Collect all CSVs present in the folder (covers results from multiple
     # tester runs with different configs writing to the same subfolder).
-    all_csvs = {p.stem.replace('_', ' '): p for p in folder.glob('*.csv')}
+    all_csvs = {canonical_label(p.stem.replace('_', ' ')): p
+                for p in folder.glob('*.csv')}
 
     ordered = CANONICAL + sorted(n for n in all_csvs if n not in CANONICAL)
     cfg['_all_algo_names'] = ordered
@@ -264,8 +293,13 @@ def save_figure(fig, stem: str):
 
 
 def make_figure(exp_name, cfg, data, algo_names, out_stem):
-    """Two subplots: left = √m/‖X_S† X‖_F, right = ‖X†‖_F/‖X_S†‖_F, each with
-    the shared lower bound √((k-m+1)/(n-m+1)) drawn (labelled in the legend)."""
+    """The k-sweep figure: √m/‖X_S† X‖_F and ‖X†‖_F/‖X_S†‖_F against k, with the
+    shared lower bound √((k-m+1)/(n-m+1)) drawn (labelled in the legend).
+
+    Both metrics are shown side by side for the dataset experiments, where they
+    do come apart. On the PDE unfoldings they agree so closely that the two
+    panels are visually the same plot drawn twice, so those get the pinv ratio
+    alone, across the full width (see SINGLE_PANEL)."""
     # Randomized algorithms have multiple rows per k; deterministic ones a
     # single row (std = 0, no visible band). Show the std machinery whenever
     # any algorithm has more than one trial at some k.
@@ -273,6 +307,22 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
     m, n       = infer_m_n(cfg)
     ylabel_left  = r'$\sqrt{m} \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
     ylabel_right = r'$\Vert X^\dag \Vert_F \,/\, \Vert X_\mathcal{S}^\dag \Vert_F$'
+
+    if exp_name in SINGLE_PANEL:
+        # Plain text width, the same aspect as the single-panel error figures
+        # (plot_allen_cahn_error.py): one axes stretched to the two-panel
+        # version's 1.15 * TEXT_WIDTH reads as uncomfortably wide, and the
+        # legend still fits at four columns.
+        fig, ax = plt.subplots(figsize=(TEXT_WIDTH, 0.55 * TEXT_WIDTH),
+                               layout='constrained')
+        plot_metric_subplot(ax, data, algo_names,
+                            metric_col='pinv_frobenius_norm_ratio',
+                            show_ylabel=True, ylabel=ylabel_right,
+                            show_std=show_std, m=m, n=n)
+        make_legend(fig, algo_names, data, show_std=show_std, show_bound=True,
+                    ncols=4)
+        save_figure(fig, out_stem)
+        return
 
     # Slightly wider than TEXT_WIDTH: the 4-column legend below the axes is
     # the widest element, so the axes may as well use the same width.

@@ -93,7 +93,20 @@ COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
 # unfolding figure, which does run them.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
-             'leverage scores', 'random columns']
+             'Leverage scores', 'Random columns']
+
+
+def canonical_label(name: str) -> str:
+    """The display name to draw for an algorithm, as a sentence-cased label.
+
+    Names come from whatever "display_name" the run's config used, and the
+    older configs spelled 'leverage scores' / 'random columns' in lower case.
+    Matching CANONICAL case-insensitively keeps the legend consistent without
+    having to re-run anything."""
+    for canon in CANONICAL:
+        if name.casefold() == canon.casefold():
+            return canon
+    return name
 
 
 def resolve_rank(df) -> int:
@@ -133,7 +146,9 @@ def load_errors(folder: Path) -> pd.DataFrame:
             f"Errors CSV not found: {csv}\n"
             "Run the AllenCahnTester binary first (see run_allen_cahn.sh)."
         )
-    return pd.read_csv(csv)
+    df = pd.read_csv(csv)
+    df['algorithm'] = df['algorithm'].map(canonical_label)
+    return df
 
 
 def error_ylim(df_list):

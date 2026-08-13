@@ -1,0 +1,52 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Acoustic unfolding",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "results/acoustic/acoustic_unfolding.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "Dominant",
+                    "name": "dominant",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Dominant-split",
+                    "name": "volume add-remove",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                }
+            ],
+            "k_values_ranges": [
+                {
+                    "start": 14,
+                    "stop": 56,
+                    "step": 1
+                }
+            ],
+            "trials_per_k": 1
+        }
+    ]
+}
