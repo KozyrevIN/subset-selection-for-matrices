@@ -2,9 +2,8 @@
 #define MAT_SUBSET_DERANDOMIZED_VOLUME_SELECTOR_H
 
 #include <cassert>
-#include <cmath>    // For std::log10
-#include <iostream> // For std::cerr
-#include <limits>   // For std::numeric_limits
+#include <cmath>  // For std::sqrt
+#include <limits> // For std::numeric_limits
 
 #include <Eigen/Eigenvalues> // For Eigen::SelfAdjointEigenSolver
 #include <Eigen/QR>          // For Eigen::HouseholderQR
@@ -18,17 +17,17 @@ namespace MatSubset {
  * forward volume sampling.
  * @tparam Scalar The underlying scalar type (e.g., `float`, `double`).
  *
- * Implements derandomized forward volume sampling algorithm. The algorithm
- * greedily selects columns by maintaining an eigendecomposition and computing
- * characteristic polynomials.
+ * Implements the forward derandomized volume sampling (FDVS) algorithm. The
+ * algorithm greedily selects columns by maintaining the eigendecomposition of
+ * \f$ Q_\mathcal{S} Q_\mathcal{S}^T \f$ and scoring each candidate by a ratio
+ * of two adjacent coefficients of a characteristic polynomial.
  *
- * @note Mild numerical sensitivity: column scores are derived from monomial-
- * basis coefficients of a polynomial whose roots span many orders of magnitude
- * (~`1` to `1/tolerance`). When two candidate columns produce near-tied
- * scores, floating-point rounding determines the choice. Empirically this
- * leads to selections that differ by at most a few columns out of \f$ k \f$
- * across minor algorithm rearrangements, with the resulting
- * pseudoinverse Frobenius norm differing by under ~2% for m <= 200.
+ * @note Every polynomial here is written in the *forward* variable, i.e. with
+ * the eigenvalues \f$ \omega_i \in (0, 1) \f$ themselves as roots rather than
+ * their reciprocals. All three terms of the rank-one update then carry the
+ * same sign (see `selectSubsetImpl`), so the score is computed without
+ * cancellation and the coefficients stay bounded by \f$ \binom{l}{s} \f$
+ * instead of growing like \f$ \prod_i \omega_i^{-1} \f$.
  */
 template <typename Scalar>
 class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
@@ -64,99 +63,105 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
     selectSubsetImpl(const Eigen::MatrixX<Scalar> &X, Eigen::Index k,
                      Eigen::Index *swap_count) override {
         // Initialization
-        Eigen::Index m = X.rows();
-        Eigen::Index n = X.cols();
+        const Eigen::Index m = X.rows();
+        const Eigen::Index n = X.cols();
 
+        // Thin LQ decomposition of X; Q has orthonormal rows.
         Eigen::HouseholderQR<Eigen::MatrixX<Scalar>> qr(X.transpose());
         Eigen::MatrixX<Scalar> Q =
             (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
                 .transpose();
 
         std::vector<Eigen::Index> selected_indices;
+        selected_indices.reserve(static_cast<size_t>(k));
         std::vector<Eigen::Index> remaining_indices(n);
         for (Eigen::Index j = 0; j < n; ++j) {
             remaining_indices[static_cast<size_t>(j)] = j;
         }
 
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixX<Scalar>> eigensolver;
-        // Eigenvalues are sorted in non-decreasing order
+        // Eigenvalues of Q_S Q_S^T, kept in non-increasing order: the block of
+        // ones comes first, then the active block, then the zeros.
         Eigen::VectorX<Scalar> lambda = Eigen::VectorX<Scalar>::Zero(m);
-        Eigen::Index r = 0;
 
         // Main loop
         for (Eigen::Index t = 0; t < k; ++t) {
-            // Deflation
-            const bool r_less_m = (r < m);
-            Eigen::Index x_minus_1_deg = n - m - t - 1;
-            auto [start, len] = deflateAndCheckOverflow(lambda, x_minus_1_deg);
-            assert(x_minus_1_deg >= -1 &&
-                   "x_minus_1_deg can't be less than -1");
-            Eigen::VectorX<Scalar> lambda_deflated = lambda.segment(start, len);
-            Eigen::MatrixX<Scalar> Q_deflated(len + r_less_m, n - t);
-            Q_deflated.bottomRows(len) = Q.middleRows(start, len);
-            if (r_less_m) {
-                Q_deflated.row(0) = Q.topRows(start).colwise().norm();
+            // Notation
+            Eigen::Index ones = 0;
+            while (ones < m && lambda(ones) > Scalar(1) - tolerance) {
+                ++ones;
             }
+            Eigen::Index r = ones;
+            while (r < m && lambda(r) > tolerance) {
+                ++r;
+            }
+            const Eigen::Index l = r - ones;     // active eigenvalues, in (0, 1)
+            const Eigen::Index d = n - t + r - m;
 
-            // Target degrees
-            const Eigen::Index min_deg_p = n - k - 1 - r_less_m;
-            const Eigen::Index max_deg_p = n - k;
+            // Q_R restricted to the non-ones rows has m - ones rows and n - t
+            // columns and full row rank, so m - ones <= n - t, i.e. l <= d.
+            assert(l <= d && "(x - 1) exponent cannot drop below -1");
+            const bool delta = (l < d);
+            const Eigen::Index binom_deg = d - l - (delta ? 1 : 0);
 
-            const Eigen::Index min_deg_g = n - k - 1;
-            const Eigen::Index max_deg_g = n - k;
+            // B holds the rows of Q spanned by the active eigenvalues;
+            // c_sq(j) = ||c_j||^2 is the mass of column j outside range(Q_S).
+            Eigen::MatrixX<Scalar> B_sq = Q.middleRows(ones, l).cwiseAbs2();
+            Eigen::RowVectorX<Scalar> c_sq =
+                Eigen::RowVectorX<Scalar>::Zero(n - t);
+            if (r < m) {
+                c_sq = Q.bottomRows(m - r).colwise().squaredNorm();
+            }
+            Eigen::VectorX<Scalar> omega = lambda.segment(ones, l);
 
-            // Construction of auxiliary polynomials
-            Eigen::VectorX<Scalar> lambda_inv = lambda_deflated.cwiseInverse();
-            Eigen::VectorX<Scalar> p_0 = buildPolynomialFromRoots(lambda_inv);
-            Eigen::MatrixX<Scalar> g = buildQuotentPolynomials(p_0, lambda_inv);
+            // Auxiliary polynomial construction. We need the coefficients of
+            //   p(x)   = (x - 1)^binom_deg prod_i (x - omega_i),
+            //   g_i(x) = p(x) / (x - omega_i),
+            // for degrees [min_deg, max_deg], all up to one common constant.
+            const Eigen::Index min_deg = d - n + k - 1;
+            const Eigen::Index max_deg = d - n + k + 1;
 
-            // Computation of characteristic polynomial coefficients
-            Eigen::MatrixX<Scalar> p(2, n - t);
-            if (x_minus_1_deg >= 0) {
-                p_0 = applyBinomials(p_0, x_minus_1_deg, min_deg_p, max_deg_p);
-                g = applyBinomials(g, x_minus_1_deg, min_deg_g, max_deg_g);
+            Eigen::VectorX<Scalar> chi = buildPolynomialFromRoots(omega);
+            Eigen::MatrixX<Scalar> chi_quotients =
+                buildQuotientPolynomials(chi, omega);
+            Eigen::MatrixX<Scalar> p =
+                applyBinomials(chi, binom_deg, min_deg, max_deg);
+            Eigen::MatrixX<Scalar> g =
+                applyBinomials(chi_quotients, binom_deg, min_deg, max_deg);
 
-                Eigen::MatrixX<Scalar> Lambda_inv_Q_squared =
-                    lambda_inv.asDiagonal() *
-                    Q_deflated.bottomRows(len).cwiseAbs2();
-                Eigen::RowVectorX<Scalar> p_factor =
-                    1 + Lambda_inv_Q_squared.colwise().sum().array();
-                Eigen::RowVectorX<Scalar> p_x_factor =
-                    Eigen::RowVectorX<Scalar>::Zero(n - t);
-                if (r_less_m) {
-                    p_x_factor = -Q_deflated.row(0).cwiseAbs2();
+            // Characteristic polynomial construction. Row 0 and row 1 of p_j
+            // hold the coefficients of degree d - n + k and d - n + k + 1.
+            Eigen::MatrixX<Scalar> p_j(2, n - t);
+            if (delta) {
+                // p_j(x) = (x - ||c_j||^2) p(x) - x sum_i B_ij^2 g_i(x).
+                //
+                // p and g have alternating coefficients of opposite parity, so
+                // all three terms below share a sign: nothing cancels.
+                for (Eigen::Index row = 0; row < 2; ++row) {
+                    p_j.row(row) =
+                        Eigen::RowVectorX<Scalar>::Constant(n - t, p(row, 0)) -
+                        p(row + 1, 0) * c_sq - g.row(row) * B_sq;
                 }
-                Eigen::MatrixX<Scalar> g_factor =
-                    lambda_inv.asDiagonal() * Lambda_inv_Q_squared;
-
-                p = p_0.tail(2) * p_factor + p_0.head(2) * p_x_factor +
-                    g * g_factor;
             } else {
-                p_0 = p_0.segment(min_deg_g, 2); // min_deg_g is intentional
-                Eigen::MatrixX<Scalar> g_trimmed =
-                    Eigen::MatrixX<Scalar>::Zero(2, g.cols());
-                Eigen::Index rows_to_copy =
-                    std::min(g.rows() - min_deg_g, static_cast<Eigen::Index>(2));
-                if (rows_to_copy > 0) {
-                    g_trimmed.topRows(rows_to_copy) =
-                        g.middleRows(min_deg_g, rows_to_copy);
-                }
-                g = g_trimmed;
-
-                Eigen::RowVectorX<Scalar> p_factor =
-                    -Q_deflated.row(0).cwiseAbs2();
-                Eigen::MatrixX<Scalar> g_factor =
-                    (lambda_inv.array() / (1 - lambda_deflated.array()))
+                // binom_deg would be -1 here, so the bracket above carries an
+                // extra root at x = 1. Dividing it out in closed form, using
+                // 1 - ||c_j||^2 = sum_i B_ij^2 / (1 - omega_i), leaves
+                // p_j(x) = p(x) + sum_i B_ij^2 omega_i / (1 - omega_i) g_i(x).
+                Eigen::MatrixX<Scalar> weighted_B_sq =
+                    (omega.array() / (1 - omega.array()))
                         .matrix()
                         .asDiagonal() *
-                    Q_deflated.bottomRows(len).cwiseAbs2();
-
-                p = p_0 * p_factor + g * g_factor;
+                    B_sq;
+                for (Eigen::Index row = 0; row < 2; ++row) {
+                    p_j.row(row) = Eigen::RowVectorX<Scalar>::Constant(
+                                       n - t, p(row + 1, 0)) +
+                                   g.row(row + 1) * weighted_B_sq;
+                }
             }
 
-            // Array with final |c_{n - k - 1} / c_{n - k}|
+            // Greedy selection and update
             Eigen::ArrayX<Scalar> ratios =
-                (p.row(0).array() / p.row(1).array()).abs();
+                (p_j.row(1).array() / p_j.row(0).array()).abs();
             Eigen::Index s;
             ratios.minCoeff(&s);
 
@@ -173,11 +178,9 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             Eigen::MatrixX<Scalar> M = q_s * q_s.transpose();
             M.diagonal() += lambda;
             eigensolver.compute(M);
-            lambda = eigensolver.eigenvalues();
-            Q = eigensolver.eigenvectors().transpose() * Q;
-
-            // Update r to count nonzero eigenvalues (within tolerance)
-            r = (lambda.array() > tolerance).count();
+            // Reverse to keep the eigenvalues in non-increasing order.
+            lambda = eigensolver.eigenvalues().reverse();
+            Q = eigensolver.eigenvectors().rowwise().reverse().transpose() * Q;
         }
 
         return selected_indices;
@@ -185,7 +188,7 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
 
   private:
     /*!
-     * @brief Numerical tolerance for checking \f$ w_j > 0 \f$.
+     * @brief Numerical tolerance for deflating eigenvalues equal to 0 or 1.
      */
     Scalar tolerance;
 
@@ -193,19 +196,15 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * @brief Build polynomial \f$ p(x) = \prod_i (x - \text{root}_i) \f$ via
      * incremental left-to-right multiplication, consuming roots in
      * ascending-magnitude order.
-     * @param roots Vector of roots, **assumed sorted in descending order**
-     * (which is what the caller produces by inverting the ascending
-     * `lambda_deflated`).
+     * @param roots Vector of roots in \f$ [0, 1) \f$, **assumed sorted in
+     * descending order** (which is what the caller produces by slicing the
+     * non-increasing `lambda`).
      * @return Polynomial coefficients in standard form (size = deg + 1).
      *
-     * Each step multiplies the running polynomial by \f$(x - r_i)\f$, so
-     * coefficient magnitudes grow as roots are absorbed. Consuming the
-     * smallest roots first keeps the intermediate polynomial well-scaled
-     * for as long as possible, deferring catastrophic cancellation toward
-     * the end where fewer steps remain to amplify error. (Equivalent in
-     * exact arithmetic to any other ordering; rounds better in finite
-     * precision when \f$ |\text{roots}| \f$ varies over many orders of
-     * magnitude.)
+     * Because every root is non-negative the coefficients strictly alternate
+     * in sign, and each step \f$ p \gets (x - r_i) p \f$ combines two
+     * like-signed terms. The construction is therefore free of cancellation
+     * and the coefficients are bounded by \f$ \binom{\deg}{s} \f$.
      */
     Eigen::VectorX<Scalar>
     buildPolynomialFromRoots(const Eigen::VectorX<Scalar> &roots) const {
@@ -223,60 +222,11 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
     }
 
     /*!
-     * @brief Deflate eigenvalues equal to 0 or 1 and check for overflow.
-     * @param lambda Vector of eigenvalues sorted in increasing order.
-     * @param x_minus_1_deg Reference to exponent of (x-1), incremented by count
-     * of eigenvalues equal to 1.
-     * @return Pair (start, len) where start is index of first active eigenvalue
-     * and len is count of active eigenvalues.
-     */
-    std::pair<Eigen::Index, Eigen::Index>
-    deflateAndCheckOverflow(const Eigen::VectorX<Scalar> &lambda,
-                            Eigen::Index &x_minus_1_deg) const {
-        Eigen::Index start = 0;
-
-        // Skip eigenvalues equal to 0 (within tolerance)
-        while (start < lambda.size() && lambda[start] < tolerance) {
-            start++;
-        }
-
-        // Find where eigenvalues equal to 1 begin
-        Eigen::Index ones_start = start;
-        while (ones_start < lambda.size() &&
-               lambda[ones_start] < Scalar(1) - tolerance) {
-            ones_start++;
-        }
-        x_minus_1_deg += lambda.size() - ones_start;
-
-        // Return segment containing only eigenvalues in (0, 1)
-        const Eigen::Index len = ones_start - start;
-
-        // Check for potential overflow on the active eigenvalues
-        const Scalar max_log_val =
-            std::log10(std::numeric_limits<Scalar>::max());
-        const Scalar safety_buffer =
-            static_cast<Scalar>(len + 1) / 3 + std::log10(tolerance);
-        const Scalar safe_limit = max_log_val - safety_buffer;
-
-        Scalar log_magnitude = 0;
-        for (Eigen::Index i = start; i < start + len; ++i) {
-            log_magnitude += std::log10(1 / lambda[i]);
-        }
-
-        if (log_magnitude > safe_limit) {
-            std::cerr << "Warning: Predicted overflow! Log magnitude sum: "
-                      << log_magnitude << std::endl;
-        }
-
-        return {start, len};
-    }
-
-    /*!
-     * @brief Build quotient polynomials \f$ g_i(x) = p_0(x) / (x - r_i) \f$
-     * via hybrid (two-way) synthetic division.
-     * @param p_0 Coefficients of \f$ p_0(x) = \prod_i (x - r_i) \f$, standard
-     * form (size = num_roots + 1).
-     * @param roots Vector of roots \f$ r_i \ge 0 \f$.
+     * @brief Build quotient polynomials \f$ g_i(x) = p(x) / (x - r_i) \f$ via
+     * composite (two-way) synthetic division.
+     * @param p Coefficients of \f$ p(x) = \prod_i (x - r_i) \f$, standard form
+     * (size = num_roots + 1).
+     * @param roots Vector of roots, **assumed sorted in descending order**.
      * @return Matrix where column \f$ i \f$ contains coefficients of
      * \f$ g_i(x) \f$ in standard form (size = num_roots).
      *
@@ -284,47 +234,42 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * \f$ O(\text{num\_roots}^3) \f$ that would result from building each
      * column independently.
      *
-     * Stability strategy: each column is computed by running synthetic
-     * division from both ends simultaneously and meeting at the peak.
-     * - Forward recurrence (high-to-low) scales errors by \f$ r_i \f$.
-     * - Backward recurrence (low-to-high) divides errors by \f$ r_i \f$.
-     * At each step we advance whichever front currently has smaller
-     * magnitude; this naturally places the meeting point near each
-     * column's peak coefficient — keeping relative error bounded.
+     * Stability strategy: coefficient \f$ b_a \f$ of \f$ g_i \f$ equals
+     * \f$ \pm e_{\deg - a}(\text{roots} \setminus \{r_i\}) \f$, and the
+     * forward step \f$ b_{a-1} = c_a + r_i b_a \f$ evaluates
+     * \f$ e_s = e_s(\text{all}) - r_i e_{s-1} \f$. That subtraction is benign
+     * exactly while the roots being absorbed are larger than \f$ r_i \f$, and
+     * the backward step is benign exactly while they are smaller. Since
+     * `roots` is descending, precisely \f$ i \f$ roots exceed \f$ r_i \f$ and
+     * the crossover sits at degree \f$ \deg - i \f$: each recurrence is run
+     * only over the range where it is stable.
      */
     Eigen::MatrixX<Scalar>
-    buildQuotentPolynomials(const Eigen::VectorX<Scalar> &p_0,
-                            const Eigen::VectorX<Scalar> &roots) const {
+    buildQuotientPolynomials(const Eigen::VectorX<Scalar> &p,
+                             const Eigen::VectorX<Scalar> &roots) const {
         const Eigen::Index num_roots = roots.size();
         const Eigen::Index g_deg = num_roots - 1;
         Eigen::MatrixX<Scalar> g(num_roots, num_roots);
 
         for (Eigen::Index i = 0; i < num_roots; ++i) {
             const Scalar r = roots(i);
+            const Eigen::Index meet = g_deg - i;
 
-            // Front anchors: forward starts at degree g_deg, backward at 0.
-            Scalar fwd = p_0(num_roots); // b_{g_deg}
-            Scalar bwd = -p_0(0) / r;    // b_0
-            Eigen::Index hi = g_deg;     // next forward write
-            Eigen::Index lo = 0;         // next backward write
-            g(hi, i) = fwd;
-            g(lo, i) = bwd;
+            // Forward recurrence (high-to-low): b_{a-1} = c_a + r * b_a.
+            Scalar fwd = p(num_roots); // b_{g_deg}
+            g(g_deg, i) = fwd;
+            for (Eigen::Index a = g_deg; a > meet; --a) {
+                fwd = p(a) + r * fwd;
+                g(a - 1, i) = fwd;
+            }
 
-            // Race the two recurrences toward each other. At each step,
-            // advance whichever front currently has smaller magnitude;
-            // that step pushes it toward the (larger) peak — keeping
-            // relative error small. They meet at the peak.
-            while (hi - lo > 1) {
-                if (std::abs(fwd) < std::abs(bwd)) {
-                    // Forward step: b_{hi-1} = c_hi + r * b_hi
-                    fwd = p_0(hi) + r * fwd;
-                    --hi;
-                    g(hi, i) = fwd;
-                } else {
-                    // Backward step: b_{lo+1} = (b_lo - c_{lo+1}) / r
-                    bwd = (bwd - p_0(lo + 1)) / r;
-                    ++lo;
-                    g(lo, i) = bwd;
+            // Backward recurrence (low-to-high): b_{a+1} = (b_a - c_{a+1}) / r.
+            if (meet > 0) {
+                Scalar bwd = -p(0) / r; // b_0
+                g(0, i) = bwd;
+                for (Eigen::Index a = 0; a + 1 < meet; ++a) {
+                    bwd = (bwd - p(a + 1)) / r;
+                    g(a + 1, i) = bwd;
                 }
             }
         }
@@ -338,9 +283,13 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * max_deg].
      * @param poly Polynomial matrix where each column is a polynomial.
      * @param x_minus_1_deg Exponent of (x-1).
-     * @param min_deg Lowest degree to keep.
+     * @param min_deg Lowest degree to keep (may be negative; those rows are
+     * left at zero).
      * @param max_deg Highest degree to keep.
      * @return New matrix with trimmed polynomial coefficients.
+     *
+     * @note The normalization constant depends only on `x_minus_1_deg` and
+     * `max_deg`, so calls sharing those arguments stay mutually consistent.
      */
     Eigen::MatrixX<Scalar> applyBinomials(const Eigen::MatrixX<Scalar> &poly,
                                           Eigen::Index x_minus_1_deg,
