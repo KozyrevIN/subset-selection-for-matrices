@@ -1,9 +1,9 @@
 #ifndef MAT_SUBSET_DERANDOMIZED_VOLUME_SELECTOR_H
 #define MAT_SUBSET_DERANDOMIZED_VOLUME_SELECTOR_H
 
-#include <cassert>
-#include <cmath>  // For std::sqrt
-#include <limits> // For std::numeric_limits
+#include <cassert> // For std::assert
+#include <cmath>   // For std::sqrt
+#include <limits>  // For std::numeric_limits
 
 #include <Eigen/Eigenvalues> // For Eigen::SelfAdjointEigenSolver
 #include <Eigen/QR>          // For Eigen::HouseholderQR
@@ -95,7 +95,7 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             while (r < m && lambda(r) > tolerance) {
                 ++r;
             }
-            const Eigen::Index l = r - ones;     // active eigenvalues, in (0, 1)
+            const Eigen::Index l = r - ones; // active eigenvalues, in (0, 1)
             const Eigen::Index d = n - t + r - m;
 
             // Q_R restricted to the non-ones rows has m - ones rows and n - t
