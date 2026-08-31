@@ -58,9 +58,13 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
             (qr.householderQ() * Eigen::MatrixX<Scalar>::Identity(n, m))
                 .transpose();
 
-        Eigen::MatrixX<Scalar> Wt; // W = V_S^{-1} V, transposed (n x m)
+        // The starting set hands the greedy the two objects it runs on: the
+        // inverse Gram M = (V_S V_S^T)^{-1} of the selected block, and the
+        // scores d_j = 1 + v_j^T M v_j.
+        Eigen::MatrixX<Scalar> M;
+        Eigen::ArrayX<Scalar> d_all;
         std::vector<Eigen::Index> indices =
-            FrobeniusPivotingBase<Scalar>::selectStartingSet(V, &Wt);
+            FrobeniusPivotingBase<Scalar>::selectStartingSet(V, &M, &d_all);
 
         if (k == m) {
             indices.resize(k);
@@ -75,33 +79,12 @@ class FrobeniusSelectionSelector : public FrobeniusPivotingBase<Scalar> {
 
         Eigen::MatrixX<Scalar> V_remaining = V.rightCols(n - m);
 
-        // The starting set hands back W = V_S^{-1} V with V_S = V.leftCols(m),
-        // upper triangular after its Householder sweep. Since
-        // M = (V_S V_S^T)^{-1} = B^T B with B = V_S^{-1}, the greedy scores
-        // initialize directly from W:
-        //   d_j = 1 + v_j^T M v_j = 1 + ||W_j||^2,
-        //   l_j = ||M v_j||^2 = ||B^T W_j||^2.
-        // The triangular inverse is also better conditioned than inverting
-        // the Gram matrix V_S V_S^T, which squares the condition number.
-        Eigen::MatrixX<Scalar> B =
-            V.leftCols(m).template triangularView<Eigen::Upper>().solve(
-                Eigen::MatrixX<Scalar>::Identity(m, m));
-        Eigen::MatrixX<Scalar> M(m, m);
-        M.noalias() = B.transpose() * B;
-
-        // Row j of Wt.bottomRows(n - m) is W_j of remaining column j; row
-        // norms are accumulated column-by-column (contiguous slices).
-        Eigen::ArrayX<Scalar> d = Eigen::ArrayX<Scalar>::Ones(n - m);
-        for (Eigen::Index c = 0; c < m; ++c) {
-            d += Wt.col(c).tail(n - m).array().square();
-        }
-        // Row j of Tt is (B^T W_j)^T.
-        Eigen::MatrixX<Scalar> Tt(n - m, m);
-        Tt.noalias() = Wt.bottomRows(n - m) * B;
-        Eigen::ArrayX<Scalar> l = Eigen::ArrayX<Scalar>::Zero(n - m);
-        for (Eigen::Index c = 0; c < m; ++c) {
-            l += Tt.col(c).array().square();
-        }
+        Eigen::ArrayX<Scalar> d = d_all.tail(n - m);
+        // l_j = ||M v_j||^2; column j of MV is M v_j.
+        Eigen::MatrixX<Scalar> MV(m, n - m);
+        MV.noalias() = M * V_remaining;
+        Eigen::ArrayX<Scalar> l =
+            MV.colwise().squaredNorm().transpose().array();
 
         // The pool shrinks by swap-with-last; `r` is the active width and the
         // matrices keep their allocation. The projection buffers are
