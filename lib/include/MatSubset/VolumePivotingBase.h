@@ -93,8 +93,15 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
         }
 
         Eigen::MatrixX<Scalar> R = X;
+        // Scratch, allocated once. The pivot column is copied out of R because
+        // the update below overwrites R, which is exactly the aliasing the
+        // explicit .eval() used to defend against — at the cost of a fresh
+        // m x n block on every pivot.
+        Eigen::ArrayX<Scalar> gamma(n);
+        Eigen::VectorX<Scalar> pivot(m);
+        Eigen::MatrixX<Scalar> pivot_row(1, n);
         for (Eigen::Index i = 0; i < m; ++i) {
-            Eigen::ArrayX<Scalar> gamma = R.colwise().squaredNorm();
+            gamma = R.colwise().squaredNorm();
             Eigen::Index j_max;
             Scalar gamma_max = gamma.tail(n - i).maxCoeff(&j_max);
             j_max += i;
@@ -104,7 +111,10 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
             X.col(i).swap(X.col(j_max));
             R.col(i).swap(R.col(j_max));
 
-            R -= (R.col(i) * (R.col(i).transpose() * R) / gamma_max).eval();
+            pivot = R.col(i);
+            pivot_row.noalias() = pivot.transpose() * R;
+            pivot_row /= gamma_max;
+            R.noalias() -= pivot * pivot_row;
         }
 
         if (init == Initialization::CPQR) {
@@ -160,14 +170,20 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
                    Eigen::Index from, Eigen::Index to) const {
 
         const Eigen::Index n = X.cols();
+        // Scratch, allocated once: the length-n gemv result was a fresh heap
+        // block on every pass otherwise.
+        Eigen::VectorX<Scalar> Y_x_max(X.rows()), Y_x_scaled(X.rows());
+        Eigen::VectorX<Scalar> xtY(n);
         for (Eigen::Index t = from; t < to; ++t) {
             Eigen::Index j_max;
             Scalar l_max = l.tail(n - t).maxCoeff(&j_max);
             j_max += t;
-            Eigen::VectorX<Scalar> Y_x_max = Y * X.col(j_max);
+            Y_x_max.noalias() = Y * X.col(j_max);
 
-            l -= (X.transpose() * Y_x_max).cwiseAbs2() / (1 + l_max);
-            Y -= Y_x_max * Y_x_max.transpose() / (1 + l_max);
+            xtY.noalias() = X.transpose() * Y_x_max;
+            l -= xtY.cwiseAbs2() / (1 + l_max);
+            Y_x_scaled = Y_x_max / (1 + l_max);
+            Y.noalias() -= Y_x_scaled * Y_x_max.transpose();
 
             std::swap(indices[static_cast<size_t>(t)],
                       indices[static_cast<size_t>(j_max)]);
@@ -192,13 +208,18 @@ class VolumePivotingBase : public SelectorBase<Scalar> {
                       std::vector<Eigen::Index> &indices,
                       Eigen::VectorX<Scalar> &l, Eigen::MatrixX<Scalar> &Y,
                       Eigen::Index from, Eigen::Index to) const {
+        // Scratch, allocated once — see greedyAdd.
+        Eigen::VectorX<Scalar> Y_x_min(X.rows()), Y_x_scaled(X.rows());
+        Eigen::VectorX<Scalar> xtY(X.cols());
         for (Eigen::Index t = from; t > to; --t) {
             Eigen::Index j_min;
             Scalar l_min = l.head(t).minCoeff(&j_min);
-            Eigen::VectorX<Scalar> Y_x_min = Y * X.col(j_min);
+            Y_x_min.noalias() = Y * X.col(j_min);
 
-            l += (X.transpose() * Y_x_min).cwiseAbs2() / (1 - l_min);
-            Y += Y_x_min * Y_x_min.transpose() / (1 - l_min);
+            xtY.noalias() = X.transpose() * Y_x_min;
+            l += xtY.cwiseAbs2() / (1 - l_min);
+            Y_x_scaled = Y_x_min / (1 - l_min);
+            Y.noalias() += Y_x_scaled * Y_x_min.transpose();
 
             std::swap(indices[static_cast<size_t>(t - 1)],
                       indices[static_cast<size_t>(j_min)]);

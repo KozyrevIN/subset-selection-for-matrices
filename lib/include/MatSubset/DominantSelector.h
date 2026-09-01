@@ -95,11 +95,29 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
 
         Eigen::Index i_max, j_max;
         Scalar max_val;
+        // The swap score, in the two forms this algorithm takes.
+        //
+        // For k = m the selected block is square, so C_selected = X_S^{-1} X_S
+        // is the identity, l_selected is exactly 1, and the (1 - l_selected)
+        // factor of B vanishes: B collapses to |C_remaining|^2 and the search
+        // is plain Maxvol (Goreinov et al.). Reading that maximum straight off
+        // C_remaining is both cheaper — it skips a k x (n-k) matrix per swap —
+        // and slightly more accurate, since it does not add and subtract a
+        // term that is zero only up to rounding.
+        //
+        // For k > m the factor is genuinely nonzero and moves the argmax, so B
+        // has to be formed. It is sized once, and its assignment is split in
+        // two to keep both halves out of the heap: noalias() lets the outer
+        // product go straight into B, and the abs2 term is coefficient-wise so
+        // it accumulates lazily. Written as one expression, Eigen evaluates the
+        // k x (n-k) product into a temporary and then adds — an allocation the
+        // size of B on every swap.
         Eigen::MatrixX<Scalar> B;
-        if (true) {
-            B = (1 - l_selected).matrix() *
-                    (1 + l_remaining).matrix().transpose() +
-                C_remaining.array().abs2().matrix();
+        if (k > m) {
+            B.resize(k, n - k);
+            B.noalias() =
+                (1 - l_selected).matrix() * (1 + l_remaining).matrix().transpose();
+            B += C_remaining.array().abs2().matrix();
 
             max_val = B.maxCoeff(&i_max, &j_max);
         } else {
@@ -117,12 +135,18 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
 
         // Main loop
         Eigen::MatrixX<Scalar> last_row(1, n);
+        // C_remaining is a block of C, so the pivot column is part of the very
+        // matrix the rank-1 updates below overwrite. Copying it out (k values)
+        // is what makes noalias() legal there — it is the aliasing Eigen would
+        // otherwise have to defend against by building a whole k x n temporary.
+        Eigen::VectorX<Scalar> pivot_col(k);
         while ((max_val > c) && (n_swaps <= max_swap_count)) {
 
             // Add extra column
-            last_row = C_remaining.col(j_max).transpose() * C /
-                       (1 + l_remaining(j_max));
-            C -= C_remaining.col(j_max) * last_row;
+            pivot_col = C_remaining.col(j_max);
+            last_row.noalias() = pivot_col.transpose() * C;
+            last_row /= (1 + l_remaining(j_max));
+            C.noalias() -= pivot_col * last_row;
             l -= last_row.transpose().array().abs2() * (1 + l_remaining(j_max));
 
             // Swap newly added column and one destined to removal
@@ -137,13 +161,15 @@ class DominantSelector : public VolumePivotingBase<Scalar> {
 
             // Remove the column
             l += last_row.transpose().array().abs2() / (1 - l_remaining(j_max));
-            C += C_remaining.col(j_max) * last_row * (1 + l_remaining(j_max));
+            // Re-read: the swaps above moved this column.
+            pivot_col = C_remaining.col(j_max) * (1 + l_remaining(j_max));
+            C.noalias() += pivot_col * last_row;
 
             // Select indices to swap
-            if (true) {
-                B = (1 - l_selected).matrix() *
-                        (1 + l_remaining).matrix().transpose() +
-                    C_remaining.array().abs2().matrix();
+            if (k > m) {
+                B.noalias() = (1 - l_selected).matrix() *
+                              (1 + l_remaining).matrix().transpose();
+                B += C_remaining.array().abs2().matrix();
 
                 max_val = B.maxCoeff(&i_max, &j_max);
             } else {

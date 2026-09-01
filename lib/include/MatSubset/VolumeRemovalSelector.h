@@ -62,17 +62,37 @@ class VolumeRemovalSelector : public SelectorBase<Scalar> {
         Eigen::ArrayX<Scalar> d =
             static_cast<Scalar>(1) - (V.transpose() * V_dag).diagonal().array();
 
+        // Scratch for the loop below, allocated once at full width and used
+        // through .head(active) as the active set shrinks. Written the obvious
+        // way, each iteration asks the allocator for an m x n block and two
+        // length-n vectors; see FrobeniusRemovalSelector for why that dominates
+        // the run rather than the arithmetic.
+        Eigen::VectorX<Scalar> w(m), w_dag(m), w_scaled(m);
+        Eigen::VectorX<Scalar> wV_dag(n), wdV(n);
+
         while (cols.size() > k) {
             Eigen::Index j_max;
             Scalar d_max = d.maxCoeff(&j_max);
 
-            Eigen::VectorX<Scalar> w = V.col(j_max);
-            Eigen::VectorX<Scalar> w_dag = V_dag.col(j_max);
+            // Copies, not views: removeColumn overwrites both columns below.
+            w = V.col(j_max);
+            w_dag = V_dag.col(j_max);
 
             removeColumn(cols, d, V, V_dag, j_max);
 
-            d -= (w.transpose() * V_dag).array().square() / d_max;
-            V_dag += w_dag * (w_dag.transpose() * V) / d_max;
+            const Eigen::Index active = static_cast<Eigen::Index>(cols.size());
+            auto wV_dag_a = wV_dag.head(active);
+            auto wdV_a = wdV.head(active);
+
+            wV_dag_a.noalias() = V_dag.transpose() * w;
+            d -= wV_dag_a.array().square() / d_max;
+
+            // One gemv into wdV, then one ger into V_dag. noalias() is what
+            // keeps the second in place: without it Eigen assumes V_dag may
+            // appear on the right and builds the m x n product first.
+            wdV_a.noalias() = V.transpose() * w_dag;
+            w_scaled = w_dag / d_max;
+            V_dag.noalias() += w_scaled * wdV_a.transpose();
         }
 
         return cols;

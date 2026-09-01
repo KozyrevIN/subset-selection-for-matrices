@@ -95,15 +95,23 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
         }
         Eigen::Index n_swaps = 0;
 
+        // Scratch, allocated once. Each exchange previously asked the
+        // allocator for two length-n vectors and an m x m block; on a wide
+        // matrix that traffic, not the arithmetic, sets the pace.
+        Eigen::VectorX<Scalar> Y_r(m), Y_r_scaled(m);
+        Eigen::VectorX<Scalar> rtY(n);
+
         // Main loop with column exchange
         while (n_swaps < max_swap_count) {
             // Column selection
             Eigen::Index s;
             Scalar l_s = l.tail(n - k).maxCoeff(&s);
             s += k;
-            Eigen::VectorX<Scalar> Y_r_s = Y * R.col(s);
-            l -= (R.transpose() * Y_r_s).cwiseAbs2() / (1 + l_s);
-            Y -= Y_r_s * Y_r_s.transpose() / (1 + l_s);
+            Y_r.noalias() = Y * R.col(s);
+            rtY.noalias() = R.transpose() * Y_r;
+            l -= rtY.cwiseAbs2() / (1 + l_s);
+            Y_r_scaled = Y_r / (1 + l_s);
+            Y.noalias() -= Y_r_scaled * Y_r.transpose();
 
             // Column removal
             Eigen::Index r;
@@ -111,9 +119,11 @@ class VolumeAddRemoveSelector : public VolumePivotingBase<Scalar> {
             if ((1 + l_s) * (1 - l_r) <= c) {
                 break;
             }
-            Eigen::VectorX<Scalar> Y_r_r = Y * R.col(r);
-            l += (R.transpose() * Y_r_r).cwiseAbs2() / (1 - l_r);
-            Y += Y_r_r * Y_r_r.transpose() / (1 - l_r);
+            Y_r.noalias() = Y * R.col(r);
+            rtY.noalias() = R.transpose() * Y_r;
+            l += rtY.cwiseAbs2() / (1 - l_r);
+            Y_r_scaled = Y_r / (1 - l_r);
+            Y.noalias() += Y_r_scaled * Y_r.transpose();
 
             // Update
             std::swap(indices[static_cast<size_t>(r)],

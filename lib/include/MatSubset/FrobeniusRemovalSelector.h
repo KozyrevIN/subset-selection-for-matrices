@@ -72,6 +72,22 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
             (V_dag.transpose() * S_inv2.asDiagonal() * V_dag).diagonal();
         Eigen::ArrayX<Scalar> d = (V.transpose() * V_dag).diagonal().array();
 
+        // Scratch for the loop below, allocated once at full width and used
+        // through .head(active) as the active set shrinks.
+        //
+        // Every one of these held a fresh Eigen temporary before. Eigen sizes
+        // its product temporaries at run time and takes them from the heap, so
+        // the loop asked the allocator for an m x n block plus three length-n
+        // vectors on each of its n - k iterations. That is invisible in `user`
+        // time and cannot be optimized out by the compiler: the buffers escape
+        // into Eigen's evaluators, and their sizes are not compile-time
+        // constants. It is also disproportionately expensive under musl, whose
+        // malloc serves large blocks straight from mmap and returns them with
+        // munmap, so each iteration faulted in a few thousand fresh pages and
+        // every free shot a TLB shootdown at the other threads.
+        Eigen::VectorX<Scalar> w(m), w_dag(m), w_scaled(m), S_inv2_w_dag(m);
+        Eigen::VectorX<Scalar> mul_1(n), mul_2(n), wdV(n);
+
         while (cols.size() > k) {
 
             Eigen::Index j_min = 0;
@@ -90,23 +106,41 @@ class FrobeniusRemovalSelector : public SelectorBase<Scalar> {
                 }
             }
 
-            Eigen::VectorX<Scalar> w = V.col(j_min);
-            Eigen::VectorX<Scalar> w_dag = V_dag.col(j_min);
+            // Copies, not views: removeColumn overwrites both columns below.
+            w = V.col(j_min);
+            w_dag = V_dag.col(j_min);
             Scalar denom = static_cast<Scalar>(1) - d(j_min);
 
             removeColumn(cols, l, d, V, V_dag, j_min);
 
-            Eigen::ArrayX<Scalar> mul_1 = w.transpose() * V_dag;
-            Eigen::ArrayX<Scalar> mul_2 =
-                w_dag.transpose() * S_inv2.asDiagonal() * V_dag;
-            Scalar mul_3 =
-                (w_dag.transpose() * S_inv2.asDiagonal() * w_dag).value();
+            const Eigen::Index active = static_cast<Eigen::Index>(cols.size());
+            auto mul_1_a = mul_1.head(active);
+            auto mul_2_a = mul_2.head(active);
+            auto wdV_a = wdV.head(active);
 
-            d += mul_1.square() / denom;
-            mul_1 /= denom;
-            l += mul_1 * (2 * mul_2 + mul_1 * mul_3);
+            // S_inv2 is diagonal, hence symmetric, so w^T S V transposes into
+            // V^T (S w) — a gemv straight into the buffer rather than a row
+            // expression Eigen would have to materialize.
+            S_inv2_w_dag.noalias() = S_inv2.asDiagonal() * w_dag;
+            Scalar mul_3 = w_dag.dot(S_inv2_w_dag);
 
-            V_dag += w_dag * (w_dag.transpose() * V) / denom;
+            mul_1_a.noalias() = V_dag.transpose() * w;
+            mul_2_a.noalias() = V_dag.transpose() * S_inv2_w_dag;
+
+            d += mul_1_a.array().square() / denom;
+            mul_1_a /= denom;
+            l += mul_1_a.array() *
+                 (2 * mul_2_a.array() + mul_1_a.array() * mul_3);
+
+            // The rank-1 update, as a rank-1 update: one gemv into wdV, then
+            // one ger into V_dag. Without noalias() Eigen must assume V_dag
+            // appears on the right and evaluates the whole m x n product into
+            // a temporary before adding it; noalias() promises it does not
+            // (the right side is w_scaled and wdV, both scratch), which lets
+            // Eigen accumulate straight into V_dag.
+            wdV_a.noalias() = V.transpose() * w_dag;
+            w_scaled = w_dag / denom;
+            V_dag.noalias() += w_scaled * wdV_a.transpose();
         }
 
         return cols;
