@@ -15,11 +15,11 @@
                     "name": "forward iterative volume sampling"
                 },
                 {
-                    "display_name": "leverage scores",
+                    "display_name": "Leverage scores",
                     "name": "leverage scores"
                 },
                 {
-                    "display_name": "random columns",
+                    "display_name": "Random columns",
                     "name": "random columns"
                 }
             ],

@@ -6,18 +6,18 @@
 # Figure 1 (plot_allen_cahn.pdf): relative Frobenius error against a dense full-grid
 #   reference vs. time, one curve per selection algorithm, against the best
 #   rank-r floor.
-#   Produced by the AllenCahnTester binary + plot_allen_cahn_error.py.
+#   Produced by the AllenCahnTester binary + plot_error.py.
 #
 # Figure 2 (plot_allen_cahn_unfolding.pdf): the exact two-panel figure of the
 #   superconductivity experiment, but on a matrix this PDE genuinely produces —
 #   a TT unfolding of the reference state taken from the middle of the run.
-#   Produced by the standard Tester + plot_k_sweep.py.
+#   Produced by the standard Tester + ../common/plot_k_sweep.py.
 #
 # Usage (from repo root or from this directory):
-#   bash experiments/subset_selection_for_matrices_by_volume_sampling/run_allen_cahn.sh
+#   bash experiments/subset_selection_for_matrices_by_volume_sampling/allen_cahn/run.sh
 #
 # The integration run of figure 1 is described entirely by one JSON config,
-# config_allen_cahn.json, which carries the grid, the fixed rank, the final time
+# config.json, which carries the grid, the fixed rank, the final time
 # and the algorithm roster. Edit it to change the experiment; this script only
 # wires it up.
 #
@@ -26,13 +26,17 @@
 #   TT_BUILD_DIR    – CMake build dir for the TT tools (default: <repo_root>/build/dlra_deim_tools)
 #   BUILD_TYPE      – cmake --config value             (default: Release)
 #   PYTHON          – python interpreter               (default: python3)
-#   CONFIG          – the integration config           (default: config_allen_cahn.json)
+#   CONFIG          – the integration config           (default: config.json)
 #   SAMPLES         – trials per k for the unfolding figure (default: 16)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# The scripts every experiment in this folder shares. They resolve their paths
+# against BASE_DIR — this experiment's own folder — rather than against
+# themselves, so each experiment keeps its results and figures to itself.
+COMMON_DIR="$SCRIPT_DIR/../common"
 BUILD_DIR="${BUILD_DIR:-$REPO_ROOT/build/experiments}"
 TT_BUILD_DIR="${TT_BUILD_DIR:-$REPO_ROOT/build/dlra_deim_tools}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
@@ -40,7 +44,7 @@ PYTHON="${PYTHON:-python3}"
 
 SAMPLES="${SAMPLES:-16}"
 
-CONFIG="${CONFIG:-$SCRIPT_DIR/config_allen_cahn.json}"
+CONFIG="${CONFIG:-$SCRIPT_DIR/config.json}"
 
 if [[ ! -f "$CONFIG" ]]; then
     echo "ERROR: config not found: $CONFIG" >&2
@@ -113,14 +117,16 @@ echo "==> Allen-Cahn integration run …"
 # count). k starts at m and runs to a few multiples of it (m is the TT rank
 # here), so the config is generated from the actual file rather than hard-coded.
 UNFOLDING="$RESULTS_DIR/$RESULTS_SUBDIR/allen_cahn_unfolding.csv"
-CONFIG_DET="$SCRIPT_DIR/config_allen_cahn_deterministic.json"
-CONFIG_RAND="$SCRIPT_DIR/config_allen_cahn_randomized.json"
+CONFIG_DET="$SCRIPT_DIR/config_deterministic.json"
+CONFIG_RAND="$SCRIPT_DIR/config_randomized.json"
 
 echo ""
 echo "==> Generating the unfolding configs from $UNFOLDING …"
+BASE_DIR="$SCRIPT_DIR" \
 UNFOLDING="$UNFOLDING" RESULTS_DIR="$RESULTS_DIR" SAMPLES="$SAMPLES" \
 CONFIG_DET="$CONFIG_DET" CONFIG_RAND="$CONFIG_RAND" \
-"$PYTHON" "$SCRIPT_DIR/make_unfolding_configs.py"
+EXPERIMENT="Allen-Cahn unfolding" \
+"$PYTHON" "$COMMON_DIR/make_unfolding_configs.py"
 
 echo ""
 echo "==> Running the unfolding experiment (deterministic algorithms) …"
@@ -132,23 +138,23 @@ echo "==> Running the unfolding experiment (randomized algorithms) …"
 
 # ── 4. refresh index.json ─────────────────────────────────────────────────────
 # Each tester run overwrites index.json with only its own experiments; rebuild
-# it from every result subfolder so the superconductivity results stay listed
-# alongside this one.
+# it from every result subfolder of this experiment so both runs stay listed.
 echo ""
 echo "==> Refreshing index.json …"
-RESULTS_DIR="$RESULTS_DIR" "$PYTHON" "$SCRIPT_DIR/update_index.py"
+BASE_DIR="$SCRIPT_DIR" RESULTS_DIR="$RESULTS_DIR" \
+"$PYTHON" "$COMMON_DIR/update_index.py"
 
 # ── 5. plots ──────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Plotting figure 1 (error vs. time) …"
 RESULTS_DIR="$RESULTS_DIR" FIGURES_DIR="$FIGURES_DIR" \
 RESULTS_SUBDIR="$RESULTS_SUBDIR" RANK="$RANK" \
-"$PYTHON" "$SCRIPT_DIR/plot_allen_cahn_error.py"
+"$PYTHON" "$SCRIPT_DIR/plot_error.py"
 
 echo ""
 echo "==> Plotting figure 2 (the mid-run unfolding) …"
-RESULTS_DIR="$RESULTS_DIR" FIGURES_DIR="$FIGURES_DIR" \
-"$PYTHON" "$SCRIPT_DIR/plot_k_sweep.py" "Allen-Cahn unfolding"
+BASE_DIR="$SCRIPT_DIR" RESULTS_DIR="$RESULTS_DIR" FIGURES_DIR="$FIGURES_DIR" \
+"$PYTHON" "$COMMON_DIR/plot_k_sweep.py" "Allen-Cahn unfolding"
 
 echo ""
 echo "==> All done. Figures saved to $FIGURES_DIR/"

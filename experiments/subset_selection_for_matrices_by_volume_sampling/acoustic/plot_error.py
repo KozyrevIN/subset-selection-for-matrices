@@ -3,7 +3,7 @@
 Plot script for the acoustic-wave accuracy experiment of the
 subset_selection_for_matrices_by_volume_sampling experiment.
 
-Companion to plot_allen_cahn_error.py, and deliberately its opposite. The
+Companion to ../allen_cahn/plot_error.py, and deliberately its opposite. The
 Allen-Cahn run is fixed-rank: every bond is pinned, so all selectors cost the
 same and the only free variable is accuracy, measured against the best rank-r
 approximation. A wave has no such luxury — the wavefront sweeps outward and the
@@ -27,8 +27,8 @@ There is deliberately no 'best rank-r' curve here. With the rank moving, the
 floor would move under every curve and differently for each selector, so it is
 not a single line — the rank panel replaces it.
 
-Usage (from repo root or from this directory):
-    python experiments/subset_selection_for_matrices_by_volume_sampling/plot_acoustic_error.py
+Usage (from this directory):
+    python plot_error.py
 
 Environment overrides:
     RESULTS_DIR    – path to the results directory (default: <script_dir>/results)
@@ -62,7 +62,7 @@ RESULTS_SUBDIR = os.environ.get('RESULTS_SUBDIR', 'acoustic')
 # (see plot_rank_subplot) so a runaway randomized curve cannot squash them.
 RANK_TOP = os.environ.get('RANK_TOP')
 
-# ── style (shared with plot_k_sweep.py / plot_allen_cahn_error.py) ────────────
+# ── style (shared with ../common/plot_k_sweep.py and ../allen_cahn/plot_error.py) ────────────
 CM         = 1 / 2.54
 TEXT_WIDTH = 17 * CM
 
@@ -125,7 +125,7 @@ def load_errors(folder: Path) -> pd.DataFrame:
     if not csv.exists():
         raise FileNotFoundError(
             f"Errors CSV not found: {csv}\n"
-            "Run the AcousticTester binary first (see run_acoustic.sh)."
+            "Run the AcousticTester binary first (see run.sh)."
         )
     df = pd.read_csv(csv)
     df['algorithm'] = df['algorithm'].map(canonical_label)

@@ -11,19 +11,24 @@ Layout (matrix has a regression target):
   - left  = 1 / ‖X_S† X‖_F   (Frobenius norm of the projected pseudo-inverse)
   - right = ‖X†‖_F / ‖X_S†‖_F (Frobenius norm ratio)
 
-Usage (from repo root or from this directory):
-    python experiments/subset_selection_for_matrices_by_volume_sampling/plot_k_sweep.py
+Shared by every experiment in this folder. It reads and writes inside one
+experiment's own directory, named by BASE_DIR — the run_*.sh scripts set it, and
+run by hand it defaults to the working directory:
+
+    cd experiments/subset_selection_for_matrices_by_volume_sampling/superconductivity
+    python ../common/plot_k_sweep.py
 
 Every experiment found under RESULTS_DIR is plotted. To plot just one, name it
 (or any part of its name, case-insensitively) as an argument or in EXPERIMENT:
 
-    python plot_k_sweep.py superconductivity     # only the dataset figure
-    python plot_k_sweep.py unfolding             # only the Allen-Cahn one
-    EXPERIMENT=superconductivity python plot_k_sweep.py
+    python ../common/plot_k_sweep.py superconductivity   # only the dataset figure
+    python ../common/plot_k_sweep.py unfolding           # only the unfolding one
+    EXPERIMENT=superconductivity python ../common/plot_k_sweep.py
 
 Environment overrides:
-    RESULTS_DIR  – path to the results directory  (default: <script_dir>/results)
-    FIGURES_DIR  – path to save figures           (default: <script_dir>/figures)
+    BASE_DIR     – the experiment folder          (default: the working directory)
+    RESULTS_DIR  – path to the results directory  (default: <BASE_DIR>/results)
+    FIGURES_DIR  – path to save figures           (default: <BASE_DIR>/figures)
     EXPERIMENT   – plot only experiments whose name contains this (default: all)
 """
 
@@ -40,10 +45,14 @@ import numpy as np
 import pandas as pd
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-SCRIPT_DIR  = Path(__file__).parent
-RESULTS_DIR = Path(os.environ.get('RESULTS_DIR', SCRIPT_DIR / 'results'))
-FIGURES_DIR = Path(os.environ.get('FIGURES_DIR', SCRIPT_DIR / 'figures'))
-FIGURES_DIR.mkdir(exist_ok=True)
+# This script lives in common/, one level above the experiment it is plotting.
+# Everything it touches — the results it reads, the figures it writes, and the
+# matrix paths its configs name, which the Tester resolved against the folder it
+# was run from — is relative to that experiment folder, not to this file.
+BASE_DIR    = Path(os.environ.get('BASE_DIR', Path.cwd()))
+RESULTS_DIR = Path(os.environ.get('RESULTS_DIR', BASE_DIR / 'results'))
+FIGURES_DIR = Path(os.environ.get('FIGURES_DIR', BASE_DIR / 'figures'))
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── style ─────────────────────────────────────────────────────────────────────
 CM         = 1 / 2.54
@@ -76,13 +85,18 @@ COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
 OUT_STEMS = {
     'Superconductivity dataset': 'plot_superconductivity',
     # A TT unfolding of the Allen-Cahn state taken from the middle of the run
-    # (see run_allen_cahn.sh) — the same two-panel figure on a matrix the
+    # (see allen_cahn/run.sh) — the same two-panel figure on a matrix the
     # PDE genuinely produces rather than on a static dataset.
     'Allen-Cahn unfolding': 'plot_allen_cahn_unfolding',
-    # The same, on the acoustic wave equation (see run_acoustic.sh). That run
+    # The same, on the acoustic wave equation (see acoustic/run.sh). That run
     # is tolerance-driven rather than fixed-rank, so its unfolding is taken
     # from the solver's own state mid-run.
     'Acoustic unfolding': 'plot_acoustic_unfolding',
+    # POD modes of NOAA OI SST V2 weekly means, where selecting a column is
+    # placing a sensor (see sensor_placement/run.sh). The reconstruction figure
+    # that experiment is really about is its own plot_error.py; this is the
+    # house k-sweep on the same matrix.
+    'SST sensor placement': 'plot_sensor_placement_k_sweep',
 }
 
 # Experiments drawn as a single wide panel rather than two.
@@ -92,12 +106,18 @@ OUT_STEMS = {
 # shown there. On the TT unfoldings of the PDE runs they track each other so
 # closely that the panels are the same picture twice, so those keep only the
 # pinv ratio, stretched across the full width.
-SINGLE_PANEL = {'Allen-Cahn unfolding', 'Acoustic unfolding'}
+#
+# The SST modes are there for a stronger reason: that matrix has orthonormal
+# rows, so the LQ factor L is orthogonal and Q = L^T X. Then ‖Q_S†‖ = ‖X_S†‖
+# exactly, and the two metrics are equal, not merely close — the panels would
+# be the same numbers, not just the same shape.
+SINGLE_PANEL = {'Allen-Cahn unfolding', 'Acoustic unfolding',
+                'SST sensor placement'}
 
 # Canonical algorithm order (by display_name) so colours are stable across runs.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
-             'Leverage scores', 'Random columns']
+             'Leverage scores', 'Random columns', 'Rect-maxvol']
 
 
 def canonical_label(name: str) -> str:
@@ -141,7 +161,7 @@ def infer_m_n(cfg: dict) -> tuple:
 
     target_file = cfg.get('matrix', {}).get('target_file')
     if target_file:
-        target_path = SCRIPT_DIR / target_file
+        target_path = BASE_DIR / target_file
         if target_path.exists():
             with open(target_path) as fh:
                 n = sum(1 for line in fh if line.strip())
@@ -153,7 +173,7 @@ def infer_m_n(cfg: dict) -> tuple:
     file_path = cfg.get('matrix', {}).get('file_path')
     if not file_path:
         return m, None
-    matrix_path = SCRIPT_DIR / file_path
+    matrix_path = BASE_DIR / file_path
     if not matrix_path.exists():
         return m, None
     with open(matrix_path) as fh:
@@ -223,6 +243,14 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
                                 and m is not None) else 1.0)
         means = means * scale
         all_k.append(k_vals)
+
+        # DEIM and Q-DEIM return one interpolation point per basis vector, so
+        # they contribute a single k and a line through one point draws
+        # nothing. Give a lone point a marker instead.
+        if k_vals.size == 1:
+            ax.plot(k_vals, means, color=color, label=name, marker='o',
+                    markersize=3.5, linestyle='none', zorder=3)
+            continue
 
         ax.plot(k_vals, means, color=color, label=name, zorder=2)
 
@@ -310,7 +338,7 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
 
     if exp_name in SINGLE_PANEL:
         # Plain text width, the same aspect as the single-panel error figures
-        # (plot_allen_cahn_error.py): one axes stretched to the two-panel
+        # (allen_cahn/plot_error.py): one axes stretched to the two-panel
         # version's 1.15 * TEXT_WIDTH reads as uncomfortably wide, and the
         # legend still fits at four columns.
         fig, ax = plt.subplots(figsize=(TEXT_WIDTH, 0.55 * TEXT_WIDTH),

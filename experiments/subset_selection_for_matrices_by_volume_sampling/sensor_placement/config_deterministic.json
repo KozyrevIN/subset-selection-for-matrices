@@ -1,0 +1,122 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "SST sensor placement",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "DEIM",
+                    "name": "deim"
+                },
+                {
+                    "display_name": "QDEIM",
+                    "name": "qdeim"
+                }
+            ],
+            "k_values": [
+                15
+            ],
+            "trials_per_k": 1
+        },
+        {
+            "name": "SST sensor placement",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "Dominant",
+                    "name": "dominant",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Dominant-split",
+                    "name": "volume add-remove",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Rect-maxvol",
+                    "name": "rect-maxvol",
+                    "c": 1.000001
+                }
+            ],
+            "k_values": [
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                39,
+                40,
+                41,
+                42,
+                43,
+                44,
+                45,
+                46,
+                47,
+                48,
+                49,
+                50,
+                51,
+                52,
+                53,
+                54,
+                55,
+                56,
+                57,
+                58,
+                59,
+                60
+            ],
+            "trials_per_k": 1
+        }
+    ]
+}

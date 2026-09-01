@@ -1,0 +1,85 @@
+{
+    "sst_file": "data/sst.wkmean.1990-present.nc",
+    "mask_file": "data/lsmask.nc",
+    "sst_url": "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2/sst.wkmean.1990-present.nc",
+    "mask_url": "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2/lsmask.nc",
+
+    "train_start": 0,
+    "train_stop": 1400,
+    "train_step": 1,
+
+    "modes": 15,
+    "subtract_mean": true,
+    "spatial_stride": 1,
+
+    "test_snapshot": 1500,
+
+    "modes_file": "data/sst_modes.csv",
+    "target_file": "data/sst_target.csv",
+
+    "experiment_name": "SST sensor placement",
+    "k_max_factor": 4,
+    "samples": 16,
+
+    "algorithms": [
+        {
+            "display_name": "FDVS",
+            "name": "derandomized volume"
+        },
+        {
+            "display_name": "RDVS",
+            "name": "spectral removal"
+        },
+        {
+            "display_name": "Frobenius selection",
+            "name": "frobenius selection"
+        },
+        {
+            "display_name": "Frobenius removal",
+            "name": "frobenius removal"
+        },
+        {
+            "display_name": "Dominant",
+            "name": "dominant",
+            "c": 1.000001,
+            "initialization": "greedy"
+        },
+        {
+            "display_name": "Dominant-split",
+            "name": "volume add-remove",
+            "c": 1.000001,
+            "initialization": "greedy"
+        },
+        {
+            "display_name": "Rect-maxvol",
+            "name": "rect-maxvol",
+            "c": 1.000001
+        }
+    ],
+
+    "algorithms_fixed_k": [
+        {
+            "display_name": "DEIM",
+            "name": "deim"
+        },
+        {
+            "display_name": "QDEIM",
+            "name": "qdeim"
+        }
+    ],
+
+    "algorithms_randomized": [
+        {
+            "display_name": "VS",
+            "name": "forward iterative volume sampling"
+        },
+        {
+            "display_name": "Leverage scores",
+            "name": "leverage scores"
+        },
+        {
+            "display_name": "Random columns",
+            "name": "random columns"
+        }
+    ]
+}

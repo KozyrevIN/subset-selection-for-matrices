@@ -17,11 +17,13 @@ matrix, so by default the sweep runs up to 4r rather than all the way to n.
 `MatrixFromFileGenerator` transposes a tall matrix to be wide, so the selectors
 see m = (CSV column count) rows and n = (CSV row count) columns.
 
-Environment (all set by the run_*.sh scripts):
+Environment (all set by the run.sh scripts):
     UNFOLDING    – path to the dumped unfolding CSV
     EXPERIMENT   – experiment name; doubles as the results subfolder and as the
-                   key plot_k_sweep.py looks up in OUT_STEMS
-                   (default: 'Allen-Cahn unfolding')
+                   key plot_k_sweep.py looks up in OUT_STEMS (required)
+    BASE_DIR     – the experiment folder, which the Tester runs from and which
+                   the written "file_path" is relative to
+                   (default: the working directory)
     RESULTS_DIR  – results directory the Tester writes into
     CONFIG_DET   – path to write the deterministic config to
     CONFIG_RAND  – path to write the randomized config to
@@ -33,14 +35,29 @@ import json
 import os
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).parent
+# This script lives in common/, one level above the experiment it is writing
+# configs for, so paths are resolved against that experiment folder — which is
+# also the directory the Tester is run from — rather than against this file.
+BASE_DIR = Path(os.environ.get('BASE_DIR', Path.cwd()))
 
-UNFOLDING   = Path(os.environ['UNFOLDING'])
-RESULTS_DIR = Path(os.environ.get('RESULTS_DIR', SCRIPT_DIR / 'results'))
+
+def required(name: str) -> str:
+    """A variable with no sensible default: a shared script cannot guess it, and
+    guessing wrong would quietly file one experiment's results under another's
+    name."""
+    try:
+        return os.environ[name]
+    except KeyError:
+        raise SystemExit(f'{name} must be set in the environment '
+                         f'(see this script\'s docstring)')
+
+
+UNFOLDING   = Path(required('UNFOLDING'))
+RESULTS_DIR = Path(os.environ.get('RESULTS_DIR', BASE_DIR / 'results'))
 CONFIG_DET  = Path(os.environ.get('CONFIG_DET',
-                                  SCRIPT_DIR / 'config_allen_cahn_deterministic.json'))
+                                  BASE_DIR / 'config_deterministic.json'))
 CONFIG_RAND = Path(os.environ.get('CONFIG_RAND',
-                                  SCRIPT_DIR / 'config_allen_cahn_randomized.json'))
+                                  BASE_DIR / 'config_randomized.json'))
 
 SAMPLES     = int(os.environ.get('SAMPLES', 16))
 
@@ -49,9 +66,9 @@ SAMPLES     = int(os.environ.get('SAMPLES', 16))
 K_MAX_FACTOR = int(os.environ.get('K_MAX_FACTOR', 4))
 
 # The experiment name doubles as the results subfolder (spaces → underscores)
-# and as the key plot_k_sweep.py looks up in OUT_STEMS. It defaults to the
-# Allen-Cahn one so an unset environment keeps that experiment's old behaviour.
-EXPERIMENT_NAME = os.environ.get('EXPERIMENT', 'Allen-Cahn unfolding')
+# and as the key plot_k_sweep.py looks up in OUT_STEMS, so every caller names
+# its own — see required() above.
+EXPERIMENT_NAME = required('EXPERIMENT')
 
 # The nine algorithms of the superconductivity experiment, split the same way:
 # deterministic ones run once per k, randomized ones run SAMPLES times. Dominant
@@ -136,7 +153,7 @@ def main():
 
     # Relative to this experiment's folder — the directory the Tester runs from.
     try:
-        matrix_path = UNFOLDING.resolve().relative_to(SCRIPT_DIR.resolve())
+        matrix_path = UNFOLDING.resolve().relative_to(BASE_DIR.resolve())
     except ValueError:
         matrix_path = UNFOLDING.resolve()
 

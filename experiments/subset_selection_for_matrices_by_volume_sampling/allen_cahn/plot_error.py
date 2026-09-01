@@ -3,7 +3,7 @@
 Plot script for the Allen-Cahn accuracy experiment of the
 subset_selection_for_matrices_by_volume_sampling experiment.
 
-Companion to plot_k_sweep.py (the superconductivity figure). Where that one compares
+Companion to ../common/plot_k_sweep.py (the superconductivity figure). Where that one compares
 the selectors on a fixed data matrix, this one compares them on the matrices a
 time-dependent problem produces: the TT unfoldings of the evolving state of
 
@@ -23,8 +23,8 @@ black dashed 'best rank-r' curve — the error of the optimal TT approximation o
 the reference at that same fixed rank, the floor no rank-limited integrator can
 beat.
 
-Usage (from repo root or from this directory):
-    python experiments/subset_selection_for_matrices_by_volume_sampling/plot_allen_cahn_error.py
+Usage (from this directory):
+    python plot_error.py
 
 Environment overrides:
     RESULTS_DIR    – path to the results directory (default: <script_dir>/results)
@@ -54,13 +54,13 @@ FIGURES_DIR.mkdir(exist_ok=True)
 RESULTS_SUBDIR = os.environ.get('RESULTS_SUBDIR', 'allen_cahn')
 
 # The fixed rank is only ever *named* in the best-rank-r legend entry, never
-# used to compute anything. run_allen_cahn.sh passes it from the config, but a
+# used to compute anything. run.sh passes it from the config, but a
 # hardcoded fallback silently mislabels the figure whenever the config's rank
 # changes and the plotter is run standalone — so when RANK is unset it is read
 # back from the run's own max_rank column (see resolve_rank).
 RANK_ENV = os.environ.get('RANK')
 
-# ── style (shared with plot_k_sweep.py) ───────────────────────────────────────────────
+# ── style (shared with ../common/plot_k_sweep.py) ───────────────────────────────────────────────
 CM         = 1 / 2.54
 TEXT_WIDTH = 17 * CM
 
@@ -85,7 +85,7 @@ plt.rcParams.update({
 # algorithms the same colour.
 COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
 
-# Same canonical order as plot_k_sweep.py, so an algorithm keeps its colour across both
+# Same canonical order as ../common/plot_k_sweep.py, so an algorithm keeps its colour across both
 # figures of the experiment. Every name keeps its slot whether or not the run
 # included it — the roster is a config choice now (the shipped configs leave out
 # leverage scores and random columns, which diverge on this problem), and
@@ -112,7 +112,7 @@ def canonical_label(name: str) -> str:
 def resolve_rank(df) -> int:
     """The rank named in the best-rank-r legend entry.
 
-    RANK from the environment wins (run_allen_cahn.sh passes the config's
+    RANK from the environment wins (run.sh passes the config's
     value), but otherwise it comes from the run itself: every row records the
     max_rank it was integrated at, so the label cannot drift out of sync with
     the data the way a hardcoded default does."""
@@ -144,7 +144,7 @@ def load_errors(folder: Path) -> pd.DataFrame:
     if not csv.exists():
         raise FileNotFoundError(
             f"Errors CSV not found: {csv}\n"
-            "Run the AllenCahnTester binary first (see run_allen_cahn.sh)."
+            "Run the AllenCahnTester binary first (see run.sh)."
         )
     df = pd.read_csv(csv)
     df['algorithm'] = df['algorithm'].map(canonical_label)

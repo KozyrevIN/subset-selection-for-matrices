@@ -13,12 +13,12 @@ so the saved file (21263 x 82) becomes an 82 x 21263 matrix (m x n).
 
 Prints the largest and smallest singular values of the prepared m x n matrix.
 
-Usage:
-    python prepare_superconductivity.py [--input PATH] [--output-matrix PATH]
-                                        [--output-target PATH]
+Usage (from this directory):
+    python prepare_data.py [--input PATH] [--output-matrix PATH]
+                           [--output-target PATH]
 
 Defaults:
-    --input          ../../supplementary/superconductivty+data/train.csv
+    --input          ../../../supplementary/superconductivty+data/train.csv
     --output-matrix  data/superconductivity.csv
     --output-target  data/superconductivity_target.csv
 """
@@ -69,7 +69,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('--input', type=Path,
-                        default=script_dir / '../../supplementary/superconductivty+data/train.csv')
+                        default=script_dir / '../../../supplementary/superconductivty+data/train.csv')
     parser.add_argument('--output-matrix', type=Path,
                         default=script_dir / 'data/superconductivity.csv')
     parser.add_argument('--output-target', type=Path,
