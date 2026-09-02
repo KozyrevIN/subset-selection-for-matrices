@@ -121,6 +121,7 @@ template <typename Scalar> class SelectorFactory {
  * - "forward iterative volume sampling" - ForwardIterativeVolumeSamplingSelector (optional "seed")
  * - "frobenius removal" - FrobeniusRemovalSelector (optional "eps")
  * - "frobenius selection" - FrobeniusSelectionSelector
+ * - "gappy pod+e" - GappyPodSelector
  * - "interlacing families" - InterlacingFamiliesSelector (optional "eps")
  * - "leverage scores" - LeverageScoresSelector (optional "seed")
  * - "qdeim" - QdeimSelector (supports k = m only)
@@ -158,6 +159,7 @@ class DefaultSelectorFactory : public SelectorFactory<Scalar> {
         registerSeedArgSelector<ForwardIterativeVolumeSamplingSelector>();
         registerEpsArgSelector<FrobeniusRemovalSelector>();
         registerNoArgsSelector<FrobeniusSelectionSelector>();
+        registerNoArgsSelector<GappyPodSelector>();
         registerEpsArgSelector<InterlacingFamiliesSelector>();
         registerSeedArgSelector<LeverageScoresSelector>();
         registerNoArgsSelector<QdeimSelector>();

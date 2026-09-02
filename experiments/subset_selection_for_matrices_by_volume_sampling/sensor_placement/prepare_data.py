@@ -35,8 +35,23 @@ see another.
 
 Everything is driven by config.json — which snapshots feed the SVD, how many
 modes are retained, how far the sensor count sweeps — and this script also
-writes the two Tester configs from it, so the mode count lives in exactly one
+writes the Tester configs from it, so the mode count lives in exactly one
 place.
+
+Two runs come out of that one config:
+
+  the sweep  one rank ("modes") against every sensor count from r to
+             k_max_factor * r, written to config_deterministic.json and
+             config_randomized.json. This is the run plot_error.py draws.
+  the grid   the ranks in "modes_grid" against the oversampling factors in
+             "oversampling" (k = f * r), every algorithm at each of the r x f
+             cells, written to config_grid_deterministic.json and
+             config_grid_randomized.json. Each rank is its own Tester
+             experiment, so its own results folder ("<name> r<r>"), and its
+             basis is the leading columns of the same SVD, saved beside the
+             sweep's as data/sst_modes_r<r>.csv. The grid entries also set
+             "save_indices", so the selected subsets themselves land in
+             results/<folder>/indices/. This is the run plot_grid.py draws.
 
 Usage (from this directory):
     python prepare_data.py
@@ -119,23 +134,75 @@ def load_snapshots(sst_path: Path, rows: slice, ocean: np.ndarray) -> np.ndarray
 
 
 def experiment_entry(cfg: dict, algorithms: list, k_values: list,
-                     trials: int) -> dict:
+                     trials: int, name: str = None, modes_file: str = None,
+                     save_indices: bool = False) -> dict:
     """One entry of a Tester config's "experiments" list. "file_path" is
     relative to the directory the Tester is run from (this experiment's folder)
     and "output_path" to the config's own parent, which is the same folder —
-    matching the other experiments here."""
-    return {
-        "name": cfg['experiment_name'],
+    matching the other experiments here.
+
+    `name` and `modes_file` default to the single-rank run's; the grid passes
+    one of each per rank. `save_indices` asks the Tester to write the selected
+    subsets themselves under indices/, which is what a later map of sensor
+    positions needs."""
+    entry = {
+        "name": name or cfg['experiment_name'],
         "enabled": True,
         "matrix": {
             "type": "matrix from file",
-            "file_path": cfg['modes_file'],
+            "file_path": modes_file or cfg['modes_file'],
             "target_file": cfg['target_file'],
         },
         "algorithms": algorithms,
         "k_values": k_values,
         "trials_per_k": trials,
     }
+    if save_indices:
+        entry["save_indices"] = True
+    return entry
+
+
+def grid_modes_file(cfg: dict, r: int) -> str:
+    """Where the rank-r basis of the grid lives, as a path relative to this
+    experiment's folder: data/sst_modes_r<r>.csv beside the single-rank
+    data/sst_modes.csv."""
+    stem = Path(cfg['modes_file'])
+    return str(stem.with_name(f'{stem.stem}_r{r}{stem.suffix}'))
+
+
+def grid_k_values(cfg: dict, r: int, n_ocean: int) -> list:
+    """The sensor counts for rank r: one per oversampling factor, k = f * r.
+    Deduplicated and clipped to n_ocean, since k > n is not a subset."""
+    factors = cfg.get('oversampling', [1, 1.5, 2])
+    k_values = sorted({min(int(round(f * r)), n_ocean) for f in factors})
+    return k_values
+
+
+def write_grid_basis(path: Path, U: np.ndarray, r: int) -> None:
+    """Write the rank-r basis, unless the file is already there and is that
+    same basis. These are hundreds of megabytes each, so rewriting them on
+    every run would dominate this script — but a file of the right shape left
+    over from a different training window would be worse than slow, so its
+    first and last modes are checked against the SVD before it is kept."""
+    Psi = U[:, :r]
+    if path.exists():
+        try:
+            first = np.loadtxt(path, delimiter=',', usecols=(0,))
+            last  = np.loadtxt(path, delimiter=',', usecols=(r - 1,))
+        except (ValueError, IndexError):
+            first = last = np.zeros(0)
+        # Signs are arbitrary in an SVD, so compare on |cos| between the file's
+        # mode and this run's.
+        ok = (first.shape == (Psi.shape[0],) and last.shape == first.shape and
+              abs(float(first @ Psi[:, 0])) > 1 - 1e-6 and
+              abs(float(last @ Psi[:, r - 1])) > 1 - 1e-6)
+        if ok:
+            print(f'  r = {r:3d}: kept {path.name} (matches this SVD)')
+            return
+        print(f'  r = {r:3d}: {path.name} is not this basis — rewriting')
+    np.savetxt(path, Psi, delimiter=',', fmt='%.12e')
+    print(f'  r = {r:3d}: wrote {path.name} '
+          f'({Psi.shape[0]} rows x {r} cols)')
 
 
 def write_tester_config(path: Path, entries: list) -> None:
@@ -145,8 +212,12 @@ def write_tester_config(path: Path, entries: list) -> None:
         "experiments": entries,
     }, indent=4) + '\n')
     for e in entries:
-        print(f'Wrote {path.name}: {len(e["algorithms"])} algorithms, '
-              f'k = {e["k_values"][0]}..{e["k_values"][-1]}, '
+        k_values = e["k_values"]
+        k_text = (str(k_values[0]) if len(k_values) == 1 else
+                  ', '.join(map(str, k_values)) if len(k_values) <= 4 else
+                  f'{k_values[0]}..{k_values[-1]}')
+        print(f'Wrote {path.name}: {e["name"]!r}, '
+              f'{len(e["algorithms"])} algorithms, k = {k_text}, '
               f'trials = {e["trials_per_k"]}')
 
 
@@ -245,6 +316,50 @@ def main():
         experiment_entry(cfg, cfg['algorithms_randomized'], k_values,
                          int(cfg.get('samples', 16))),
     ])
+
+    # ── the grid ──────────────────────────────────────────────────────────────
+    # The sweep above is one rank against many sensor counts. The grid is the
+    # other cut: a few ranks against a few oversampling factors, r x f, with
+    # every algorithm at each cell. Each rank is its own matrix and so its own
+    # Tester experiment — the basis is just the leading columns of the same
+    # SVD, so no extra factorization is needed — and its own results folder,
+    # named after the rank.
+    modes_grid = [int(r) for r in cfg.get('modes_grid', [])]
+    if not modes_grid:
+        return
+
+    r_max = max(modes_grid)
+    if r_max > U.shape[1]:
+        raise SystemExit(f'modes_grid asks for {r_max} modes, but the SVD of '
+                         f'the training window has only {U.shape[1]}')
+
+    print(f'\nGrid: ranks {modes_grid} x oversampling '
+          f'{cfg.get("oversampling", [1, 1.5, 2])}')
+    for r in modes_grid:
+        write_grid_basis(BASE_DIR / grid_modes_file(cfg, r), U, r)
+
+    grid_deterministic, grid_randomized = [], []
+    for r in modes_grid:
+        name  = f'{cfg["experiment_name"]} r{r}'
+        modes = grid_modes_file(cfg, r)
+        ks    = grid_k_values(cfg, r, n_ocean)
+        # DEIM and Q-DEIM exist only at k = r, so they get their own entry,
+        # listed first for the same reason as in the sweep above.
+        grid_deterministic.append(
+            experiment_entry(cfg, cfg['algorithms_fixed_k'], [r], 1,
+                             name=name, modes_file=modes, save_indices=True))
+        grid_deterministic.append(
+            experiment_entry(cfg, cfg['algorithms'], ks, 1,
+                             name=name, modes_file=modes, save_indices=True))
+        grid_randomized.append(
+            experiment_entry(cfg, cfg['algorithms_randomized'], ks,
+                             int(cfg.get('samples', 16)),
+                             name=name, modes_file=modes, save_indices=True))
+
+    write_tester_config(BASE_DIR / 'config_grid_deterministic.json',
+                        grid_deterministic)
+    write_tester_config(BASE_DIR / 'config_grid_randomized.json',
+                        grid_randomized)
 
 
 if __name__ == '__main__':

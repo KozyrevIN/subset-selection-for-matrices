@@ -1,0 +1,76 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "Superconductivity extended",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/superconductivity.csv",
+                "target_file": "data/superconductivity_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "DEIM",
+                    "name": "deim"
+                }
+            ],
+            "k_values": [
+                82
+            ],
+            "trials_per_k": 1
+        },
+        {
+            "name": "Superconductivity extended",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/superconductivity.csv",
+                "target_file": "data/superconductivity_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "c": 1.000001,
+                    "display_name": "Dominant",
+                    "initialization": "greedy",
+                    "name": "dominant"
+                },
+                {
+                    "c": 1.000001,
+                    "display_name": "Dominant-split",
+                    "initialization": "greedy",
+                    "name": "volume add-remove"
+                },
+                {
+                    "display_name": "GappyPOD+E",
+                    "name": "gappy pod+e"
+                },
+                {
+                    "display_name": "Spectral selection",
+                    "name": "spectral selection"
+                }
+            ],
+            "k_values_ranges": [
+                {"start": 82, "stop": 200, "step": 1}
+            ],
+            "trials_per_k": 1
+        }
+    ]
+}

@@ -1,0 +1,255 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "SST sensor placement r100",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r100.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "DEIM",
+                    "name": "deim"
+                },
+                {
+                    "display_name": "QDEIM",
+                    "name": "qdeim"
+                }
+            ],
+            "k_values": [
+                100
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r100",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r100.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "Dominant",
+                    "name": "dominant",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Dominant-split",
+                    "name": "volume add-remove",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Rect-maxvol",
+                    "name": "rect-maxvol",
+                    "c": 1.000001
+                },
+                {
+                    "display_name": "GappyPOD+E",
+                    "name": "gappy pod+e"
+                },
+                {
+                    "display_name": "Spectral selection",
+                    "name": "spectral selection"
+                }
+            ],
+            "k_values": [
+                100,
+                150,
+                200
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r200",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r200.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "DEIM",
+                    "name": "deim"
+                },
+                {
+                    "display_name": "QDEIM",
+                    "name": "qdeim"
+                }
+            ],
+            "k_values": [
+                200
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r200",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r200.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "Dominant",
+                    "name": "dominant",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Dominant-split",
+                    "name": "volume add-remove",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Rect-maxvol",
+                    "name": "rect-maxvol",
+                    "c": 1.000001
+                },
+                {
+                    "display_name": "GappyPOD+E",
+                    "name": "gappy pod+e"
+                },
+                {
+                    "display_name": "Spectral selection",
+                    "name": "spectral selection"
+                }
+            ],
+            "k_values": [
+                200,
+                300,
+                400
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r302",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r302.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "DEIM",
+                    "name": "deim"
+                },
+                {
+                    "display_name": "QDEIM",
+                    "name": "qdeim"
+                }
+            ],
+            "k_values": [
+                302
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r302",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r302.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "FDVS",
+                    "name": "derandomized volume"
+                },
+                {
+                    "display_name": "RDVS",
+                    "name": "spectral removal"
+                },
+                {
+                    "display_name": "Frobenius selection",
+                    "name": "frobenius selection"
+                },
+                {
+                    "display_name": "Frobenius removal",
+                    "name": "frobenius removal"
+                },
+                {
+                    "display_name": "Dominant",
+                    "name": "dominant",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Dominant-split",
+                    "name": "volume add-remove",
+                    "c": 1.000001,
+                    "initialization": "greedy"
+                },
+                {
+                    "display_name": "Rect-maxvol",
+                    "name": "rect-maxvol",
+                    "c": 1.000001
+                },
+                {
+                    "display_name": "GappyPOD+E",
+                    "name": "gappy pod+e"
+                },
+                {
+                    "display_name": "Spectral selection",
+                    "name": "spectral selection"
+                }
+            ],
+            "k_values": [
+                302,
+                453,
+                604
+            ],
+            "trials_per_k": 1,
+            "save_indices": true
+        }
+    ]
+}

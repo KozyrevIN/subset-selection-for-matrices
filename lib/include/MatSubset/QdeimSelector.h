@@ -31,8 +31,9 @@ namespace MatSubset {
  * go on to run their exchange loops.
  *
  * @note Like `DeimSelector`, Q-DEIM produces one interpolation point per basis
- * vector, so only \f$ k = m \f$ is supported. (The oversampled variants of
- * Q-DEIM are a different algorithm and are not implemented here.)
+ * vector, so only \f$ k = m \f$ is supported. For the oversampled regime
+ * \f$ k > m \f$ see `GappyPodSelector`, which keeps these pivots as its
+ * starting set and greedily appends the remaining \f$ k - m \f$ points.
  */
 template <typename Scalar>
 class QdeimSelector : public VolumePivotingBase<Scalar> {

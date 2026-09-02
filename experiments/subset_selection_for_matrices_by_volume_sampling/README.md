@@ -6,16 +6,22 @@ experiment shares.
 
 ```
 common/                    shared scripts, driven by BASE_DIR (see below)
-  plot_k_sweep.py            the two-panel k-sweep figure
+  plot_k_sweep.py            the two-panel k-sweep figure (NORM=spectral
+                             draws it in the spectral norm instead)
   make_unfolding_configs.py  Tester configs for a dumped TT unfolding
   update_index.py            rebuild results/index.json
 
 superconductivity/         a static dataset: one k-sweep figure
+superconductivity_extended/
+                           the same dataset and k range, with DEIM,
+                           GappyPOD+E and spectral selection added
 allen_cahn/                a fixed-rank PDE run: error vs. time + its unfolding
 acoustic/                  a tolerance-driven PDE run: error and rank vs. time
                            + its unfolding
 sensor_placement/          sparse sensors on NOAA OI SST V2: reconstruction
-                           error vs. sensor count, after Manohar et al. (2018)
+                           error vs. sensor count, after Manohar et al. (2018),
+                           plus an r x oversampling grid (run_grid.sh) that
+                           also saves the selected sensor sets
 ```
 
 Run one with its own runner, from anywhere:

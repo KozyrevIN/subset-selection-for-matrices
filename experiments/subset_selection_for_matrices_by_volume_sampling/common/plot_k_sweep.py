@@ -8,8 +8,12 @@ randomized tester runs both write into the same results subfolder
 rather than trusting a single config's algorithm list.
 
 Layout (matrix has a regression target):
-  - left  = 1 / ‖X_S† X‖_F   (Frobenius norm of the projected pseudo-inverse)
-  - right = ‖X†‖_F / ‖X_S†‖_F (Frobenius norm ratio)
+  - left  = 1 / ‖X_S† X‖   (norm of the projected pseudo-inverse)
+  - right = ‖X†‖ / ‖X_S†‖  (pseudo-inverse norm ratio)
+
+Both norms are in every CSV the Tester writes, so NORM picks which one the
+figure is drawn in: 'frobenius' (the default) or 'spectral', the latter saved
+under the same file stem with a '_spectral' suffix.
 
 Shared by every experiment in this folder. It reads and writes inside one
 experiment's own directory, named by BASE_DIR — the run_*.sh scripts set it, and
@@ -30,6 +34,7 @@ Environment overrides:
     RESULTS_DIR  – path to the results directory  (default: <BASE_DIR>/results)
     FIGURES_DIR  – path to save figures           (default: <BASE_DIR>/figures)
     EXPERIMENT   – plot only experiments whose name contains this (default: all)
+    NORM         – 'frobenius' or 'spectral'      (default: frobenius)
 """
 
 import os
@@ -53,6 +58,19 @@ BASE_DIR    = Path(os.environ.get('BASE_DIR', Path.cwd()))
 RESULTS_DIR = Path(os.environ.get('RESULTS_DIR', BASE_DIR / 'results'))
 FIGURES_DIR = Path(os.environ.get('FIGURES_DIR', BASE_DIR / 'figures'))
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── norm ──────────────────────────────────────────────────────────────────────
+# Every Tester CSV carries both norms, so the figure switches on this one
+# setting: which two columns are plotted, the y-labels, whether the left panel
+# is scaled by √m, the shared bound, and the '_spectral' suffix on the file
+# stem. Nothing about the algorithms or the layout changes with it.
+NORM = os.environ.get('NORM', 'frobenius').strip().lower()
+if NORM not in ('frobenius', 'spectral'):
+    raise SystemExit(f"NORM must be 'frobenius' or 'spectral', not {NORM!r}")
+
+PROJ_COL = f'X_S_dag_X_{NORM}_norm_inv'   # left panel
+PINV_COL = f'pinv_{NORM}_norm_ratio'      # right panel
+STEM_SUFFIX = '' if NORM == 'frobenius' else '_spectral'
 
 # ── style ─────────────────────────────────────────────────────────────────────
 CM         = 1 / 2.54
@@ -79,11 +97,22 @@ plt.rcParams.update({
 # tab20b for the overflow: the canonical roster is longer than 10 now that DEIM
 # and QDEIM are in it, and wrapping with % 10 would silently hand two
 # algorithms the same colour.
-COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
+#
+# tab20b runs four shades of one hue before moving to the next, so consecutive
+# overflow slots would come out near indistinguishable — GappyPOD+E and
+# spectral selection, adjacent in CANONICAL, drew two shades of the same
+# purple. Take one shade per hue family first and keep the remaining shades
+# behind them.
+_TAB20B = plt.cm.tab20b.colors
+COLORS = (plt.cm.tab10.colors + _TAB20B[::4] +
+          tuple(c for i, c in enumerate(_TAB20B) if i % 4))
 
 # Map experiment name → output file stem
 OUT_STEMS = {
     'Superconductivity dataset': 'plot_superconductivity',
+    # The same dataset and the same k range, with DEIM, GappyPOD+E and
+    # spectral selection added (see superconductivity_extended/run.sh).
+    'Superconductivity extended': 'plot_superconductivity_extended',
     # A TT unfolding of the Allen-Cahn state taken from the middle of the run
     # (see allen_cahn/run.sh) — the same two-panel figure on a matrix the
     # PDE genuinely produces rather than on a static dataset.
@@ -117,7 +146,8 @@ SINGLE_PANEL = {'Allen-Cahn unfolding', 'Acoustic unfolding',
 # Canonical algorithm order (by display_name) so colours are stable across runs.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
-             'Leverage scores', 'Random columns', 'Rect-maxvol']
+             'Leverage scores', 'Random columns', 'Rect-maxvol',
+             'GappyPOD+E', 'Spectral selection']
 
 
 def canonical_label(name: str) -> str:
@@ -141,12 +171,22 @@ def canonical_label(name: str) -> str:
 # lower bound for every deterministic algorithm on both axes (the randomized
 # baselines, having no such guarantee, may dip below it). The LaTeX form is a
 # legend entry (see make_legend), rendered as a proper fraction.
-BOUND_LATEX = r'$\sqrt{\dfrac{k - m + 1}{n - m + 1}}$'
+#
+# The spectral panels plot the unscaled 1/‖X_S† X‖_2 and ‖X†‖_2/‖X_S†‖_2, and
+# their bound is the same volume bound passed through ‖A‖_2 ≤ ‖A‖_F — the step
+# RectMaxvolSelector's boundImpl already takes to fit Osinsky's mixed-norm
+# result into this framework. That costs a factor √m, so the line sits a factor
+# m lower and is correspondingly looser; it is still a valid lower bound for
+# every deterministic algorithm on both spectral axes.
+BOUND_LATEX = (r'$\sqrt{\dfrac{k - m + 1}{n - m + 1}}$' if NORM == 'frobenius'
+               else r'$\sqrt{\dfrac{k - m + 1}{m \, (n - m + 1)}}$')
 
 
 def shared_bound(m: int, n: int, k: np.ndarray) -> np.ndarray:
-    """The lower bound √((k-m+1)/(n-m+1)) at k, shared by both subplots."""
-    return np.sqrt((k - m + 1) / (n - m + 1))
+    """The lower bound at k, shared by both subplots: √((k-m+1)/(n-m+1)) in the
+    Frobenius norm, that over √m in the spectral one."""
+    denominator = (n - m + 1) * (1 if NORM == 'frobenius' else m)
+    return np.sqrt((k - m + 1) / denominator)
 
 
 def infer_m_n(cfg: dict) -> tuple:
@@ -218,9 +258,10 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
                         ylabel: str, show_std: bool, show_bound: bool = True,
                         m: int = None, n: int = None):
     """Plot mean (± std) of *metric_col* on *ax* for every algorithm, plus the
-    single shared lower bound √((k-m+1)/(n-m+1)). The left subplot
-    (metric_col 'X_S_dag_X_frobenius_norm_inv') plots √m / ‖X_S† X‖_F; the CSV
-    stores 1 / ‖X_S† X‖_F, so its means are scaled by √m."""
+    single shared lower bound (see shared_bound). In the Frobenius norm the
+    left subplot plots √m / ‖X_S† X‖_F, where the CSV stores 1 / ‖X_S† X‖_F, so
+    its means are scaled by √m; the spectral one needs no such scaling and
+    plots 1 / ‖X_S† X‖_2 as stored."""
     all_k = []
     for idx, name in enumerate(algo_names):
         if name not in data:
@@ -236,11 +277,13 @@ def plot_metric_subplot(ax, data, algo_names, metric_col, show_ylabel: bool,
         grp    = df_filt.groupby('k')[metric_col]
         means  = grp.mean().reindex(k_vals).values
 
-        # The left subplot plots √m / ‖X_S† X‖_F (the CSV stores
+        # The Frobenius left subplot plots √m / ‖X_S† X‖_F (the CSV stores
         # 1 / ‖X_S† X‖_F). The √m makes √((k-m+1)/(n-m+1)) an exact lower bound:
         # ‖X_S† X‖_F² ≤ m (n-m+1)/(k-m+1) ⟹ √m/‖X_S† X‖_F ≥ √((k-m+1)/(n-m+1)).
-        scale = (np.sqrt(m) if (metric_col == 'X_S_dag_X_frobenius_norm_inv'
-                                and m is not None) else 1.0)
+        # The spectral one keeps the stored value and carries the √m in its
+        # bound instead (see BOUND_LATEX).
+        scale = (np.sqrt(m) if (metric_col == PROJ_COL and m is not None
+                                and NORM == 'frobenius') else 1.0)
         means = means * scale
         all_k.append(k_vals)
 
@@ -333,8 +376,12 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
     # any algorithm has more than one trial at some k.
     show_std   = any((df.groupby('k').size() > 1).any() for df in data.values())
     m, n       = infer_m_n(cfg)
-    ylabel_left  = r'$\sqrt{m} \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
-    ylabel_right = r'$\Vert X^\dag \Vert_F \,/\, \Vert X_\mathcal{S}^\dag \Vert_F$'
+    if NORM == 'frobenius':
+        ylabel_left  = r'$\sqrt{m} \,/\, \Vert X_\mathcal{S}^\dag X \Vert_F$'
+        ylabel_right = r'$\Vert X^\dag \Vert_F \,/\, \Vert X_\mathcal{S}^\dag \Vert_F$'
+    else:
+        ylabel_left  = r'$1 \,/\, \Vert X_\mathcal{S}^\dag X \Vert_2$'
+        ylabel_right = r'$\Vert X^\dag \Vert_2 \,/\, \Vert X_\mathcal{S}^\dag \Vert_2$'
 
     if exp_name in SINGLE_PANEL:
         # Plain text width, the same aspect as the single-panel error figures
@@ -344,7 +391,7 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
         fig, ax = plt.subplots(figsize=(TEXT_WIDTH, 0.55 * TEXT_WIDTH),
                                layout='constrained')
         plot_metric_subplot(ax, data, algo_names,
-                            metric_col='pinv_frobenius_norm_ratio',
+                            metric_col=PINV_COL,
                             show_ylabel=True, ylabel=ylabel_right,
                             show_std=show_std, m=m, n=n)
         make_legend(fig, algo_names, data, show_std=show_std, show_bound=True,
@@ -359,12 +406,12 @@ def make_figure(exp_name, cfg, data, algo_names, out_stem):
         layout='constrained')
 
     plot_metric_subplot(ax_left, data, algo_names,
-                        metric_col='X_S_dag_X_frobenius_norm_inv',
+                        metric_col=PROJ_COL,
                         show_ylabel=True, ylabel=ylabel_left,
                         show_std=show_std, m=m, n=n)
 
     plot_metric_subplot(ax_right, data, algo_names,
-                        metric_col='pinv_frobenius_norm_ratio',
+                        metric_col=PINV_COL,
                         show_ylabel=True, ylabel=ylabel_right,
                         show_std=show_std, m=m, n=n)
 
@@ -432,7 +479,8 @@ def main():
 
         algo_names = cfg.get('_all_algo_names',
                              [a.get('display_name', a['name']) for a in cfg['algorithms']])
-        stem       = OUT_STEMS.get(exp_name, exp_name.replace(' ', '_').lower())
+        stem       = (OUT_STEMS.get(exp_name, exp_name.replace(' ', '_').lower())
+                      + STEM_SUFFIX)
 
         make_figure(exp_name, cfg, data, algo_names, stem)
 

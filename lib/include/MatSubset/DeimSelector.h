@@ -30,10 +30,9 @@ namespace MatSubset {
  *
  * @note Unlike most selectors here, DEIM produces exactly \f$ m \f$ indices:
  * one interpolation point per basis vector. It therefore only supports
- * \f$ k = m \f$. For the oversampled regime \f$ k > m \f$ use Q-DEIM (which is
- * plain column-pivoted QR, available through the `Initialization::CPQR`
- * strategy of `DominantSelector` or `VolumeAddRemoveSelector`) or one of the
- * volume-based selectors.
+ * \f$ k = m \f$. For the oversampled regime \f$ k > m \f$ use
+ * `GappyPodSelector` (Q-DEIM pivots plus a greedy spectral oversampling
+ * phase) or one of the volume-based selectors.
  */
 template <typename Scalar> class DeimSelector : public SelectorBase<Scalar> {
   public:

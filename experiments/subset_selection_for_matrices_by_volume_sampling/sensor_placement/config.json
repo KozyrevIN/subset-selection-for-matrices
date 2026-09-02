@@ -3,24 +3,28 @@
     "mask_file": "data/lsmask.nc",
     "sst_url": "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2/sst.wkmean.1990-present.nc",
     "mask_url": "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2/lsmask.nc",
-
     "train_start": 0,
     "train_stop": 1400,
     "train_step": 1,
-
     "modes": 15,
+    "modes_grid": [
+        100,
+        200,
+        302
+    ],
+    "oversampling": [
+        1,
+        1.5,
+        2
+    ],
     "subtract_mean": true,
     "spatial_stride": 1,
-
     "test_snapshot": 1500,
-
     "modes_file": "data/sst_modes.csv",
     "target_file": "data/sst_target.csv",
-
     "experiment_name": "SST sensor placement",
     "k_max_factor": 4,
     "samples": 16,
-
     "algorithms": [
         {
             "display_name": "FDVS",
@@ -54,9 +58,16 @@
             "display_name": "Rect-maxvol",
             "name": "rect-maxvol",
             "c": 1.000001
+        },
+        {
+            "display_name": "GappyPOD+E",
+            "name": "gappy pod+e"
+        },
+        {
+            "display_name": "Spectral selection",
+            "name": "spectral selection"
         }
     ],
-
     "algorithms_fixed_k": [
         {
             "display_name": "DEIM",
@@ -67,7 +78,6 @@
             "name": "qdeim"
         }
     ],
-
     "algorithms_randomized": [
         {
             "display_name": "VS",

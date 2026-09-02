@@ -1,0 +1,96 @@
+{
+    "scalar": "double",
+    "output_path": "results",
+    "experiments": [
+        {
+            "name": "SST sensor placement r100",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r100.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "VS",
+                    "name": "forward iterative volume sampling"
+                },
+                {
+                    "display_name": "Leverage scores",
+                    "name": "leverage scores"
+                },
+                {
+                    "display_name": "Random columns",
+                    "name": "random columns"
+                }
+            ],
+            "k_values": [
+                100,
+                150,
+                200
+            ],
+            "trials_per_k": 16,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r200",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r200.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "VS",
+                    "name": "forward iterative volume sampling"
+                },
+                {
+                    "display_name": "Leverage scores",
+                    "name": "leverage scores"
+                },
+                {
+                    "display_name": "Random columns",
+                    "name": "random columns"
+                }
+            ],
+            "k_values": [
+                200,
+                300,
+                400
+            ],
+            "trials_per_k": 16,
+            "save_indices": true
+        },
+        {
+            "name": "SST sensor placement r302",
+            "enabled": true,
+            "matrix": {
+                "type": "matrix from file",
+                "file_path": "data/sst_modes_r302.csv",
+                "target_file": "data/sst_target.csv"
+            },
+            "algorithms": [
+                {
+                    "display_name": "VS",
+                    "name": "forward iterative volume sampling"
+                },
+                {
+                    "display_name": "Leverage scores",
+                    "name": "leverage scores"
+                },
+                {
+                    "display_name": "Random columns",
+                    "name": "random columns"
+                }
+            ],
+            "k_values": [
+                302,
+                453,
+                604
+            ],
+            "trials_per_k": 16,
+            "save_indices": true
+        }
+    ]
+}

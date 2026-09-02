@@ -76,13 +76,18 @@ plt.rcParams.update({
     "axes.edgecolor":  "gray",
 })
 
-COLORS = plt.cm.tab10.colors + plt.cm.tab20b.colors
+# tab10 first, then one shade per tab20b hue family — the same palette as
+# ../common/plot_k_sweep.py, so an algorithm keeps its colour across figures.
+_TAB20B = plt.cm.tab20b.colors
+COLORS = (plt.cm.tab10.colors + _TAB20B[::4] +
+          tuple(c for i, c in enumerate(_TAB20B) if i % 4))
 
 # Same canonical order as the other plot scripts, so an algorithm keeps its
 # colour across every figure of this folder.
 CANONICAL = ['FDVS', 'RDVS', 'Frobenius selection', 'Frobenius removal',
              'Dominant', 'Dominant-split', 'VS', 'DEIM', 'QDEIM',
-             'Leverage scores', 'Random columns', 'Rect-maxvol']
+             'Leverage scores', 'Random columns', 'Rect-maxvol',
+             'GappyPOD+E', 'Spectral selection']
 
 # The randomized selectors are the ones run many times per k, so they are the
 # ones that get a spread band. Everything else contributes one row per k.

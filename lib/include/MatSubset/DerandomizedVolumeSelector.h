@@ -1,9 +1,10 @@
 #ifndef MAT_SUBSET_DERANDOMIZED_VOLUME_SELECTOR_H
 #define MAT_SUBSET_DERANDOMIZED_VOLUME_SELECTOR_H
 
-#include <cassert> // For std::assert
-#include <cmath>   // For std::sqrt
-#include <limits>  // For std::numeric_limits
+#include <algorithm> // For std::max
+#include <cassert>   // For std::assert
+#include <cmath>     // For std::sqrt
+#include <limits>    // For std::numeric_limits
 
 #include <Eigen/Eigenvalues> // For Eigen::SelfAdjointEigenSolver
 #include <Eigen/QR>          // For Eigen::HouseholderQR
@@ -28,6 +29,26 @@ namespace MatSubset {
  * same sign (see `selectSubsetImpl`), so the score is computed without
  * cancellation and the coefficients stay bounded by \f$ \binom{l}{s} \f$
  * instead of growing like \f$ \prod_i \omega_i^{-1} \f$.
+ *
+ * @note The coefficients carry the binomial weights of \f$ (x - 1)^{D} \f$
+ * from the moment they are built, rather than meeting them at the end. What
+ * the score needs is a handful of coefficients of
+ * \f$ (x-1)^{D} \chi(x) \f$, each a sum of products
+ * \f$ \chi_a \binom{D}{b - a} \f$. Those products span a modest range, but
+ * the two factors do not: with \f$ l \f$ active eigenvalues the low-order
+ * \f$ \chi_a \f$ fall off like \f$ \prod_i \omega_i \f$ while the
+ * binomials climb like \f$ (D/b)^{a} \f$, each crossing double precision's
+ * exponent range near \f$ l \approx 150 \f$ on a matrix with strongly
+ * non-uniform leverage. Formed separately, the small factor underflows to zero
+ * while the large one is still finite, and the term is lost even though its
+ * product is not negligible — the selection then degrades below random. Scaled
+ * by \f$ w(a) = \binom{D}{\text{max\_deg} - a} \f$ throughout, every
+ * quantity stays in range: the polynomial is built through
+ * \f$ \sigma(a) = w(a)/w(a+1) \f$, the quotients through the same ratios,
+ * and the three coefficients the score needs come out as one plain sum and two
+ * sums weighted by single binomial ratios. Any underflow that survives the
+ * scaling is then benign: every term of those sums shares a sign, so what is
+ * dropped is negligible relative to what is kept.
  */
 template <typename Scalar>
 class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
@@ -121,13 +142,41 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             const Eigen::Index min_deg = d - n + k - 1;
             const Eigen::Index max_deg = d - n + k + 1;
 
-            Eigen::VectorX<Scalar> chi = buildPolynomialFromRoots(omega);
-            Eigen::MatrixX<Scalar> chi_quotients =
-                buildQuotientPolynomials(chi, omega);
-            Eigen::MatrixX<Scalar> p =
-                applyBinomials(chi, binom_deg, min_deg, max_deg);
-            Eigen::MatrixX<Scalar> g =
-                applyBinomials(chi_quotients, binom_deg, min_deg, max_deg);
+            Eigen::MatrixX<Scalar> p, g;
+            if (max_deg <= binom_deg) {
+                // The weighted path: coefficient a is carried scaled by
+                // w(a) = C(binom_deg, max_deg - a), which is exactly the
+                // binomial it meets in the sums below.
+                const Eigen::VectorX<Scalar> sigma =
+                    binomialWeightRatios(binom_deg, max_deg, l);
+                const Eigen::VectorX<Scalar> chi =
+                    buildPolynomialFromRoots(omega, sigma);
+                const Eigen::MatrixX<Scalar> chi_quotients =
+                    buildQuotientPolynomials(chi, omega, sigma);
+                // Row 2 is a plain sum — its binomial is already in the
+                // coefficients — and rows 0 and 1 are the same sum reweighted
+                // by one and two binomial ratios.
+                const Eigen::MatrixX<Scalar> weights =
+                    collapseWeights(binom_deg, min_deg, max_deg, l);
+                p = weights * chi;
+                g = weights.leftCols(l) * chi_quotients;
+            } else {
+                // max_deg > binom_deg only when all but a handful of columns
+                // are being selected (it needs k > n - m - 2), which bounds
+                // (x - 1)^binom_deg to degree max_deg <= k - t + 1 and its
+                // coefficients to a range no scaling is needed for. Weighting
+                // cannot be anchored at max_deg there — the binomial does not
+                // reach that far — so the coefficients are built unweighted
+                // (sigma = 1) and meet the binomials at the end, as before.
+                const Eigen::VectorX<Scalar> sigma =
+                    Eigen::VectorX<Scalar>::Ones(l);
+                const Eigen::VectorX<Scalar> chi =
+                    buildPolynomialFromRoots(omega, sigma);
+                const Eigen::MatrixX<Scalar> chi_quotients =
+                    buildQuotientPolynomials(chi, omega, sigma);
+                p = applyBinomials(chi, binom_deg, min_deg, max_deg);
+                g = applyBinomials(chi_quotients, binom_deg, min_deg, max_deg);
+            }
 
             // Characteristic polynomial construction. Row 0 and row 1 of p_j
             // hold the coefficients of degree d - n + k and d - n + k + 1.
@@ -193,21 +242,83 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
     Scalar tolerance;
 
     /*!
-     * @brief Build polynomial \f$ p(x) = \prod_i (x - \text{root}_i) \f$ via
-     * incremental left-to-right multiplication, consuming roots in
-     * ascending-magnitude order.
+     * @brief Ratios \f$ \sigma(a) = w(a)/w(a+1) \f$ of the binomial weights
+     * \f$ w(a) = \binom{D}{\text{max\_deg} - a} \f$ the coefficients are
+     * carried in.
+     * @param binom_deg The exponent \f$ D \f$ of \f$ (x - 1)^{D} \f$.
+     * @param max_deg The highest output degree, where the weight is anchored:
+     * \f$ w(0) = \binom{D}{\text{max\_deg}} \f$. Must not exceed
+     * \f$ D \f$.
+     * @param deg Degree of the polynomial being weighted.
+     * @return \f$ \sigma(0 \ldots \deg - 1) \f$.
+     *
+     * Only the ratios are ever formed, never the weights themselves: they are
+     * \f$ \binom{D}{b} / \binom{D}{b - 1} = (D - b + 1)/b \f$ at
+     * \f$ b = \text{max\_deg} - a \f$, each a modest number, where the
+     * weights they compose are not representable. Past the end of the binomial
+     * (\f$ b \le 0 \f$) the denominator is clamped to 1: those coefficients
+     * meet a zero binomial in `collapseWeights` and contribute nothing, and
+     * the clamp only keeps the continuation finite for the recurrences that
+     * pass through them.
+     */
+    Eigen::VectorX<Scalar> binomialWeightRatios(Eigen::Index binom_deg,
+                                                Eigen::Index max_deg,
+                                                Eigen::Index deg) const {
+        Eigen::VectorX<Scalar> sigma(deg);
+        for (Eigen::Index a = 0; a < deg; ++a) {
+            const Eigen::Index b = max_deg - a;
+            sigma(a) = static_cast<Scalar>(binom_deg - b + 1) /
+                       static_cast<Scalar>(std::max<Eigen::Index>(b, 1));
+        }
+        return sigma;
+    }
+
+    /*!
+     * @brief Rescale a polynomial so its largest coefficient sits well inside
+     * the exponent range.
+     * @param poly Coefficients, rescaled in place.
+     *
+     * The factor is global, and everything downstream of it — the quotients,
+     * the collapsed coefficients, the score's ratio — is homogeneous in it, so
+     * this changes no result. It only stops the weighted coefficients, which
+     * climb steadily as the polynomial fills in, from running out of range on
+     * the way. The bounds are the square roots of the type's own limits, so a
+     * rescale is rare and leaves half the exponent range as headroom either
+     * side.
+     */
+    void rescale(Eigen::VectorX<Scalar> &poly) const {
+        const Scalar high = std::sqrt(std::numeric_limits<Scalar>::max());
+        const Scalar low = std::sqrt(std::numeric_limits<Scalar>::min());
+
+        const Scalar peak = poly.cwiseAbs().maxCoeff();
+        if (peak > high || (peak > static_cast<Scalar>(0) && peak < low)) {
+            poly /= peak;
+        }
+    }
+
+    /*!
+     * @brief Build the weighted polynomial
+     * \f$ P_a = w(a) [x^a] \prod_i (x - \text{root}_i) \f$ via incremental
+     * left-to-right multiplication, consuming roots in ascending-magnitude
+     * order.
      * @param roots Vector of roots in \f$ [0, 1) \f$, **assumed sorted in
      * descending order** (which is what the caller produces by slicing the
      * non-increasing `lambda`).
-     * @return Polynomial coefficients in standard form (size = deg + 1).
+     * @param sigma Weight ratios \f$ w(a)/w(a+1) \f$ from
+     * `binomialWeightRatios`; all ones builds the plain polynomial.
+     * @return Weighted coefficients in standard form (size = deg + 1), up to
+     * one global constant.
      *
      * Because every root is non-negative the coefficients strictly alternate
      * in sign, and each step \f$ p \gets (x - r_i) p \f$ combines two
-     * like-signed terms. The construction is therefore free of cancellation
-     * and the coefficients are bounded by \f$ \binom{\deg}{s} \f$.
+     * like-signed terms. The construction is therefore free of cancellation.
+     * In weighted form the step \f$ p_a \gets p_a - r p_{a+1} \f$ becomes
+     * \f$ P_a \gets P_a - r \sigma(a) P_{a+1} \f$: one extra elementwise
+     * multiply, and the weights themselves are never formed.
      */
     Eigen::VectorX<Scalar>
-    buildPolynomialFromRoots(const Eigen::VectorX<Scalar> &roots) const {
+    buildPolynomialFromRoots(const Eigen::VectorX<Scalar> &roots,
+                             const Eigen::VectorX<Scalar> &sigma) const {
         const Eigen::Index deg = roots.size();
         Eigen::VectorX<Scalar> p = Eigen::VectorX<Scalar>::Zero(deg + 1);
         p(deg) = static_cast<Scalar>(1);
@@ -215,20 +326,25 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
         // Consume roots smallest-magnitude first: roots(deg - i) walks the
         // input in reverse (the caller passes a descending vector).
         for (Eigen::Index i = 1; i <= deg; ++i) {
-            p.segment(deg - i, i) -= roots(deg - i) * p.tail(i).eval();
+            p.segment(deg - i, i).array() -=
+                roots(deg - i) *
+                (sigma.segment(deg - i, i).array() * p.tail(i).array()).eval();
+            rescale(p);
         }
 
         return p;
     }
 
     /*!
-     * @brief Build quotient polynomials \f$ g_i(x) = p(x) / (x - r_i) \f$ via
-     * composite (two-way) synthetic division.
-     * @param p Coefficients of \f$ p(x) = \prod_i (x - r_i) \f$, standard form
-     * (size = num_roots + 1).
+     * @brief Build the weighted quotient polynomials
+     * \f$ g_i(x) = p(x) / (x - r_i) \f$ via composite (two-way) synthetic
+     * division, in the same weights as \f$ p \f$.
+     * @param p Weighted coefficients of \f$ p(x) = \prod_i (x - r_i) \f$,
+     * standard form (size = num_roots + 1).
      * @param roots Vector of roots, **assumed sorted in descending order**.
-     * @return Matrix where column \f$ i \f$ contains coefficients of
-     * \f$ g_i(x) \f$ in standard form (size = num_roots).
+     * @param sigma The weight ratios \f$ p \f$ is carried in.
+     * @return Matrix where column \f$ i \f$ contains the weighted
+     * coefficients of \f$ g_i(x) \f$ in standard form (size = num_roots).
      *
      * Cost: \f$ O(\text{num\_roots}^2) \f$ instead of the naive
      * \f$ O(\text{num\_roots}^3) \f$ that would result from building each
@@ -243,10 +359,16 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
      * `roots` is descending, precisely \f$ i \f$ roots exceed \f$ r_i \f$ and
      * the crossover sits at degree \f$ \deg - i \f$: each recurrence is run
      * only over the range where it is stable.
+     *
+     * Both recurrences carry the weights the same way the build does — a
+     * factor \f$ \sigma \f$ where they step down in degree, its reciprocal
+     * where they step up — so the quotients come out weighted like \f$ p \f$,
+     * as the sums that consume them require.
      */
     Eigen::MatrixX<Scalar>
     buildQuotientPolynomials(const Eigen::VectorX<Scalar> &p,
-                             const Eigen::VectorX<Scalar> &roots) const {
+                             const Eigen::VectorX<Scalar> &roots,
+                             const Eigen::VectorX<Scalar> &sigma) const {
         const Eigen::Index num_roots = roots.size();
         const Eigen::Index g_deg = num_roots - 1;
         Eigen::MatrixX<Scalar> g(num_roots, num_roots);
@@ -255,26 +377,85 @@ class DerandomizedVolumeSelector : public SelectorBase<Scalar> {
             const Scalar r = roots(i);
             const Eigen::Index meet = g_deg - i;
 
-            // Forward recurrence (high-to-low): b_{a-1} = c_a + r * b_a.
-            Scalar fwd = p(num_roots); // b_{g_deg}
+            // Forward recurrence (high-to-low):
+            // B_{a-1} = sigma(a-1) * (C_a + r * B_a).
+            Scalar fwd = sigma(g_deg) * p(num_roots); // b_{g_deg}
             g(g_deg, i) = fwd;
             for (Eigen::Index a = g_deg; a > meet; --a) {
-                fwd = p(a) + r * fwd;
+                fwd = sigma(a - 1) * (p(a) + r * fwd);
                 g(a - 1, i) = fwd;
             }
 
-            // Backward recurrence (low-to-high): b_{a+1} = (b_a - c_{a+1}) / r.
+            // Backward recurrence (low-to-high):
+            // B_{a+1} = (B_a / sigma(a) - C_{a+1}) / r.
             if (meet > 0) {
                 Scalar bwd = -p(0) / r; // b_0
                 g(0, i) = bwd;
                 for (Eigen::Index a = 0; a + 1 < meet; ++a) {
-                    bwd = (bwd - p(a + 1)) / r;
+                    bwd = (bwd / sigma(a) - p(a + 1)) / r;
                     g(a + 1, i) = bwd;
                 }
             }
         }
 
         return g;
+    }
+
+    /*!
+     * @brief The weights that collapse a weighted polynomial into the three
+     * coefficients of \f$ (x - 1)^{D} p(x) \f$ the score needs.
+     * @param binom_deg The exponent \f$ D \f$ of \f$ (x - 1)^{D} \f$.
+     * @param min_deg Lowest output degree (may be negative, giving a zero row).
+     * @param max_deg Highest output degree; the weights are anchored here and
+     * it must not exceed \f$ D \f$.
+     * @param deg Degree of the polynomial being collapsed.
+     * @return A \f$ 3 \times (\deg + 1) \f$ matrix; multiplying it by the
+     * weighted coefficients gives the output degrees `min_deg`, `min_deg + 1`
+     * and `max_deg`, in that order, up to one global constant.
+     *
+     * Coefficient \f$ a \f$ is carried scaled by
+     * \f$ w(a) = \binom{D}{\text{max\_deg} - a} \f$, which is precisely
+     * the binomial the top row wants, so that row is a plain sum. The other
+     * two want the next binomials down, and
+     * \f$ \binom{D}{b-1} / \binom{D}{b} = b / (D - b + 1) \f$ supplies
+     * each as one modest factor. The alternating signs of \f$ (x - 1)^{D} \f$
+     * and of the coefficients cancel to leave every term of a row sharing one
+     * sign, which is what makes the sums cancellation-free; the sign that
+     * alternates between rows is kept, since the score's numerator and
+     * denominator rely on it.
+     */
+    Eigen::MatrixX<Scalar> collapseWeights(Eigen::Index binom_deg,
+                                           Eigen::Index min_deg,
+                                           Eigen::Index max_deg,
+                                           Eigen::Index deg) const {
+        Eigen::MatrixX<Scalar> weights =
+            Eigen::MatrixX<Scalar>::Zero(max_deg - min_deg + 1, deg + 1);
+
+        for (Eigen::Index a = 0; a <= deg; ++a) {
+            const Eigen::Index b = max_deg - a;
+            // Past the end of the binomial nothing contributes, and b only
+            // falls from here.
+            if (b < 0) {
+                break;
+            }
+            const Scalar sign = (a % 2 == 0) ? static_cast<Scalar>(1)
+                                             : static_cast<Scalar>(-1);
+            // Ratios to the binomials one and two degrees below the anchor.
+            const Scalar ratio_mid =
+                (b > 0) ? static_cast<Scalar>(b) /
+                              static_cast<Scalar>(binom_deg - b + 1)
+                        : static_cast<Scalar>(0);
+            const Scalar ratio_low =
+                (b > 1) ? ratio_mid * static_cast<Scalar>(b - 1) /
+                              static_cast<Scalar>(binom_deg - b + 2)
+                        : static_cast<Scalar>(0);
+
+            weights(0, a) = sign * ratio_low;
+            weights(1, a) = -sign * ratio_mid;
+            weights(2, a) = sign;
+        }
+
+        return weights;
     }
 
     /*!

@@ -161,6 +161,16 @@ template <typename Scalar> class Tester {
 
         std::vector<std::ofstream> output_files;
 
+        // The metric CSVs say how good a subset is, not which one it was. With
+        // "save_indices": true the experiment also writes the subsets
+        // themselves, one file per algorithm under indices/, so a later plot
+        // (sensor positions on a map, say) does not need the run repeated.
+        bool save_indices = experiment_config.value("save_indices", false);
+        std::vector<std::ofstream> index_files;
+        if (save_indices) {
+            std::filesystem::create_directories(experiment_folder / "indices");
+        }
+
         // Check once whether the generator provides a target vector
         auto target_vector_opt = matrix_generator->getTargetVector();
         bool has_target = target_vector_opt.has_value();
@@ -176,6 +186,18 @@ template <typename Scalar> class Tester {
                    "wall_time_ms,swap_count,spectral_bound,frobenius_bound,"
                    "volume_ratio,regression_mse"
                 << std::endl;
+            if (save_indices) {
+                std::filesystem::path index_path =
+                    experiment_folder / "indices" /
+                    (Utils::add_underscores(selector_names[i]) + ".csv");
+                index_files.emplace_back(index_path);
+                // The indices are space-separated inside the last field, so
+                // the row stays valid CSV however many of them there are. They
+                // are written in selection order, not sorted: for the greedy
+                // selectors that order is the order the sensors were placed.
+                index_files.back()
+                    << "k,trial,selected_indices" << std::endl;
+            }
         }
 
         // Main loop with progress tracking
@@ -341,6 +363,18 @@ template <typename Scalar> class Tester {
                                 << frobenius_bounds[i] << ","
                                 << volume_ratio << ","
                                 << regression_mse << std::endl;
+
+                            if (save_indices) {
+                                index_files[i] << k << "," << item.second
+                                               << ",";
+                                for (size_t j = 0;
+                                     j < selected_indices.size(); ++j) {
+                                    index_files[i]
+                                        << (j ? " " : "")
+                                        << selected_indices[j];
+                                }
+                                index_files[i] << std::endl;
+                            }
                         }
                     }
                 });

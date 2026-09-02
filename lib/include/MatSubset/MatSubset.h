@@ -5,6 +5,7 @@
 #include "ForwardIterativeVolumeSamplingSelector.h"
 #include "FrobeniusRemovalSelector.h"
 #include "FrobeniusSelectionSelector.h"
+#include "GappyPodSelector.h"
 #include "InterlacingFamiliesSelector.h"
 #include "LeverageScoresSelector.h"
 #include "QdeimSelector.h"

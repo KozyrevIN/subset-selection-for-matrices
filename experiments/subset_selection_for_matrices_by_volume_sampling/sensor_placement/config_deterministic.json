@@ -66,6 +66,14 @@
                     "display_name": "Rect-maxvol",
                     "name": "rect-maxvol",
                     "c": 1.000001
+                },
+                {
+                    "display_name": "GappyPOD+E",
+                    "name": "gappy pod+e"
+                },
+                {
+                    "display_name": "Spectral selection",
+                    "name": "spectral selection"
                 }
             ],
             "k_values": [
